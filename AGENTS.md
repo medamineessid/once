@@ -2,7 +2,30 @@
 
 You are a senior Python engineer building "Once", a local Windows desktop application, in small verified increments. You optimise for: correctness, safety of user files, testability, maintainability. You do NOT optimise for cleverness, novelty, or speed of typing.
 
-# PRODUCT
+# PRODUCT — REVISED LONG-TERM VISION (2026-10-22)
+
+Once is a local desktop workflow automation and orchestration application. It
+lets a user define a bounded sequence of controlled steps, run it, inspect
+each outcome, understand failures, and repeat a verified workflow. Files and
+folders are one integration capability, not the whole product.
+
+The long-term product may support desktop applications, browser interfaces,
+application output, logs, monitoring systems, coding agents, tests, and
+bounded diagnose-fix-test cycles. Each capability must be implemented behind a
+typed integration boundary and must report observable outcomes. Once must not
+claim an integration works until it has a real implementation and automated
+verification.
+
+The product remains local-first and offline by default. It does not require a
+paid AI API, unrestricted scripts, arbitrary shell commands, or opaque
+AI-generated actions. Any future AI proposal must produce validated structured
+workflow data; deterministic Once components remain responsible for execution.
+
+# PRODUCT — SUPERSEDED FILE-MANAGEMENT-FIRST DEFINITION
+
+The following definition is retained as historical detail and as the safety
+requirements for the file-management integration. It is no longer the primary
+product definition.
 
 Once lets an ordinary, non-technical user automate repetitive file-management tasks (bulk rename, organise/sort into folders, copy, move) WITHOUT scripting.
 
@@ -17,6 +40,39 @@ IN: bulk rename; organise by extension / filename / date; copy; move; save/reope
 OUT (do not build, do not stub, do not "prepare for"): controlling other desktop apps; mouse/keyboard recording; website automation; running arbitrary or AI-generated code/shell commands; permanent deletion; cloud sync / accounts / plugin marketplace; supporting every file type; recursive deep-tree reorganisation beyond the explicit optional "include subfolders" scan flag; changing file extensions; renaming/moving folders (only files are renamed/moved; folders are only CREATED).
 
 If a task seems to need something OUT of scope, stop and say so in your report instead of building it.
+
+# FIRST PRACTICAL MILESTONE — WORKFLOW FOUNDATION
+
+The first revised-vision milestone is deliberately small and real:
+
+- represent a named workflow as immutable, identifiable declarative steps;
+- execute only known built-in step kinds in deterministic order;
+- expose RUNNING, SUCCEEDED, FAILED, SKIPPED, and CANCELLED outcomes;
+- stop after a controlled failure and explain skipped steps;
+- allow cancellation before a pending step starts;
+- expose the complete run state to the controller and UI;
+- keep external application, browser, coding-agent, Sentry, and AI integrations
+  unimplemented and clearly labelled for later milestones.
+
+The current implementation uses REPORT and FAIL steps only. These are genuine
+engine behaviours for exercising orchestration, not simulated external
+integrations.
+
+# REVISED ROADMAP
+
+1. **Workflow foundation (current):** declarative steps, deterministic runner,
+   observable state, cancellation, failure propagation, controller service,
+   and a minimal Qt trigger.
+2. **Workflow persistence and validation:** versioned JSON workflows, SQLite
+   execution history, schema validation, and restart-safe state.
+3. **File-management integration:** retain the existing scanner/planner/
+   validator/executor/recovery roadmap as one controlled integration.
+4. **Additional integrations:** implement and test one integration at a time
+   behind explicit interfaces; no integration is represented by a placeholder.
+5. **User workflow editor and history UI:** expose only capabilities that have
+   real engine and integration implementations.
+6. **Packaging and release hardening:** Windows packaging, recovery testing,
+   documentation, and performance checks.
 
 # NON-NEGOTIABLE SAFETY INVARIANTS (each MUST have at least one automated test)
 

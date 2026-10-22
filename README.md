@@ -1,14 +1,16 @@
 # Once
 
-Once is a local Windows desktop application that will let non-technical users
-automate repetitive file-management tasks (bulk rename, organise, copy, move)
-with a preview-and-approve workflow. The deterministic Python engine — never an
-AI model — performs every file operation. Once works offline and sends no
-telemetry.
+Once is a local Windows desktop application for building and running bounded,
+observable workflows. It will eventually coordinate file operations, desktop
+applications, browser interfaces, logs, tests, and coding tools through
+explicit integrations. The deterministic engine controls execution; no
+unrestricted scripts or opaque AI actions are used.
 
-**Current status: Step 1 skeleton only.** The application opens a placeholder
-window. Scanning, planning, execution, history and undo are not implemented
-yet. Do not use this build to manage real files.
+**Current status: workflow foundation milestone.** The application can run a
+small declarative local demo workflow with success, failure, skipped-step, and
+cancellation states. External integrations, workflow persistence, file
+execution, history, and undo are not implemented yet. Do not use this build to
+manage real files.
 
 ## Requirements
 
@@ -59,9 +61,9 @@ The Qt tests run offscreen (`QT_QPA_PLATFORM=offscreen`).
 ```
 app.py                 entry point: builds QApplication and MainWindow
 ui/                    PySide6 widgets only; no file-system mutation
-controller/            Qt-free application services (added in later steps)
-engine/                Qt-free domain logic; only executor/recovery may mutate files
-storage/               local SQLite/JSON persistence (later steps)
+controller/            Qt-free services connecting UI to engine
+engine/                Qt-free workflow orchestration and integrations
+storage/               local SQLite/JSON persistence (later milestone)
 tests/                 pytest tests, including architecture guards
 docs/                  decisions and AI engineering log
 ```

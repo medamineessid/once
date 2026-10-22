@@ -7,7 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PySide6.QtWidgets import QLabel
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel, QPushButton
 from pytestqt.qtbot import QtBot
 
 from engine.errors import (
@@ -90,13 +91,23 @@ def test_error_hierarchy_is_rooted_in_once_error() -> None:
     assert issubclass(OnceError, Exception)
 
 
-def test_main_window_shows_startup_label(qtbot: QtBot) -> None:
+def test_main_window_shows_workflow_controls(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
 
     assert window.windowTitle() == "Once"
     label_texts = [label.text() for label in window.findChildren(QLabel)]
     assert "Once is starting up…" in label_texts
+    assert [button.text() for button in window.findChildren(QPushButton)] == ["Run demo workflow"]
+
+
+def test_main_window_runs_demo_workflow(qtbot: QtBot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    qtbot.mouseClick(window.findChild(QPushButton), Qt.MouseButton.LeftButton)
+
+    assert "SUCCEEDED: 2 steps recorded" in [label.text() for label in window.findChildren(QLabel)]
 
 
 def test_app_smoke_test_exits_zero() -> None:

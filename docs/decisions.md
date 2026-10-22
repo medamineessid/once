@@ -3,6 +3,23 @@
 Append-only. Each entry: date, question, evidence, choice, reason.
 Decisions D1–D10 below are copied verbatim from `AGENTS.md` (they are pre-made and must not be re-litigated; if one is found wrong, flag it in the step report and continue with it).
 
+## 2026-10-22 — Revised product direction and first milestone
+
+- **Question:** How should the file-management-first specification fit the
+  clarified workflow automation vision?
+- **Choice:** Treat workflow orchestration as the primary product and retain
+  file scanning, planning, execution, and recovery as one later integration.
+  Preserve the existing safety invariants for that integration.
+- **Reason:** This preserves verified prior work while preventing the first
+  milestone from becoming a file-organizer GUI that cannot grow into the
+  intended orchestration product.
+- **Implementation decision:** The first milestone uses immutable declarative
+  `REPORT` and `FAIL` steps. They exercise real orchestration state and error
+  propagation without pretending to control an external application.
+- **Unresolved:** The contracts for desktop automation, browser automation,
+  coding-agent coordination, and monitoring integrations require separate
+  design and verification before implementation.
+
 ---
 
 ## 2026-10-21 — Step 0: Pre-flight evidence and toolchain decision

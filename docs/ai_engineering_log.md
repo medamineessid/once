@@ -11,6 +11,23 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review: 
 
+## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: pending)
+- Task: Reconcile the file-management-first specification with the broader
+  workflow automation vision and implement a real, testable orchestration base.
+- AI contribution: revised the product definition and roadmap; added immutable
+  workflow models, deterministic execution with failure propagation and
+  cancellation, a Qt-free controller service, and a minimal UI trigger.
+- Defect found: the existing controller package contained only `__init__.py`;
+  the first implementation therefore added the missing service explicitly
+  rather than placing workflow logic in the UI.
+- Verification: `.\.venv\Scripts\ruff.exe format .` reformatted one file;
+  `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  `.\.venv\Scripts\python.exe -m pytest -q` printed `25 passed, 1 skipped`;
+  `QT_QPA_PLATFORM=offscreen .\.venv\Scripts\python.exe app.py --smoke-test`
+  exited 0. The skipped test reported that symbolic links are unavailable.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.
