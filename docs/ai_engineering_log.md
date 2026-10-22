@@ -113,6 +113,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Controller and UI recording lifecycle   (commit: pending)
+- Task: Expose explicit Record/Stop controls through the controller without
+  putting capture or persistence logic in the Qt layer.
+- AI contribution: added a controller-owned recording service, application-data
+  recording storage, and main-window Record/Stop actions with shutdown cleanup.
+- Defect found: the first busy-state implementation would enable Stop after a
+  workflow completed even when no recording was active; it now checks the
+  controller's live recording state.
+- Verification: `.\.venv\Scripts\ruff.exe format .` completed;
+  `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  focused pytest printed `10 passed`; no global listener was started.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.

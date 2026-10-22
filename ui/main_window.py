@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import override
 
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from controller.recording import RecordingService
 from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
 from engine.workflow import StepKind, Workflow, WorkflowRun, WorkflowStep
@@ -35,10 +37,15 @@ STARTUP_MESSAGE = "Choose a saved workflow or run the local demo."
 class MainWindow(QMainWindow):
     """Top-level view that delegates workflow operations to the controller."""
 
-    def __init__(self, service: WorkflowService | None = None) -> None:
+    def __init__(
+        self,
+        service: WorkflowService | None = None,
+        recording_service: RecordingService | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self._service = service or WorkflowService()
+        self._recording_service = recording_service
         self._current_workflow: Workflow | None = None
         self._status_label = QLabel(STARTUP_MESSAGE, self)
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -49,6 +56,9 @@ class MainWindow(QMainWindow):
         self._run_button = QPushButton("Run selected workflow", self)
         self._demo_button = QPushButton("Run local demo", self)
         self._cancel_button = QPushButton("Cancel run", self)
+        self._record_button = QPushButton("Record", self)
+        self._stop_record_button = QPushButton("Stop recording", self)
+        self._stop_record_button.setEnabled(False)
         self._cancel_button.setEnabled(False)
         self._open_button = QPushButton("Open workflow JSON", self)
         self._save_button = QPushButton("Save current workflow", self)
@@ -70,6 +80,8 @@ class MainWindow(QMainWindow):
         self._run_button.clicked.connect(self._run_selected)
         self._demo_button.clicked.connect(self._run_demo)
         self._cancel_button.clicked.connect(self._cancel_run)
+        self._record_button.clicked.connect(self._start_recording)
+        self._stop_record_button.clicked.connect(self._stop_recording)
         self._open_button.clicked.connect(self._open_workflow)
         self._save_button.clicked.connect(self._save_current)
         self._create_button.clicked.connect(self._create_from_form)
@@ -89,6 +101,8 @@ class MainWindow(QMainWindow):
             self._run_button,
             self._demo_button,
             self._cancel_button,
+            self._record_button,
+            self._stop_record_button,
             self._open_button,
             self._save_button,
         ):
@@ -212,9 +226,15 @@ class MainWindow(QMainWindow):
             self._move_up_button,
             self._move_down_button,
             self._remove_step_button,
+            self._record_button,
         ):
             button.setEnabled(not running)
         self._cancel_button.setEnabled(running)
+        self._stop_record_button.setEnabled(
+            False
+            if running
+            else self._recording_service is not None and self._recording_service.recording
+        )
 
     def _show_step_result(self, result: object) -> None:
         step_result = result
@@ -311,8 +331,37 @@ class MainWindow(QMainWindow):
         self._status_label.setText(f"Error: {message}")
         QMessageBox.warning(self, "Workflow error", message)
 
+    def _start_recording(self) -> None:
+        if self._recording_service is None:
+            self._show_error("Recording is not configured for this application instance.")
+            return
+        try:
+            self._recording_service.start(f"recording-{time.time_ns()}")
+        except RuntimeError as error:
+            self._show_error(str(error))
+            return
+        self._record_button.setEnabled(False)
+        self._stop_record_button.setEnabled(True)
+        self._status_label.setText("Recording is active. Press Stop recording when finished.")
+
+    def _stop_recording(self) -> None:
+        if self._recording_service is None:
+            return
+        try:
+            recording = self._recording_service.stop()
+        except RuntimeError as error:
+            self._show_error(str(error))
+            return
+        self._record_button.setEnabled(True)
+        self._stop_record_button.setEnabled(False)
+        self._status_label.setText(
+            f"Recording saved: {recording.recording_id} ({len(recording.events)} events)"
+        )
+
     @override
     def closeEvent(self, event: QCloseEvent) -> None:
+        if self._recording_service is not None and self._recording_service.recording:
+            self._recording_service.stop()
         if self._worker is not None:
             self._worker.cancel()
         if self._thread is not None:

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
+from controller.recording import RecordingService
 from controller.service import WorkflowService
 from ui.main_window import MainWindow
 
@@ -35,7 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     app = build_application(qt_args)
     app_data_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Once"
     service = WorkflowService.for_app_data(app_data_dir)
-    window = MainWindow(service)
+    recording_service = RecordingService(app_data_dir / "recordings")
+    window = MainWindow(service, recording_service)
     window.show()
 
     if smoke_test:
