@@ -56,3 +56,56 @@ class PywinautoWindowInspector:
             if field in target and getattr(info, attribute, None) != target[field]:
                 return False
         return True
+
+    def inspect_element(self, target_json: str) -> tuple[str, ...]:
+        """Inspect exactly one descendant of exactly one identified window."""
+        try:
+            target = json.loads(target_json)
+        except json.JSONDecodeError as error:
+            raise ExecutionError("The UI element target is not valid JSON.") from error
+        if not isinstance(target, dict) or set(target) != {"window", "element"}:
+            raise ExecutionError("The UI element target must identify a window and element.")
+        windows = self._desktop_factory().windows()
+        matches = [wrapper for wrapper in windows if self._matches(wrapper, target["window"])]
+        if not matches:
+            raise ExecutionError("The identified parent window was not found.")
+        if len(matches) > 1:
+            raise ExecutionError("The identified parent window is ambiguous.")
+        parent = matches[0]
+        element_matches = [
+            wrapper
+            for wrapper in parent.descendants()
+            if self._matches_element(wrapper, target["element"])
+        ]
+        if not element_matches:
+            raise ExecutionError("The identified UI element was not found.")
+        if len(element_matches) > 1:
+            raise ExecutionError("The identified UI element is ambiguous.")
+        element = element_matches[0]
+        info = element.element_info
+        return (
+            f"automation_id={getattr(info, 'automation_id', None) or 'unknown'}",
+            f"control_type={getattr(info, 'control_type', None) or 'unknown'}",
+            f"class_name={getattr(info, 'class_name', None) or 'unknown'}",
+            f"enabled={self._enabled(element)}",
+        )
+
+    @staticmethod
+    def _matches_element(wrapper: object, target: object) -> bool:
+        if not isinstance(target, dict):
+            return False
+        info = wrapper.element_info
+        if getattr(info, "automation_id", None) != target.get("automation_id"):
+            return False
+        if getattr(info, "control_type", None) != target.get("control_type"):
+            return False
+        return (
+            "class_name" not in target or getattr(info, "class_name", None) == target["class_name"]
+        )
+
+    @staticmethod
+    def _enabled(wrapper: object) -> bool:
+        try:
+            return bool(wrapper.is_enabled())
+        except (AttributeError, OSError, RuntimeError) as error:
+            raise ExecutionError("The UI element state could not be inspected.") from error

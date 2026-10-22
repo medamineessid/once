@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from controller.service import WorkflowService
-from engine.errors import ExecutionError
+from engine.errors import ExecutionError, WorkflowValidationError
 from engine.replay import ReplayExecutor
 from engine.workflow import (
     StepKind,
@@ -128,6 +128,25 @@ class FakeInfo:
 class FakeWindow:
     element_info = FakeInfo()
 
+    def __init__(self, descendants=()) -> None:
+        self._descendants = descendants
+
+    def descendants(self):
+        return self._descendants
+
+
+class FakeElementInfo:
+    automation_id = "save"
+    control_type = "Button"
+    class_name = "Button"
+
+
+class FakeElement:
+    element_info = FakeElementInfo()
+
+    def is_enabled(self):
+        return True
+
 
 class FakeDesktop:
     def __init__(self, windows) -> None:
@@ -180,3 +199,100 @@ def test_window_action_is_policy_allowed_and_has_no_fallback() -> None:
     assert run.status is WorkflowStatus.SUCCEEDED
     assert run.results[0].status is StepStatus.VERIFIED
     assert run.results[0].evidence == ("title=Once fixture",)
+
+
+def element_target() -> str:
+    return (
+        '{"window":{"title":"Once fixture","process_id":1234},'
+        '"element":{"automation_id":"save","control_type":"Button"}}'
+    )
+
+
+def test_windows_inspector_finds_one_element_without_reading_text() -> None:
+    inspector = PywinautoWindowInspector(lambda: FakeDesktop([FakeWindow((FakeElement(),))]))
+
+    evidence = inspector.inspect_element(element_target())
+
+    assert evidence == (
+        "automation_id=save",
+        "control_type=Button",
+        "class_name=Button",
+        "enabled=True",
+    )
+
+
+def test_windows_inspector_rejects_missing_or_ambiguous_elements() -> None:
+    target = element_target()
+    missing = PywinautoWindowInspector(lambda: FakeDesktop([FakeWindow()]))
+    ambiguous = PywinautoWindowInspector(
+        lambda: FakeDesktop([FakeWindow((FakeElement(), FakeElement()))])
+    )
+
+    with pytest.raises(ExecutionError, match="element was not found"):
+        missing.inspect_element(target)
+    with pytest.raises(ExecutionError, match="element is ambiguous"):
+        ambiguous.inspect_element(target)
+
+
+def test_ui_element_target_requires_stable_selector() -> None:
+    workflow = Workflow(
+        "element",
+        "Element inspection",
+        (
+            WorkflowStep(
+                "inspect",
+                "Inspect",
+                StepKind.INSPECT_UI_ELEMENT,
+                "Element found.",
+                '{"window":{"title":"Once fixture"},"element":{"control_type":"Button"}}',
+            ),
+        ),
+    )
+
+    with pytest.raises(WorkflowValidationError, match="AutomationId"):
+        ReplayExecutor().validate(workflow)
+
+
+def test_ui_element_action_is_policy_allowed_and_persisted(tmp_path) -> None:
+    workflow = Workflow(
+        "element",
+        "Element inspection",
+        (
+            WorkflowStep(
+                "inspect",
+                "Inspect",
+                StepKind.INSPECT_UI_ELEMENT,
+                "Element found.",
+                element_target(),
+            ),
+        ),
+    )
+    service = WorkflowService.for_app_data(tmp_path / "app-data")
+    run = service.run_replay(workflow, allowed_root=None)
+
+    assert run.status is WorkflowStatus.FAILED
+    assert run.results[0].status is StepStatus.FAILED
+    assert service.history()[0].results[0].status is StepStatus.FAILED
+    service.close()
+
+
+def test_injected_ui_element_inspector_executes_through_controller() -> None:
+    workflow = Workflow(
+        "element",
+        "Element inspection",
+        (
+            WorkflowStep(
+                "inspect",
+                "Inspect",
+                StepKind.INSPECT_UI_ELEMENT,
+                "Element found.",
+                element_target(),
+            ),
+        ),
+    )
+    service = WorkflowService(ui_element_inspector=lambda _target: ("enabled=True",))
+
+    run = service.run_replay(workflow, allowed_root=None)
+
+    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.results[0].evidence == ("enabled=True",)

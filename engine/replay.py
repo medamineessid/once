@@ -12,6 +12,7 @@ from .workflow import (
     StepKind,
     StepResult,
     StepStatus,
+    UIElementInspector,
     WindowInspector,
     Workflow,
     WorkflowRun,
@@ -25,7 +26,12 @@ class ReplayPolicy:
     """Allowlist and bounds for deterministic replay."""
 
     allowed_kinds: frozenset[StepKind] = frozenset(
-        {StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS, StepKind.INSPECT_WINDOW}
+        {
+            StepKind.INSPECT_PATH,
+            StepKind.VERIFY_PATH_EXISTS,
+            StepKind.INSPECT_WINDOW,
+            StepKind.INSPECT_UI_ELEMENT,
+        }
     )
     max_steps: int = 20
 
@@ -86,6 +92,7 @@ class ReplayExecutor:
         cancel_check: CancelCheck | None = None,
         progress_callback: ProgressCallback | None = None,
         window_inspector: WindowInspector | None = None,
+        ui_element_inspector: UIElementInspector | None = None,
     ) -> WorkflowRun:
         """Preview or execute the allowlisted read-only actions."""
         self.validate(workflow)
@@ -98,7 +105,7 @@ class ReplayExecutor:
                 StepResult(
                     step.step_id,
                     StepStatus.SUCCEEDED,
-                    f"Dry run: would verify {step.target}.",
+                    f"Dry run: would inspect {step.target}.",
                 )
                 for step in workflow.steps
             )
@@ -116,4 +123,5 @@ class ReplayExecutor:
             cancel_check=cancel_check,
             progress_callback=progress_callback,
             window_inspector=window_inspector,
+            ui_element_inspector=ui_element_inspector,
         )

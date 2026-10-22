@@ -110,3 +110,9 @@ Automation window inspection. Window targets include a title and may include a
 process ID, class name, or automation ID. Ambiguous or missing windows fail
 closed; Once never falls back to the active window and does not replay clicks,
 keystrokes, or text input.
+
+It also supports read-only UI element inspection when a target contains both
+an exact parent-window identity and a stable `AutomationId` plus `ControlType`.
+The element must be unique within that window. Inspection records only
+non-sensitive metadata such as control type, class name, and enabled state; it
+does not read control text.

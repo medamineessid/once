@@ -10,7 +10,7 @@ from enum import StrEnum
 from pathlib import Path
 from uuid import uuid4
 
-from .errors import WorkflowValidationError
+from .errors import ExecutionError, WorkflowValidationError
 
 MAX_WORKFLOW_STEPS = 100
 MAX_TEXT_LENGTH = 500
@@ -24,6 +24,7 @@ class StepKind(StrEnum):
     INSPECT_PATH = "INSPECT_PATH"
     VERIFY_PATH_EXISTS = "VERIFY_PATH_EXISTS"
     INSPECT_WINDOW = "INSPECT_WINDOW"
+    INSPECT_UI_ELEMENT = "INSPECT_UI_ELEMENT"
 
 
 class PostconditionKind(StrEnum):
@@ -101,6 +102,8 @@ class WorkflowRun:
 CancelCheck = Callable[[], bool]
 ProgressCallback = Callable[[StepResult], None]
 WindowInspector = Callable[[str], tuple[str, ...]]
+UIElementInspector = Callable[[str], tuple[str, ...]]
+UIElementInspector = Callable[[str], tuple[str, ...]]
 
 
 def _validate_window_target(step: WorkflowStep) -> None:
@@ -112,6 +115,81 @@ def _validate_window_target(step: WorkflowStep) -> None:
         raise WorkflowValidationError(
             f"Step {step.step_id} has an invalid window target."
         ) from error
+    _validate_window_identity(step, target)
+
+
+def _validate_window_identity(step: WorkflowStep, target: object) -> None:
+    if not isinstance(target, dict) or not set(target).issubset(
+        {"title", "process_id", "class_name", "automation_id"}
+    ):
+        raise WorkflowValidationError(f"Step {step.step_id} has unknown window target fields.")
+    if not isinstance(target.get("title"), str) or not target["title"].strip():
+        raise WorkflowValidationError(f"Step {step.step_id} needs a window title.")
+    if "process_id" in target and (
+        not isinstance(target["process_id"], int) or target["process_id"] < 1
+    ):
+        raise WorkflowValidationError(f"Step {step.step_id} has an invalid process ID.")
+    for field in ("title", "class_name", "automation_id"):
+        if field in target and not isinstance(target[field], str):
+            raise WorkflowValidationError(f"Step {step.step_id} has an invalid {field}.")
+
+
+def _validate_ui_element_target(step: WorkflowStep) -> None:
+    if not step.target:
+        raise WorkflowValidationError(f"Step {step.step_id} needs a UI element target.")
+    try:
+        target = json.loads(step.target)
+    except json.JSONDecodeError as error:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has an invalid UI element target."
+        ) from error
+    if not isinstance(target, dict) or set(target) != {"window", "element"}:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs window and element target fields."
+        )
+    window = target["window"]
+    element = target["element"]
+    _validate_window_identity(step, window)
+    if not isinstance(element, dict) or not set(element).issubset(
+        {"automation_id", "control_type", "class_name"}
+    ):
+        raise WorkflowValidationError(f"Step {step.step_id} has unknown element target fields.")
+    for field in ("automation_id", "control_type"):
+        if not isinstance(element.get(field), str) or not element[field].strip():
+            raise WorkflowValidationError(f"Step {step.step_id} needs an element {field}.")
+    if "class_name" in element and not isinstance(element["class_name"], str):
+        raise WorkflowValidationError(f"Step {step.step_id} has an invalid element class name.")
+
+
+def _validate_ui_element_target(step: WorkflowStep) -> None:
+    if not step.target:
+        raise WorkflowValidationError(f"Step {step.step_id} needs a UI element target.")
+    try:
+        target = json.loads(step.target)
+    except json.JSONDecodeError as error:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has an invalid UI element target."
+        ) from error
+    if not isinstance(target, dict) or set(target) != {"window", "element"}:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs window and element target fields."
+        )
+    window = target["window"]
+    element = target["element"]
+    if not isinstance(window, dict) or not isinstance(element, dict):
+        raise WorkflowValidationError(f"Step {step.step_id} has invalid UI target fields.")
+    _validate_window_identity(step, window)
+    if not set(element).issubset({"automation_id", "control_type", "class_name"}):
+        raise WorkflowValidationError(f"Step {step.step_id} has unknown element target fields.")
+    if not isinstance(element.get("automation_id"), str) or not element["automation_id"].strip():
+        raise WorkflowValidationError(f"Step {step.step_id} needs an AutomationId.")
+    if not isinstance(element.get("control_type"), str) or not element["control_type"].strip():
+        raise WorkflowValidationError(f"Step {step.step_id} needs a control type.")
+    if "class_name" in element and not isinstance(element["class_name"], str):
+        raise WorkflowValidationError(f"Step {step.step_id} has an invalid element class name.")
+
+
+def _validate_window_identity(step: WorkflowStep, target: object) -> None:
     if not isinstance(target, dict) or not set(target).issubset(
         {"title", "process_id", "class_name", "automation_id"}
     ):
@@ -174,6 +252,8 @@ class WorkflowRunner:
                 raise WorkflowValidationError(f"Step {step.step_id} needs an absolute target path.")
             if step.kind is StepKind.INSPECT_WINDOW:
                 _validate_window_target(step)
+            if step.kind is StepKind.INSPECT_UI_ELEMENT:
+                _validate_ui_element_target(step)
             step_ids.add(step.step_id)
 
     def run(
@@ -185,6 +265,7 @@ class WorkflowRunner:
         allowed_root: Path | None = None,
         progress_callback: ProgressCallback | None = None,
         window_inspector: WindowInspector | None = None,
+        ui_element_inspector: UIElementInspector | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
         self.validate(workflow)
@@ -219,6 +300,7 @@ class WorkflowRunner:
                 allowed_root,
                 is_cancelled,
                 window_inspector,
+                ui_element_inspector,
             )
             results.append(result)
             if progress_callback is not None:
@@ -246,6 +328,7 @@ class WorkflowRunner:
         allowed_root: Path | None,
         cancel_check: CancelCheck,
         window_inspector: WindowInspector | None,
+        ui_element_inspector: UIElementInspector | None,
     ) -> StepResult:
         attempts: list[str] = []
         for attempt in range(1, step.max_attempts + 1):
@@ -256,10 +339,10 @@ class WorkflowRunner:
                     "Skipped because the workflow was cancelled.",
                     tuple(attempts),
                 )
-            if window_inspector is None:
+            if window_inspector is None and ui_element_inspector is None:
                 result = self._run_once(step, allowed_root)
             else:
-                result = self._run_once(step, allowed_root, window_inspector)
+                result = self._run_once(step, allowed_root, window_inspector, ui_element_inspector)
             if result.status in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
                 if step.postcondition is None:
                     if attempt == 1:
@@ -295,6 +378,7 @@ class WorkflowRunner:
         step: WorkflowStep,
         allowed_root: Path | None,
         window_inspector: WindowInspector | None = None,
+        ui_element_inspector: UIElementInspector | None = None,
     ) -> StepResult:
         if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
             return self._run_path_step(step, allowed_root)
@@ -307,12 +391,28 @@ class WorkflowRunner:
                         step.message,
                         window_inspector(step.target or ""),
                     )
-                except (OSError, RuntimeError, ValueError) as error:
+                except (ExecutionError, OSError, RuntimeError, ValueError) as error:
                     return StepResult(step.step_id, StepStatus.FAILED, str(error))
             return StepResult(
                 step.step_id,
                 StepStatus.INCONCLUSIVE,
                 "No Windows UI Automation inspector was configured.",
+            )
+        if step.kind is StepKind.INSPECT_UI_ELEMENT:
+            if ui_element_inspector is not None:
+                try:
+                    return StepResult(
+                        step.step_id,
+                        StepStatus.VERIFIED,
+                        step.message,
+                        ui_element_inspector(step.target or ""),
+                    )
+                except (ExecutionError, OSError, RuntimeError, ValueError) as error:
+                    return StepResult(step.step_id, StepStatus.FAILED, str(error))
+            return StepResult(
+                step.step_id,
+                StepStatus.INCONCLUSIVE,
+                "No Windows UI Automation element inspector was configured.",
             )
         if step.kind is StepKind.FAIL:
             return StepResult(step.step_id, StepStatus.FAILED, step.message)

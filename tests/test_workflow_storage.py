@@ -110,6 +110,30 @@ def test_workflow_round_trips_window_inspection_target(tmp_path) -> None:
     assert load_workflow(path) == workflow
 
 
+def test_workflow_round_trips_ui_element_target(tmp_path) -> None:
+    path = tmp_path / "workflow.json"
+    workflow = Workflow(
+        "element",
+        "Element inspection",
+        (
+            WorkflowStep(
+                "inspect",
+                "Inspect element",
+                StepKind.INSPECT_UI_ELEMENT,
+                "Element found.",
+                (
+                    '{"window":{"title":"Once fixture","process_id":1234},'
+                    '"element":{"automation_id":"save","control_type":"Button"}}'
+                ),
+            ),
+        ),
+    )
+
+    save_workflow(workflow, path)
+
+    assert load_workflow(path) == workflow
+
+
 @pytest.mark.parametrize(
     "change",
     [

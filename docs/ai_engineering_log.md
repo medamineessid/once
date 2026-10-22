@@ -231,6 +231,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Read-only UI element inspection   (commit: pending)
+- Task: Identify one unique UI Automation control inside one verified window
+  without focus, input, text access, or mutation.
+- AI contribution: added `INSPECT_UI_ELEMENT`, nested target validation,
+  exact descendant matching, safe metadata evidence, replay/controller
+  integration, persistence coverage, and ambiguity/error handling.
+- Defect found: provider `ExecutionError` initially escaped the workflow runner;
+  it was converted into an accurate failed step result and tested.
+- Verification: deterministic provider and controller tests passed. A
+  disposable Once process was launched with isolated local app data; real
+  UI Automation found the replay-preview button by its exposed AutomationId
+  and returned non-sensitive metadata. Final full verification follows.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.

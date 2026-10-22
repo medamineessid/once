@@ -117,6 +117,15 @@ def test_main_window_shows_workflow_controls(qtbot: QtBot) -> None:
     assert window.findChildren(QListWidget)
 
 
+def test_main_window_exposes_stable_replay_control_ids(qtbot: QtBot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    assert window.findChild(QPushButton, "replayPreviewButton") is not None
+    assert window.findChild(QPushButton, "chooseAuthorizedFolderButton") is not None
+    assert window.findChild(QPushButton, "executeApprovedReplayButton") is not None
+
+
 def test_main_window_runs_demo_workflow(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
