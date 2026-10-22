@@ -71,6 +71,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Provider-independent AI proposal boundary   (commit: pending)
+- Task: Add an offline-testable AI provider contract, bounded interview
+  behavior, approved credential sources, and an opt-in Gemini adapter.
+- AI contribution: added provider request/response models, deterministic fake
+  provider, strict draft validation, Windows Credential Manager lookup with
+  environment fallback, and a standard-library Gemini REST adapter.
+- Defect found: the first credential probe decoded Windows generic credential
+  bytes as UTF-16; corrected it to UTF-8, matching the stored API-key format.
+- Verification: `.\.venv\Scripts\ruff.exe format .` completed;
+  `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  provider tests printed `3 passed`; no live network request was made.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.

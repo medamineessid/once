@@ -26,3 +26,7 @@ class ExecutionError(OnceError):
 
 class RecoveryError(OnceError):
     """An undo or recovery action could not be performed safely."""
+
+
+class AIProviderError(OnceError):
+    """An AI provider is unavailable or returned invalid proposal data."""
