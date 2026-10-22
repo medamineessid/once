@@ -90,7 +90,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Milestones B/C: authorized action and verification   (commit: pending)
+## 2026-10-22 — Milestones B/C: authorized action and verification   (commit: fb7dabf)
 - Task: Add a reusable, bounded read-only path action with observable evidence
   and persistence of that evidence.
 - AI contribution: added `INSPECT_PATH` and `VERIFY_PATH_EXISTS` steps,
