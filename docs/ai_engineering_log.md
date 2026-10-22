@@ -39,7 +39,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Milestone 2: versioned workflow persistence   (commit: pending)
+## 2026-10-22 — Milestone 2: versioned workflow persistence   (commit: b1feb9d)
 - Task: Save and reopen strictly validated workflow definitions locally.
 - AI contribution: added a versioned JSON representation, strict known-key and
   step-kind validation, UTF-8 save/load helpers, and isolated persistence tests.
@@ -49,7 +49,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Milestone 3: SQLite execution history   (commit: pending)
+## 2026-10-22 — Milestone 3: SQLite execution history   (commit: 375dc79)
 - Task: Persist real workflow runs and step outcomes, then connect the
   controller service to that history.
 - AI contribution: added UTC run timestamps, SQLite schema and repository,
