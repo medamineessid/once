@@ -45,6 +45,7 @@ class MainWindow(QMainWindow):
         self._workflow_list = QListWidget(self)
         self._history_list = QListWidget(self)
         self._result_list = QListWidget(self)
+        self._draft_list = QListWidget(self)
         self._run_button = QPushButton("Run selected workflow", self)
         self._demo_button = QPushButton("Run local demo", self)
         self._cancel_button = QPushButton("Cancel run", self)
@@ -53,6 +54,9 @@ class MainWindow(QMainWindow):
         self._save_button = QPushButton("Save current workflow", self)
         self._create_button = QPushButton("Create workflow from form", self)
         self._add_step_button = QPushButton("Add step to draft", self)
+        self._move_up_button = QPushButton("Move step up", self)
+        self._move_down_button = QPushButton("Move step down", self)
+        self._remove_step_button = QPushButton("Remove step", self)
         self._workflow_name = QLineEdit(self)
         self._step_name = QLineEdit(self)
         self._step_message = QLineEdit(self)
@@ -70,6 +74,10 @@ class MainWindow(QMainWindow):
         self._save_button.clicked.connect(self._save_current)
         self._create_button.clicked.connect(self._create_from_form)
         self._add_step_button.clicked.connect(self._add_step)
+        self._move_up_button.clicked.connect(lambda: self._move_draft_step(-1))
+        self._move_down_button.clicked.connect(lambda: self._move_draft_step(1))
+        self._remove_step_button.clicked.connect(self._remove_draft_step)
+        self._history_list.currentRowChanged.connect(self._show_history_details)
 
         form = QFormLayout()
         form.addRow("Workflow name", self._workflow_name)
@@ -89,6 +97,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._status_label)
         layout.addLayout(form)
         layout.addWidget(self._add_step_button)
+        layout.addWidget(self._draft_list)
+        draft_actions = QHBoxLayout()
+        for button in (self._move_up_button, self._move_down_button, self._remove_step_button):
+            draft_actions.addWidget(button)
+        layout.addLayout(draft_actions)
         layout.addWidget(self._create_button)
         layout.addWidget(QLabel("Saved workflows", self))
         layout.addWidget(self._workflow_list)
@@ -147,6 +160,7 @@ class MainWindow(QMainWindow):
             path = self._service.save(self._current_workflow)
             self._status_label.setText(f"Created and saved: {path.name}")
             self._draft_steps.clear()
+            self._draft_list.clear()
             self._refresh()
         except WorkflowValidationError as error:
             self._show_error(str(error))
@@ -181,11 +195,11 @@ class MainWindow(QMainWindow):
     def _finish_run(self, _value: object) -> None:
         if self._thread is not None:
             self._thread.quit()
-        self._set_running(False)
 
     def _thread_finished(self) -> None:
         self._worker = None
         self._thread = None
+        self._set_running(False)
 
     def _set_running(self, running: bool) -> None:
         for button in (
@@ -195,6 +209,9 @@ class MainWindow(QMainWindow):
             self._save_button,
             self._create_button,
             self._add_step_button,
+            self._move_up_button,
+            self._move_down_button,
+            self._remove_step_button,
         ):
             button.setEnabled(not running)
         self._cancel_button.setEnabled(running)
@@ -246,7 +263,45 @@ class MainWindow(QMainWindow):
         self._draft_steps.append(
             WorkflowStep(f"step-{len(self._draft_steps) + 1}", step_name, kind, message)
         )
+        self._render_draft()
         self._status_label.setText(f"Draft contains {len(self._draft_steps)} step(s).")
+
+    def _render_draft(self) -> None:
+        self._draft_list.clear()
+        for step in self._draft_steps:
+            self._draft_list.addItem(f"{step.step_id}: {step.name} ({step.kind.value})")
+
+    def _move_draft_step(self, offset: int) -> None:
+        index = self._draft_list.currentRow()
+        target = index + offset
+        if index < 0 or target < 0 or target >= len(self._draft_steps):
+            return
+        self._draft_steps[index], self._draft_steps[target] = (
+            self._draft_steps[target],
+            self._draft_steps[index],
+        )
+        self._render_draft()
+        self._draft_list.setCurrentRow(target)
+
+    def _remove_draft_step(self) -> None:
+        index = self._draft_list.currentRow()
+        if index < 0:
+            return
+        self._draft_steps.pop(index)
+        self._draft_steps = [
+            WorkflowStep(f"step-{position}", step.name, step.kind, step.message, step.target)
+            for position, step in enumerate(self._draft_steps, start=1)
+        ]
+        self._render_draft()
+
+    def _show_history_details(self, row: int) -> None:
+        runs = self._service.history()
+        if row < 0 or row >= len(runs):
+            return
+        run = runs[row]
+        self._result_list.clear()
+        for result in run.results:
+            self._show_step_result(result)
 
     @staticmethod
     def _history_text(run: WorkflowRun) -> str:

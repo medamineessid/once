@@ -138,7 +138,10 @@ def test_main_window_creates_and_saves_workflow_from_form(qtbot: QtBot, tmp_path
     qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
 
     assert (tmp_path / "workflows" / "invoices.json").exists()
-    assert window.findChildren(QListWidget)[0].count() == 1
+    assert any(
+        list_widget.count() == 1 and list_widget.item(0).text() == "invoices.json"
+        for list_widget in window.findChildren(QListWidget)
+    )
 
 
 def test_main_window_displays_each_step_result(qtbot: QtBot) -> None:
@@ -162,6 +165,39 @@ def test_main_window_displays_each_step_result(qtbot: QtBot) -> None:
         result_list.count() == 2 and "inspect: SUCCEEDED" in result_list.item(0).text()
         for result_list in result_lists
     )
+
+
+def test_main_window_reorders_and_removes_draft_steps(qtbot: QtBot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+    edits = window.findChildren(QLineEdit)
+    add_button = next(
+        button
+        for button in window.findChildren(QPushButton)
+        if button.text() == "Add step to draft"
+    )
+    edits[1].setText("First")
+    edits[2].setText("first")
+    qtbot.mouseClick(add_button, Qt.MouseButton.LeftButton)
+    edits[1].setText("Second")
+    edits[2].setText("second")
+    qtbot.mouseClick(add_button, Qt.MouseButton.LeftButton)
+
+    draft_list = next(
+        list_widget for list_widget in window.findChildren(QListWidget) if list_widget.count() == 2
+    )
+    draft_list.setCurrentRow(1)
+    move_up = next(
+        button for button in window.findChildren(QPushButton) if button.text() == "Move step up"
+    )
+    qtbot.mouseClick(move_up, Qt.MouseButton.LeftButton)
+    assert draft_list.item(0).text().endswith("Second (REPORT)")
+
+    remove = next(
+        button for button in window.findChildren(QPushButton) if button.text() == "Remove step"
+    )
+    qtbot.mouseClick(remove, Qt.MouseButton.LeftButton)
+    assert draft_list.count() == 1
 
 
 def test_app_smoke_test_exits_zero(tmp_path) -> None:

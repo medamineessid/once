@@ -11,6 +11,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review: 
 
+## 2026-10-22 — Draft editing and history detail inspection   (commit: pending)
+- Task: Improve the workflow editor and execution-history surface without
+  moving workflow logic into the UI.
+- AI contribution: added draft step reordering and removal, regenerated stable
+  draft IDs after removal, selected-history result/evidence rendering, and
+  thread-lifecycle locking until the worker thread finishes.
+- Defect found: the GUI previously re-enabled controls as soon as the worker
+  requested thread shutdown, allowing a second run attempt while the QThread
+  was still alive; controls now re-enable from the thread-finished signal.
+- Verification: `.\.venv\Scripts\ruff.exe format .` completed; `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`; `.\.venv\Scripts\python.exe -m pytest -q` printed `52 passed, 2 skipped`; `git diff --check` reported no whitespace errors.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.
