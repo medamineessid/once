@@ -21,6 +21,35 @@ paid AI API, unrestricted scripts, arbitrary shell commands, or opaque
 AI-generated actions. Any future AI proposal must produce validated structured
 workflow data; deterministic Once components remain responsible for execution.
 
+## AI-ASSISTED RECORDER AMENDMENT (2026-10-22)
+
+Once may accept AI-assisted recording as a proposal feature. An AI provider may
+analyze a local event log, sampled screenshots, UI-element metadata, and a
+bounded user interview, then return either a question or a declarative
+workflow draft. The provider must never execute actions, emit executable code,
+emit shell commands, or bypass Once validation and approval.
+
+Every AI-generated draft is untrusted input. It must use an explicit allowlist
+of step kinds, pass the same strict workflow validator as hand-authored
+workflows, be shown to the user for review, and require explicit approval
+before it becomes runnable. Malformed or unknown output is rejected visibly
+and recorded as an error; it is never silently repaired.
+
+Cloud providers are optional, disabled by default, and require explicit user
+activation and consent before any recording data leaves the machine. Windows
+Credential Manager is the normal credential store. Environment variables are
+allowed only as a development/testing fallback. Credentials must never be
+stored in ordinary configuration files, logs, workflow data, or the
+repository. Automated tests use a deterministic fake provider and never call a
+live service.
+
+The recorder stores an event log as its source of truth and may store sampled
+screenshots and UI-element metadata. Password fields and password keystrokes
+must be redacted or skipped. Users must be able to review and delete local
+recordings and queued AI input. Replay remains the responsibility of the
+deterministic engine and is subject to explicit application targeting,
+boundedness, cancellation, dry-run behavior, and postcondition verification.
+
 # PRODUCT — SUPERSEDED FILE-MANAGEMENT-FIRST DEFINITION
 
 The following definition is retained as historical detail and as the safety
@@ -37,7 +66,14 @@ Core principle: the user must not need to understand automation. The application
 
 IN: bulk rename; organise by extension / filename / date; copy; move; save/reopen/rerun workflows; preview of every change; detection of duplicate names and destination conflicts; execution history (journal); undo for eligible operations; inferring simple filename rules from user-given examples; fully local operation.
 
-OUT (do not build, do not stub, do not "prepare for"): controlling other desktop apps; mouse/keyboard recording; website automation; running arbitrary or AI-generated code/shell commands; permanent deletion; cloud sync / accounts / plugin marketplace; supporting every file type; recursive deep-tree reorganisation beyond the explicit optional "include subfolders" scan flag; changing file extensions; renaming/moving folders (only files are renamed/moved; folders are only CREATED).
+OUT (do not build, do not stub, do not "prepare for"): running arbitrary or
+AI-generated code/shell commands; permanent deletion; cloud sync / accounts /
+plugin marketplace; supporting every file type; recursive deep-tree
+reorganisation beyond the explicit optional "include subfolders" scan flag;
+changing file extensions; renaming/moving folders (only files are
+renamed/moved; folders are only CREATED). Desktop recording, AI proposals, and
+cloud-provider adapters are governed by the amendment above and the revised
+roadmap; they do not grant permission for unrestricted replay or execution.
 
 If a task seems to need something OUT of scope, stop and say so in your report instead of building it.
 
@@ -76,8 +112,13 @@ integrations.
    behind explicit interfaces; no integration is represented by a placeholder.
 7. **User workflow editor and history UI:** expose only capabilities that have
    real engine and integration implementations.
-8. **Packaging and release hardening:** Windows packaging, recovery testing,
-   documentation, and performance checks.
+8. **AI-assisted recorder:** local event capture with redaction, keyframes,
+   provider-independent analysis and bounded interview, validated draft
+   review, and explicit consent for optional cloud analysis.
+9. **Controlled input replay:** allowlisted input steps, application targeting,
+   dry-run, kill switch, postconditions, evidence, and bounded retries.
+10. **Packaging and release hardening:** Windows packaging, recovery testing,
+    documentation, and performance checks.
 
 # NON-NEGOTIABLE SAFETY INVARIANTS (each MUST have at least one automated test)
 

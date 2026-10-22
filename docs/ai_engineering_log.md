@@ -24,6 +24,23 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — AI-assisted recorder specification amendment   (commit: pending)
+- Task: Amend the product specification for AI-assisted recording while
+  preserving deterministic execution, validation, privacy, and offline-first
+  requirements.
+- AI contribution: added the proposal-only AI contract, cloud consent and
+  credential policy, recording privacy requirements, and revised recorder and
+  replay roadmap entries; recorded the user's provider and credential
+  decisions.
+- Defect found: the previous specification listed desktop recording and cloud
+  AI as permanently out of scope, which contradicted the approved recorder
+  direction; the amendment now scopes them without permitting unrestricted
+  execution.
+- Verification: reviewed the affected specification and decision sections;
+  no application code or dependency manifests were changed.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.

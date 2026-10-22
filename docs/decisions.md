@@ -20,6 +20,31 @@ Decisions D1–D10 below are copied verbatim from `AGENTS.md` (they are pre-made
   coding-agent coordination, and monitoring integrations require separate
   design and verification before implementation.
 
+## 2026-10-22 — AI-assisted recorder provider and credential policy
+
+- **Question:** How should Once support AI-assisted recording without allowing
+  an AI provider to execute actions or expose credentials?
+- **Choice:** Add a provider-independent interface, a deterministic fake
+  provider for tests, and Gemini as the first real cloud adapter. Cloud AI is
+  disabled by default and requires explicit activation and consent.
+- **Credential policy:** Use Windows Credential Manager for normal Windows
+  operation. Permit environment-variable credentials only for development and
+  tests. Never store credentials in ordinary configuration files, workflow
+  JSON, recordings, logs, or source control.
+- **Reason:** This permits a real demonstrator while preserving local-first
+  operation, test determinism, and the rule that AI proposes validated
+  workflow data but never executes it.
+- **Implementation decision:** The first recorder milestone stores an event log
+  plus user-selectable screenshots/keyframes. Continuous video is optional,
+  not required for the event-log source of truth. Target application support
+  begins with whichever Windows UI metadata can be captured and verified on
+  the development machine; unsupported targets must be reported rather than
+  implied to work.
+- **Unresolved:** Gemini SDK/API compatibility and Windows UI Automation
+  capture-library compatibility on Python 3.14.3 require a primary-source
+  compatibility spike and real local installation tests before pinning
+  dependencies.
+
 ---
 
 ## 2026-10-21 — Step 0: Pre-flight evidence and toolchain decision
