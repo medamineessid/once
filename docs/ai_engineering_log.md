@@ -180,6 +180,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Honest observed and inferred action presentation   (commit: pending)
+- Task: Make the recording-to-proposal boundary explicit without claiming
+  unsupported clicks, keystrokes, or reports can be replayed.
+- AI contribution: labeled the recording timeline as observed/redacted data
+  and added replay permission plus `source=AI inference` to proposal steps.
+- Defect found: the first expected preview assertion retained the old format;
+  it was updated to assert the new permission and provenance text.
+- Verification: targeted recording, replay, and GUI tests passed with 15
+  tests; final full verification is recorded after this milestone commit.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.

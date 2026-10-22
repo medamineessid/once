@@ -1,6 +1,6 @@
 # Once progress
 
-- Last completed step: Controller and UI replay preview integration
+- Last completed step: Honest observed-versus-inferred replay presentation
 - Last commit: pending
 - Next action: expand only verified, allowlisted actions beyond path checks
 - Currently failing tests or known breakage: none

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from engine.errors import WorkflowValidationError
+from engine.replay import ReplayExecutor
 from engine.workflow import Workflow, WorkflowRunner
 
 from .models import ProviderDraft
@@ -30,14 +31,10 @@ class ApprovedProposal:
 def preview_proposal(proposal: ProviderDraft) -> WorkflowPreview:
     """Validate and render a proposal without saving or executing it."""
     WorkflowRunner.validate(proposal.workflow)
+    replay_preview = ReplayExecutor().preview(proposal.workflow)
     return WorkflowPreview(
         proposal.goal,
-        tuple(
-            f"{step.step_id}: {step.name} [{step.kind.value}] "
-            f"target={step.target or 'none'} attempts={step.max_attempts} "
-            f"postcondition={step.postcondition.value if step.postcondition else 'none'}"
-            for step in proposal.workflow.steps
-        ),
+        tuple(f"{step_preview} source=AI inference" for step_preview in replay_preview.steps),
     )
 
 

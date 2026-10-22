@@ -60,8 +60,9 @@ def test_recording_to_approved_proposal(tmp_path) -> None:
 
     assert preview.goal == "Goal"
     assert preview.steps == (
-        "summary: Summary [VERIFY_PATH_EXISTS] "
-        f"target={tmp_path / 'result.txt'} attempts=1 postcondition=none",
+        "summary: action=VERIFY_PATH_EXISTS "
+        f"target={tmp_path / 'result.txt'} permission=ALLOWED "
+        "expected=Recorded result exists. source=AI inference",
     )
     assert approved.workflow == workflow
 
