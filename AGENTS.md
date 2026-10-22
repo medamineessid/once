@@ -152,7 +152,10 @@ once/
 ├── requirements.txt  requirements-dev.txt  pyproject.toml  README.md  AGENTS.md  .gitignore
 ```
 
-Dependency direction: ui -> controller -> (engine, storage). storage -> engine.models only. engine never imports storage, controller, ui, or PySide6.
+Dependency direction: ui -> controller -> (engine, storage). storage may
+import the immutable workflow domain types from `engine.models` and
+`engine.workflow`; it never imports UI or controller code. engine never imports
+storage, controller, ui, or PySide6.
 Filesystem mutations are permitted ONLY in `engine/executor.py` and `engine/recovery.py` (and the journal DB writes in `storage/`). Everything else is read-only with respect to user files.
 
 # DOMAIN MODEL (implement exactly; extend only with justification)

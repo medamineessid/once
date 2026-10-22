@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import uuid4
 
@@ -76,6 +77,8 @@ class WorkflowRun:
     workflow_id: str
     status: WorkflowStatus
     results: tuple[StepResult, ...]
+    started_at: datetime
+    finished_at: datetime
 
 
 CancelCheck = Callable[[], bool]
@@ -119,8 +122,19 @@ class WorkflowRunner:
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
         self.validate(workflow)
+        started_at = datetime.now(UTC)
         results: list[StepResult] = []
         is_cancelled = cancel_check or (lambda: False)
+
+        def completed(status: WorkflowStatus) -> WorkflowRun:
+            return WorkflowRun(
+                run_id=run_id or str(uuid4()),
+                workflow_id=workflow.workflow_id,
+                status=status,
+                results=tuple(results),
+                started_at=started_at,
+                finished_at=datetime.now(UTC),
+            )
 
         for index, step in enumerate(workflow.steps):
             if is_cancelled():
@@ -132,12 +146,7 @@ class WorkflowRunner:
                     )
                     for remaining in workflow.steps[index:]
                 )
-                return WorkflowRun(
-                    run_id=run_id or str(uuid4()),
-                    workflow_id=workflow.workflow_id,
-                    status=WorkflowStatus.CANCELLED,
-                    results=tuple(results),
-                )
+                return completed(WorkflowStatus.CANCELLED)
 
             results.append(
                 StepResult(
@@ -160,12 +169,7 @@ class WorkflowRunner:
                     )
                     for remaining in workflow.steps[index + 1 :]
                 )
-                return WorkflowRun(
-                    run_id=run_id or str(uuid4()),
-                    workflow_id=workflow.workflow_id,
-                    status=WorkflowStatus.FAILED,
-                    results=tuple(results),
-                )
+                return completed(WorkflowStatus.FAILED)
 
             results[-1] = StepResult(
                 step_id=step.step_id,
@@ -173,9 +177,4 @@ class WorkflowRunner:
                 message=step.message,
             )
 
-        return WorkflowRun(
-            run_id=run_id or str(uuid4()),
-            workflow_id=workflow.workflow_id,
-            status=WorkflowStatus.SUCCEEDED,
-            results=tuple(results),
-        )
+        return completed(WorkflowStatus.SUCCEEDED)

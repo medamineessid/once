@@ -49,6 +49,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Milestone 3: SQLite execution history   (commit: pending)
+- Task: Persist real workflow runs and step outcomes, then connect the
+  controller service to that history.
+- AI contribution: added UTC run timestamps, SQLite schema and repository,
+  history reconstruction, and controller integration tests for success and
+  failure runs.
+- Defect found: the first history reconstruction returned raw strings instead
+  of enum values; fixed it by converting persisted statuses back to their
+  domain enums.
+- Verification: `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  targeted pytest printed `17 passed in 0.36s`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.

@@ -9,13 +9,19 @@ from engine.workflow import (
     WorkflowRunner,
     WorkflowStep,
 )
+from storage.history import ExecutionHistory
 
 
 class WorkflowService:
     """Create and execute the currently supported local workflow definitions."""
 
-    def __init__(self, runner: WorkflowRunner | None = None) -> None:
+    def __init__(
+        self,
+        runner: WorkflowRunner | None = None,
+        history: ExecutionHistory | None = None,
+    ) -> None:
         self._runner = runner or WorkflowRunner()
+        self._history = history
 
     @staticmethod
     def demo_workflow() -> Workflow:
@@ -41,4 +47,11 @@ class WorkflowService:
 
     def run_demo(self) -> WorkflowRun:
         """Execute the demo through the same service path used by future workflows."""
-        return self._runner.run(self.demo_workflow())
+        return self.run_workflow(self.demo_workflow())
+
+    def run_workflow(self, workflow: Workflow) -> WorkflowRun:
+        """Execute a workflow and persist its real outcome when history is configured."""
+        run = self._runner.run(workflow)
+        if self._history is not None:
+            self._history.record(run)
+        return run
