@@ -154,7 +154,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Responsive cancellable workflow execution   (commit: pending)
+## 2026-10-22 — Responsive cancellable workflow execution   (commit: 7a06207)
 - Task: Move workflow execution off the Qt GUI thread and expose cooperative
   progress/cancellation without introducing Qt into the engine.
 - AI contribution: added engine progress callbacks, controller callback

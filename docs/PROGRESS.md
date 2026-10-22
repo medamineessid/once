@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: Responsive cancellable workflow execution
-- Last commit: pending
+- Last commit: 7a06207
 - Next action: add explicit step editing/reordering and detailed history inspection
 - Next action: add a real workflow editor for supported declarative steps
 - Currently failing tests or known breakage: none
