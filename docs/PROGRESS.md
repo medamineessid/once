@@ -4,9 +4,9 @@
 - Last commit: 53e4ce0
 - Last completed step: Bounded retry and postcondition workflow steps
 - Last commit: pending
-- Last completed step: Provider-independent AI proposal boundary
+- Last completed step: Bounded provider-driven interview orchestration
 - Last commit: pending
-- Next action: connect recorder review and bounded interview to the Qt UI
+- Next action: connect recorder review and interview state to the Qt UI
 - Currently failing tests or known breakage: none
 - Open items: file management is retained as a later integration; external
   desktop/browser/agent integrations are not implemented

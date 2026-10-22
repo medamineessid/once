@@ -85,6 +85,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Bounded provider-driven interview   (commit: pending)
+- Task: Coordinate provider questions and user answers without placing
+  orchestration logic in Qt or allowing unbounded interview loops.
+- AI contribution: added immutable interview state, bounded answer handling,
+  empty-answer rejection, and provider-to-draft completion behavior.
+- Defect found: none after focused testing; the session deliberately treats
+  provider questions as conversation state and never executes the returned
+  workflow.
+- Verification: `.\.venv\Scripts\ruff.exe format .` completed;
+  `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  focused pytest printed `2 passed`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.
