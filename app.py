@@ -6,10 +6,13 @@ to the engine package; this module only wires the UI together.
 
 from __future__ import annotations
 
+import os
 import sys
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
+from controller.service import WorkflowService
 from ui.main_window import MainWindow
 
 SMOKE_TEST_FLAG = "--smoke-test"
@@ -30,7 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     qt_args = [sys.argv[0], *(arg for arg in args if arg != SMOKE_TEST_FLAG)]
 
     app = build_application(qt_args)
-    window = MainWindow()
+    app_data_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Once"
+    window = MainWindow(WorkflowService.for_app_data(app_data_dir))
     window.show()
 
     if smoke_test:

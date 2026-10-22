@@ -76,6 +76,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Milestone A: GUI workflow vertical slice   (commit: pending)
+- Task: Make the real engine, workflow storage, and execution history usable
+  through the Qt application without bypassing the controller boundary.
+- AI contribution: added controller-owned app-data wiring, saved workflow
+  listing/loading/saving, selected-workflow execution, history rendering, and
+  GUI smoke coverage.
+- Defect found: the placeholder-window smoke assertion expected the old startup
+  label after the GUI became functional; updated the test to assert the new
+  user-facing controls.
+- Verification: `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  focused pytest printed `13 passed in 1.10s`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.

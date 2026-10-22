@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from engine.errors import WorkflowValidationError
 from engine.workflow import (
     StepKind,
     Workflow,
@@ -9,7 +12,9 @@ from engine.workflow import (
     WorkflowRunner,
     WorkflowStep,
 )
+from storage.database import connect
 from storage.history import ExecutionHistory
+from storage.workflows import load_workflow, save_workflow
 
 
 class WorkflowService:
@@ -19,9 +24,21 @@ class WorkflowService:
         self,
         runner: WorkflowRunner | None = None,
         history: ExecutionHistory | None = None,
+        workflow_directory: Path | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._history = history
+        self._workflow_directory = workflow_directory
+        if workflow_directory is not None:
+            workflow_directory.mkdir(parents=True, exist_ok=True)
+
+    @classmethod
+    def for_app_data(cls, app_data_dir: Path) -> WorkflowService:
+        """Create a service backed by the application's local data directory."""
+        workflow_directory = app_data_dir / "workflows"
+        workflow_directory.mkdir(parents=True, exist_ok=True)
+        history = ExecutionHistory(connect(app_data_dir / "once.db"))
+        return cls(history=history, workflow_directory=workflow_directory)
 
     @staticmethod
     def demo_workflow() -> Workflow:
@@ -55,3 +72,30 @@ class WorkflowService:
         if self._history is not None:
             self._history.record(run)
         return run
+
+    def save(self, workflow: Workflow, path: Path | None = None) -> Path:
+        """Validate and save a workflow through the storage boundary."""
+        if self._workflow_directory is None and path is None:
+            raise WorkflowValidationError("Workflow storage is not configured.")
+        destination = path or self._workflow_directory / f"{workflow.workflow_id}.json"
+        save_workflow(workflow, destination)
+        return destination
+
+    def list_saved(self) -> tuple[Path, ...]:
+        """Return saved workflow files in deterministic order."""
+        if self._workflow_directory is None:
+            return ()
+        return tuple(
+            sorted(self._workflow_directory.glob("*.json"), key=lambda item: item.name.casefold())
+        )
+
+    @staticmethod
+    def load(path: Path) -> Workflow:
+        """Load one validated workflow through the storage boundary."""
+        return load_workflow(path)
+
+    def history(self) -> tuple[WorkflowRun, ...]:
+        """Return persisted executions, newest first."""
+        if self._history is None:
+            return ()
+        return tuple(record.run for record in self._history.list_runs())

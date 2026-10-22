@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QLabel, QListWidget, QPushButton
 from pytestqt.qtbot import QtBot
 
 from engine.errors import (
@@ -97,22 +97,27 @@ def test_main_window_shows_workflow_controls(qtbot: QtBot) -> None:
 
     assert window.windowTitle() == "Once"
     label_texts = [label.text() for label in window.findChildren(QLabel)]
-    assert "Once is starting up…" in label_texts
-    assert [button.text() for button in window.findChildren(QPushButton)] == ["Run demo workflow"]
+    assert "Choose a saved workflow or run the local demo." in label_texts
+    assert "Run local demo" in [button.text() for button in window.findChildren(QPushButton)]
+    assert window.findChildren(QListWidget)
 
 
 def test_main_window_runs_demo_workflow(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
 
-    qtbot.mouseClick(window.findChild(QPushButton), Qt.MouseButton.LeftButton)
+    demo_button = next(
+        button for button in window.findChildren(QPushButton) if button.text() == "Run local demo"
+    )
+    qtbot.mouseClick(demo_button, Qt.MouseButton.LeftButton)
 
     assert "SUCCEEDED: 2 steps recorded" in [label.text() for label in window.findChildren(QLabel)]
 
 
-def test_app_smoke_test_exits_zero() -> None:
+def test_app_smoke_test_exits_zero(tmp_path) -> None:
     environment = os.environ.copy()
     environment["QT_QPA_PLATFORM"] = "offscreen"
+    environment["LOCALAPPDATA"] = str(tmp_path / "localappdata")
 
     completed = subprocess.run(
         [sys.executable, str(PROJECT_ROOT / "app.py"), "--smoke-test"],

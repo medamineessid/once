@@ -1,8 +1,8 @@
 # Once progress
 
-- Last completed step: SQLite execution history and controller integration
-- Last commit: 0c4d791
-- Next action: connect persisted workflows and history to a non-demo UI flow
+- Last completed step: GUI workflow and history vertical slice
+- Last commit: pending
+- Next action: add reusable action primitives and observation/verification contracts
 - Currently failing tests or known breakage: none
 - Open items: file management is retained as a later integration; external
   desktop/browser/agent integrations are not implemented
