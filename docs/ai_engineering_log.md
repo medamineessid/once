@@ -260,7 +260,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Headless acceptance-case verifier slice   (commit: pending)
+## 2026-10-22 — Headless acceptance-case verifier slice   (commit: 7ad9987)
 - Task: Verify synthetic invoice outputs through an allowlisted command and
   produce bounded redacted JSON and Markdown evidence.
 - AI contribution: added strict acceptance-case models, exact argv command

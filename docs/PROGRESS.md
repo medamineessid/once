@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: Headless acceptance-case verifier slice
-- Last commit: pending
+- Last commit: 7ad9987
 - Next action: stop after A2; do not start the loop controller or coding-agent adapter
 - Currently failing tests or known breakage: none
 - Open items: live Gemini use is opt-in and unverified; screenshots are
