@@ -11,6 +11,7 @@ from engine.replay import ReplayExecutor, ReplayPreview
 from engine.workflow import (
     StepKind,
     StepResult,
+    WindowInspector,
     Workflow,
     WorkflowRun,
     WorkflowRunner,
@@ -29,9 +30,16 @@ class WorkflowService:
         runner: WorkflowRunner | None = None,
         history: ExecutionHistory | None = None,
         workflow_directory: Path | None = None,
+        window_inspector: WindowInspector | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
+        if window_inspector is None:
+            from integrations.windows_automation import PywinautoWindowInspector
+
+            self._window_inspector = PywinautoWindowInspector().inspect
+        else:
+            self._window_inspector = window_inspector
         self._history = history
         self._workflow_directory = workflow_directory
         if workflow_directory is not None:
@@ -126,6 +134,7 @@ class WorkflowService:
         allowed_root: Path | None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[StepResult], None] | None = None,
+        window_inspector: WindowInspector | None = None,
     ) -> WorkflowRun:
         """Execute and persist only actions allowed by the replay policy."""
         run = self._replay.execute(
@@ -133,6 +142,7 @@ class WorkflowService:
             allowed_root=allowed_root,
             cancel_check=cancel_check,
             progress_callback=progress_callback,
+            window_inspector=window_inspector or self._window_inspector,
         )
         if self._history is not None:
             self._history.record(run)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -22,6 +23,7 @@ class StepKind(StrEnum):
     FAIL = "FAIL"
     INSPECT_PATH = "INSPECT_PATH"
     VERIFY_PATH_EXISTS = "VERIFY_PATH_EXISTS"
+    INSPECT_WINDOW = "INSPECT_WINDOW"
 
 
 class PostconditionKind(StrEnum):
@@ -98,6 +100,31 @@ class WorkflowRun:
 
 CancelCheck = Callable[[], bool]
 ProgressCallback = Callable[[StepResult], None]
+WindowInspector = Callable[[str], tuple[str, ...]]
+
+
+def _validate_window_target(step: WorkflowStep) -> None:
+    if not step.target:
+        raise WorkflowValidationError(f"Step {step.step_id} needs a window target.")
+    try:
+        target = json.loads(step.target)
+    except json.JSONDecodeError as error:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has an invalid window target."
+        ) from error
+    if not isinstance(target, dict) or not set(target).issubset(
+        {"title", "process_id", "class_name", "automation_id"}
+    ):
+        raise WorkflowValidationError(f"Step {step.step_id} has unknown window target fields.")
+    if not isinstance(target.get("title"), str) or not target["title"].strip():
+        raise WorkflowValidationError(f"Step {step.step_id} needs a window title.")
+    if "process_id" in target and (
+        not isinstance(target["process_id"], int) or target["process_id"] < 1
+    ):
+        raise WorkflowValidationError(f"Step {step.step_id} has an invalid process ID.")
+    for field in ("title", "class_name", "automation_id"):
+        if field in target and not isinstance(target[field], str):
+            raise WorkflowValidationError(f"Step {step.step_id} has an invalid {field}.")
 
 
 class WorkflowRunner:
@@ -145,6 +172,8 @@ class WorkflowRunner:
                 not step.target or not Path(step.target).is_absolute()
             ):
                 raise WorkflowValidationError(f"Step {step.step_id} needs an absolute target path.")
+            if step.kind is StepKind.INSPECT_WINDOW:
+                _validate_window_target(step)
             step_ids.add(step.step_id)
 
     def run(
@@ -155,6 +184,7 @@ class WorkflowRunner:
         run_id: str | None = None,
         allowed_root: Path | None = None,
         progress_callback: ProgressCallback | None = None,
+        window_inspector: WindowInspector | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
         self.validate(workflow)
@@ -188,6 +218,7 @@ class WorkflowRunner:
                 step,
                 allowed_root,
                 is_cancelled,
+                window_inspector,
             )
             results.append(result)
             if progress_callback is not None:
@@ -214,6 +245,7 @@ class WorkflowRunner:
         step: WorkflowStep,
         allowed_root: Path | None,
         cancel_check: CancelCheck,
+        window_inspector: WindowInspector | None,
     ) -> StepResult:
         attempts: list[str] = []
         for attempt in range(1, step.max_attempts + 1):
@@ -224,7 +256,10 @@ class WorkflowRunner:
                     "Skipped because the workflow was cancelled.",
                     tuple(attempts),
                 )
-            result = self._run_once(step, allowed_root)
+            if window_inspector is None:
+                result = self._run_once(step, allowed_root)
+            else:
+                result = self._run_once(step, allowed_root, window_inspector)
             if result.status in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
                 if step.postcondition is None:
                     if attempt == 1:
@@ -255,9 +290,30 @@ class WorkflowRunner:
             )
         raise AssertionError("Retry loop must return a result.")
 
-    def _run_once(self, step: WorkflowStep, allowed_root: Path | None) -> StepResult:
+    def _run_once(
+        self,
+        step: WorkflowStep,
+        allowed_root: Path | None,
+        window_inspector: WindowInspector | None = None,
+    ) -> StepResult:
         if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
             return self._run_path_step(step, allowed_root)
+        if step.kind is StepKind.INSPECT_WINDOW:
+            if window_inspector is not None:
+                try:
+                    return StepResult(
+                        step.step_id,
+                        StepStatus.VERIFIED,
+                        step.message,
+                        window_inspector(step.target or ""),
+                    )
+                except (OSError, RuntimeError, ValueError) as error:
+                    return StepResult(step.step_id, StepStatus.FAILED, str(error))
+            return StepResult(
+                step.step_id,
+                StepStatus.INCONCLUSIVE,
+                "No Windows UI Automation inspector was configured.",
+            )
         if step.kind is StepKind.FAIL:
             return StepResult(step.step_id, StepStatus.FAILED, step.message)
         return StepResult(step.step_id, StepStatus.SUCCEEDED, step.message)

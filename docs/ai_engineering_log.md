@@ -205,6 +205,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — First verified Windows UI Automation inspection   (commit: pending)
+- Task: Add one narrowly scoped, read-only UI Automation action with explicit
+  window identity and no focus or input fallback.
+- AI contribution: added `INSPECT_WINDOW`, strict JSON target validation,
+  `PywinautoWindowInspector`, replay policy integration, evidence, controller
+  wiring, and persistence tests.
+- Defect found: the first controller wiring passed the inspector to approved
+  execution but not general replay; targeted tests caught and corrected it.
+- Verification: fake-provider tests cover exact identity and ambiguity; a real
+  Windows probe found 9 titled windows and completed identity inspection;
+  final suite verification is recorded after this milestone commit.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.

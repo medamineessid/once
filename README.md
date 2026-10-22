@@ -104,3 +104,9 @@ workflow can then be selected and run through the normal deterministic engine.
 
 The offline demo does not send recording data over the network. Gemini remains
 disabled unless a caller explicitly enables it and supplies a credential.
+
+Replay currently supports read-only path checks and exact-identity Windows UI
+Automation window inspection. Window targets include a title and may include a
+process ID, class name, or automation ID. Ambiguous or missing windows fail
+closed; Once never falls back to the active window and does not replay clicks,
+keystrokes, or text input.

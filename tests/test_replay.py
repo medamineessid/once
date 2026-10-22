@@ -14,6 +14,7 @@ from engine.workflow import (
     WorkflowStatus,
     WorkflowStep,
 )
+from integrations.windows_automation import PywinautoWindowInspector
 
 
 def test_replay_dry_run_does_not_read_or_modify_target(tmp_path) -> None:
@@ -114,3 +115,68 @@ def test_controller_replay_persists_progress_and_cancellation(tmp_path) -> None:
     assert [result.step_id for result in progress] == ["first"]
     assert service.history()[0].status is WorkflowStatus.CANCELLED
     service.close()
+
+
+class FakeInfo:
+    name = "Once fixture"
+    process_id = 1234
+    class_name = "FixtureWindow"
+    automation_id = "root"
+    control_type = "Window"
+
+
+class FakeWindow:
+    element_info = FakeInfo()
+
+
+class FakeDesktop:
+    def __init__(self, windows) -> None:
+        self._windows = windows
+
+    def windows(self):
+        return self._windows
+
+
+def test_windows_inspector_resolves_exact_identity_without_focus() -> None:
+    inspector = PywinautoWindowInspector(lambda: FakeDesktop([FakeWindow()]))
+
+    evidence = inspector.inspect(
+        '{"title":"Once fixture","process_id":1234,"class_name":"FixtureWindow"}'
+    )
+
+    assert evidence == (
+        "title=Once fixture",
+        "process_id=1234",
+        "class_name=FixtureWindow",
+        "control_type=Window",
+    )
+
+
+def test_windows_inspector_rejects_ambiguous_identity() -> None:
+    inspector = PywinautoWindowInspector(lambda: FakeDesktop([FakeWindow(), FakeWindow()]))
+
+    with pytest.raises(ExecutionError, match="ambiguous"):
+        inspector.inspect('{"title":"Once fixture"}')
+
+
+def test_window_action_is_policy_allowed_and_has_no_fallback() -> None:
+    workflow = Workflow(
+        "window",
+        "Window",
+        (
+            WorkflowStep(
+                "inspect",
+                "Inspect",
+                StepKind.INSPECT_WINDOW,
+                "Window found.",
+                '{"title":"Once fixture"}',
+            ),
+        ),
+    )
+    service = WorkflowService(window_inspector=lambda _target: ("title=Once fixture",))
+
+    run = service.run_replay(workflow, allowed_root=None)
+
+    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.results[0].status is StepStatus.VERIFIED
+    assert run.results[0].evidence == ("title=Once fixture",)

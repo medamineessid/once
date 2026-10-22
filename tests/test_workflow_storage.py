@@ -89,6 +89,27 @@ def test_workflow_round_trips_retry_and_postcondition(tmp_path) -> None:
     assert load_workflow(path) == workflow
 
 
+def test_workflow_round_trips_window_inspection_target(tmp_path) -> None:
+    path = tmp_path / "workflow.json"
+    workflow = Workflow(
+        "window",
+        "Window inspection",
+        (
+            WorkflowStep(
+                "inspect",
+                "Inspect window",
+                StepKind.INSPECT_WINDOW,
+                "Window found.",
+                '{"title":"Once fixture","process_id":1234}',
+            ),
+        ),
+    )
+
+    save_workflow(workflow, path)
+
+    assert load_workflow(path) == workflow
+
+
 @pytest.mark.parametrize(
     "change",
     [
