@@ -8,9 +8,10 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QListWidget, QPushButton
+from PySide6.QtWidgets import QLabel, QLineEdit, QListWidget, QPushButton
 from pytestqt.qtbot import QtBot
 
+from controller.service import WorkflowService
 from engine.errors import (
     ExecutionError,
     OnceError,
@@ -112,6 +113,26 @@ def test_main_window_runs_demo_workflow(qtbot: QtBot) -> None:
     qtbot.mouseClick(demo_button, Qt.MouseButton.LeftButton)
 
     assert "SUCCEEDED: 2 steps recorded" in [label.text() for label in window.findChildren(QLabel)]
+
+
+def test_main_window_creates_and_saves_workflow_from_form(qtbot: QtBot, tmp_path) -> None:
+    service = WorkflowService(workflow_directory=tmp_path / "workflows")
+    window = MainWindow(service)
+    qtbot.addWidget(window)
+    edits = window.findChildren(QLineEdit)
+    edits[0].setText("Invoices")
+    edits[1].setText("Report extraction")
+    edits[2].setText("Extraction completed")
+
+    create_button = next(
+        button
+        for button in window.findChildren(QPushButton)
+        if button.text() == "Create workflow from form"
+    )
+    qtbot.mouseClick(create_button, Qt.MouseButton.LeftButton)
+
+    assert (tmp_path / "workflows" / "invoices.json").exists()
+    assert window.findChildren(QListWidget)[0].count() == 1
 
 
 def test_app_smoke_test_exits_zero(tmp_path) -> None:

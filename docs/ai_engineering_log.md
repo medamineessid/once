@@ -105,6 +105,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Milestone A extension: declarative workflow editor   (commit: pending)
+- Task: Allow users to create and save supported workflows from the GUI rather
+  than requiring hand-authored JSON.
+- AI contribution: added a small controller-backed form for workflow name,
+  step name, message, and the supported REPORT/FAIL step kinds.
+- Defect found: the first implementation omitted the `StepKind` UI import;
+  the application smoke test caught the NameError and the import was fixed.
+- Verification: `.\.venv\Scripts\ruff.exe check --fix .` fixed two import-order
+  issues; final lint printed `All checks passed!`; full pytest printed
+  `45 passed, 1 skipped`; the offscreen app smoke test exited 0.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.
