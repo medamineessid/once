@@ -63,7 +63,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Lifecycle validation hardening   (commit: pending)
+## 2026-10-22 — Lifecycle validation hardening   (commit: 0c4d791)
 - Task: Prevent programmatic workflow callers from bypassing known step-kind
   validation.
 - AI contribution: added explicit enum-type validation and a regression test
