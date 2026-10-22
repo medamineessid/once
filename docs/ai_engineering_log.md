@@ -63,6 +63,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Lifecycle validation hardening   (commit: pending)
+- Task: Prevent programmatic workflow callers from bypassing known step-kind
+  validation.
+- AI contribution: added explicit enum-type validation and a regression test
+  for unknown step kinds.
+- Defect found: an invalid string kind could otherwise fall through the runner
+  as a successful report step.
+- Verification: `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  full pytest printed `39 passed, 1 skipped`; the offscreen app smoke test
+  exited 0.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.

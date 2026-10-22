@@ -26,6 +26,13 @@ def test_runner_rejects_duplicate_step_ids_before_execution() -> None:
         WorkflowRunner().run(workflow)
 
 
+def test_runner_rejects_unknown_step_kind_before_execution() -> None:
+    workflow = workflow_with(WorkflowStep("step", "Step", "UNKNOWN", "message"))
+
+    with pytest.raises(WorkflowValidationError, match="unknown kind"):
+        WorkflowRunner().run(workflow)
+
+
 @pytest.mark.parametrize(
     ("workflow", "message"),
     [

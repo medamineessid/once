@@ -107,6 +107,8 @@ class WorkflowRunner:
                 raise WorkflowValidationError(f"Step ID is duplicated: {step.step_id}.")
             if not step.name.strip():
                 raise WorkflowValidationError(f"Step {step.step_id} needs a name.")
+            if not isinstance(step.kind, StepKind):
+                raise WorkflowValidationError(f"Step {step.step_id} has an unknown kind.")
             if len(step.name) > MAX_TEXT_LENGTH or len(step.message) > MAX_TEXT_LENGTH:
                 raise WorkflowValidationError(
                     f"Step {step.step_id} contains text that is too long."
