@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: Draft editing and history detail inspection
-- Last commit: pending
+- Last commit: 53e4ce0
 - Next action: add explicit retry and postcondition workflow steps
 - Currently failing tests or known breakage: none
 - Open items: file management is retained as a later integration; external

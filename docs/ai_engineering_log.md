@@ -11,7 +11,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review: 
 
-## 2026-10-22 — Draft editing and history detail inspection   (commit: pending)
+## 2026-10-22 — Draft editing and history detail inspection   (commit: 53e4ce0)
 - Task: Improve the workflow editor and execution-history surface without
   moving workflow logic into the UI.
 - AI contribution: added draft step reordering and removal, regenerated stable
