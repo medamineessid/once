@@ -24,10 +24,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ai.approval import ApprovedProposal, WorkflowPreview, approve_proposal, preview_proposal
+from ai.interview import InterviewSession, InterviewState
+from ai.models import AnalysisRequest, ProviderDraft
+from ai.provider import deterministic_demo_provider
 from controller.recording import RecordingService
 from controller.service import WorkflowService
-from engine.errors import WorkflowValidationError
+from engine.errors import AIProviderError, WorkflowValidationError
 from engine.workflow import StepKind, Workflow, WorkflowRun, WorkflowStep
+from recorder.drafts import build_raw_draft
 from ui.workers import WorkflowWorker
 
 WINDOW_TITLE = "Once"
@@ -53,6 +58,9 @@ class MainWindow(QMainWindow):
         self._history_list = QListWidget(self)
         self._result_list = QListWidget(self)
         self._draft_list = QListWidget(self)
+        self._recording_list = QListWidget(self)
+        self._recording_events = QListWidget(self)
+        self._proposal_list = QListWidget(self)
         self._run_button = QPushButton("Run selected workflow", self)
         self._demo_button = QPushButton("Run local demo", self)
         self._cancel_button = QPushButton("Cancel run", self)
@@ -67,6 +75,13 @@ class MainWindow(QMainWindow):
         self._move_up_button = QPushButton("Move step up", self)
         self._move_down_button = QPushButton("Move step down", self)
         self._remove_step_button = QPushButton("Remove step", self)
+        self._analyze_button = QPushButton("Analyze selected recording (offline)", self)
+        self._delete_recording_button = QPushButton("Delete selected recording", self)
+        self._answer_button = QPushButton("Submit answer", self)
+        self._approve_button = QPushButton("Approve and save proposal", self)
+        self._answer_input = QLineEdit(self)
+        self._question_label = QLabel("No interview question is active.", self)
+        self._proposal_goal = QLabel("No proposal is loaded.", self)
         self._workflow_name = QLineEdit(self)
         self._step_name = QLineEdit(self)
         self._step_message = QLineEdit(self)
@@ -90,6 +105,15 @@ class MainWindow(QMainWindow):
         self._move_down_button.clicked.connect(lambda: self._move_draft_step(1))
         self._remove_step_button.clicked.connect(self._remove_draft_step)
         self._history_list.currentRowChanged.connect(self._show_history_details)
+        self._recording_list.currentRowChanged.connect(self._show_recording)
+        self._analyze_button.clicked.connect(self._analyze_recording)
+        self._delete_recording_button.clicked.connect(self._delete_recording)
+        self._answer_button.clicked.connect(self._answer_interview)
+        self._approve_button.clicked.connect(self._approve_proposal)
+        self._answer_button.setEnabled(False)
+        self._approve_button.setEnabled(False)
+        self._interview: InterviewSession | None = None
+        self._proposal: ProviderDraft | None = None
 
         form = QFormLayout()
         form.addRow("Workflow name", self._workflow_name)
@@ -117,6 +141,17 @@ class MainWindow(QMainWindow):
             draft_actions.addWidget(button)
         layout.addLayout(draft_actions)
         layout.addWidget(self._create_button)
+        layout.addWidget(QLabel("Saved recordings", self))
+        layout.addWidget(self._recording_list)
+        layout.addWidget(self._recording_events)
+        layout.addWidget(self._analyze_button)
+        layout.addWidget(self._delete_recording_button)
+        layout.addWidget(self._question_label)
+        layout.addWidget(self._answer_input)
+        layout.addWidget(self._answer_button)
+        layout.addWidget(self._proposal_goal)
+        layout.addWidget(self._proposal_list)
+        layout.addWidget(self._approve_button)
         layout.addWidget(QLabel("Saved workflows", self))
         layout.addWidget(self._workflow_list)
         layout.addLayout(actions)
@@ -139,6 +174,9 @@ class MainWindow(QMainWindow):
         self._history_list.clear()
         for run in self._service.history():
             self._history_list.addItem(self._history_text(run))
+        self._recording_list.clear()
+        if self._recording_service is not None:
+            self._recording_list.addItems(self._recording_service.list_recordings())
 
     def _select_workflow(self, current: QListWidgetItem | None, _: QListWidgetItem | None) -> None:
         if current is None:
@@ -274,6 +312,97 @@ class MainWindow(QMainWindow):
         self._result_list.clear()
         for result in run.results:
             self._show_step_result(result)
+
+    def _show_recording(self, row: int) -> None:
+        if self._recording_service is None or row < 0:
+            return
+        try:
+            recording = self._recording_service.load(self._recording_list.item(row).text())
+        except WorkflowValidationError as error:
+            self._show_error(str(error))
+            return
+        self._recording_events.clear()
+        for event in recording.events:
+            element = event.element
+            metadata = (
+                f" element={element.control_type or 'unknown'}:{element.name or 'unnamed'}"
+                if element
+                else ""
+            )
+            redaction = " [password data omitted]" if element and element.is_password else ""
+            self._recording_events.addItem(
+                f"#{event.sequence} {event.kind.value} at {event.timestamp_ns}{metadata}{redaction}"
+            )
+
+    def _analyze_recording(self) -> None:
+        if self._recording_service is None or self._recording_list.currentRow() < 0:
+            self._show_error("Select a saved recording before analyzing it.")
+            return
+        try:
+            recording = self._recording_service.load(self._recording_list.currentItem().text())
+        except WorkflowValidationError as error:
+            self._show_error(str(error))
+            return
+        self._interview = InterviewSession(
+            deterministic_demo_provider(),
+            AnalysisRequest(build_raw_draft(recording)),
+        )
+        self._proposal = None
+        self._proposal_list.clear()
+        self._proposal_goal.setText("Offline analysis is active. No cloud data was sent.")
+        self._show_interview_state(self._interview.start())
+
+    def _delete_recording(self) -> None:
+        if self._recording_service is None or self._recording_list.currentRow() < 0:
+            self._show_error("Select a saved recording before deleting it.")
+            return
+        recording_id = self._recording_list.currentItem().text()
+        try:
+            self._recording_service.delete(recording_id)
+        except WorkflowValidationError as error:
+            self._show_error(str(error))
+            return
+        self._recording_events.clear()
+        self._status_label.setText(f"Recording deleted: {recording_id}")
+        self._refresh()
+
+    def _answer_interview(self) -> None:
+        if self._interview is None:
+            return
+        try:
+            state = self._interview.answer(self._answer_input.text())
+        except AIProviderError as error:
+            self._show_error(str(error))
+            return
+        self._answer_input.clear()
+        self._show_interview_state(state)
+
+    def _show_interview_state(self, state: InterviewState) -> None:
+        self._question_label.setText(state.question or "Interview complete. Review the proposal.")
+        self._answer_button.setEnabled(not state.complete)
+        self._proposal = state.draft
+        self._approve_button.setEnabled(state.draft is not None)
+        if state.draft is not None:
+            preview = preview_proposal(state.draft)
+            self._show_preview(preview)
+
+    def _show_preview(self, preview: WorkflowPreview) -> None:
+        self._proposal_goal.setText(f"Goal: {preview.goal}")
+        self._proposal_list.clear()
+        self._proposal_list.addItems(preview.steps)
+
+    def _approve_proposal(self) -> None:
+        if self._proposal is None:
+            self._show_error("No proposal is ready for approval.")
+            return
+        try:
+            approved: ApprovedProposal = approve_proposal(self._proposal)
+            path = self._service.save_approved(approved)
+        except WorkflowValidationError as error:
+            self._show_error(str(error))
+            return
+        self._status_label.setText(f"Approved workflow saved: {path.name}")
+        self._refresh()
         self._refresh()
 
     def _add_step(self) -> None:
@@ -357,6 +486,7 @@ class MainWindow(QMainWindow):
         self._status_label.setText(
             f"Recording saved: {recording.recording_id} ({len(recording.events)} events)"
         )
+        self._refresh()
 
     @override
     def closeEvent(self, event: QCloseEvent) -> None:

@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QLineEdit, QListWidget, QPushButton
 from pytestqt.qtbot import QtBot
 
+from controller.recording import RecordingService
 from controller.service import WorkflowService
 from engine.errors import (
     ExecutionError,
@@ -20,9 +21,22 @@ from engine.errors import (
     WorkflowValidationError,
 )
 from engine.models import IssueCode, OperationType, OpStatus, RunStatus, Severity
+from recorder.models import RecordedEvent, RecordedEventKind
 from ui.main_window import MainWindow
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+class FakeRecorder:
+    def __init__(self, sink) -> None:
+        self._sink = sink
+
+    def start(self) -> None:
+        self._sink.append(RecordedEvent(1, 1, RecordedEventKind.MOUSE_CLICK, x=1, y=2))
+
+    def stop(self) -> None:
+        return None
+
 
 EXPECTED_ISSUE_CODES = {
     "NAME_EMPTY",
@@ -198,6 +212,29 @@ def test_main_window_reorders_and_removes_draft_steps(qtbot: QtBot) -> None:
     )
     qtbot.mouseClick(remove, Qt.MouseButton.LeftButton)
     assert draft_list.count() == 1
+
+
+def test_main_window_reviews_analyzes_and_approves_recording(qtbot: QtBot, tmp_path) -> None:
+    service = WorkflowService(workflow_directory=tmp_path / "workflows")
+    recording_service = RecordingService(tmp_path / "recordings", recorder_factory=FakeRecorder)
+    window = MainWindow(service, recording_service)
+    qtbot.addWidget(window)
+
+    buttons = {button.text(): button for button in window.findChildren(QPushButton)}
+    qtbot.mouseClick(buttons["Record"], Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(buttons["Stop recording"], Qt.MouseButton.LeftButton)
+
+    recording_list = next(
+        widget for widget in window.findChildren(QListWidget) if widget.count() == 1
+    )
+    recording_list.setCurrentRow(0)
+    qtbot.mouseClick(buttons["Analyze selected recording (offline)"], Qt.MouseButton.LeftButton)
+    answer = window.findChildren(QLineEdit)[-1]
+    answer.setText("The result is visible.")
+    qtbot.mouseClick(buttons["Submit answer"], Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(buttons["Approve and save proposal"], Qt.MouseButton.LeftButton)
+
+    assert (tmp_path / "workflows" / "recorded-task.json").exists()
 
 
 def test_app_smoke_test_exits_zero(tmp_path) -> None:

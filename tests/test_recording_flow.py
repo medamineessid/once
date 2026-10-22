@@ -7,10 +7,13 @@ from ai.interview import InterviewSession
 from ai.models import AnalysisRequest, ProviderDraft, ProviderQuestion
 from ai.provider import FakeAnalysisProvider
 from controller.recording import RecordingService
+from controller.service import WorkflowService
 from engine.workflow import StepKind, Workflow, WorkflowStep
 from integrations.recorder import EventSink
 from recorder.drafts import build_raw_draft
 from recorder.models import RecordedEvent, RecordedEventKind
+from storage.database import connect
+from storage.history import ExecutionHistory
 
 
 class FakeRecorder:
@@ -49,3 +52,9 @@ def test_recording_to_approved_proposal(tmp_path) -> None:
     assert preview.goal == "Goal"
     assert preview.steps == ("summary: Summary [REPORT] target=none attempts=1 postcondition=none",)
     assert approved.workflow == workflow
+
+    history = ExecutionHistory(connect(tmp_path / "history.db"))
+    run = WorkflowService(history=history).run_workflow(approved.workflow)
+
+    assert run.status.value == "SUCCEEDED"
+    assert history.list_runs()[0].run.workflow_id == "journey-workflow"

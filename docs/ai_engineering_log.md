@@ -127,6 +127,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Recording review and local-first approval UI   (commit: pending)
+- Task: Connect saved recordings to review, offline analysis, bounded
+  interview, proposal preview, explicit approval, deletion, execution, and
+  persisted history.
+- AI contribution: added recording timeline and metadata display, offline
+  Analyze action, interview answer controls, proposal preview, approve/save
+  action, explicit recording deletion, and a UI journey regression test.
+- Defect found: the first UI journey test filled the workflow-name field
+  instead of the interview answer field and opened a modal error; corrected it
+  to target the dedicated answer input.
+- Verification: focused UI journey printed `1 passed`; full verification is
+  recorded after this milestone commit.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.
