@@ -119,7 +119,7 @@ Availability verified today (B.3); exact pins will be written into `requirements
 
 The repository was confirmed at `C:\Users\DELL\once` and had no commits. `AGENTS.md`,
 the Step 1 skeleton, and the pre-existing Phase 0 decision/log files were present.
-The existing Git identity is `medamineessid <mohamedamin.essid@musteducation.tn>`.
+The repo-local Git identity remains unset in this project. The user may configure it later with a repo-local `git config user.name` and `git config user.email` if desired.
 The baseline command showed one fixture failure caused by Windows text newline
 translation (`"a\n"` is stored as three bytes), and Ruff reported one unformatted file.
 
