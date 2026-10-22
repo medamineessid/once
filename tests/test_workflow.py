@@ -74,3 +74,34 @@ def test_workflow_runner_terminates_empty_workflow() -> None:
 
     assert run.status is WorkflowStatus.SUCCEEDED
     assert run.results == ()
+
+
+def test_workflow_runner_verifies_file_within_authorized_root(tmp_path) -> None:
+    target = tmp_path / "invoice.txt"
+    target.write_bytes(b"invoice")
+    workflow = Workflow(
+        "inspect",
+        "Inspect",
+        (WorkflowStep("check", "Check file", StepKind.INSPECT_PATH, "File found", str(target)),),
+    )
+
+    run = WorkflowRunner().run(workflow, allowed_root=tmp_path)
+
+    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.results[0].status is StepStatus.VERIFIED
+    assert "size=7" in run.results[0].evidence
+
+
+def test_workflow_runner_rejects_path_outside_authorized_root(tmp_path) -> None:
+    target = tmp_path / "invoice.txt"
+    target.write_bytes(b"invoice")
+    workflow = Workflow(
+        "inspect",
+        "Inspect",
+        (WorkflowStep("check", "Check file", StepKind.INSPECT_PATH, "File found", str(target)),),
+    )
+
+    run = WorkflowRunner().run(workflow, allowed_root=tmp_path / "other")
+
+    assert run.status is WorkflowStatus.FAILED
+    assert "authorized folder" in run.results[0].message

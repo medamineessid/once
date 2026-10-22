@@ -60,18 +60,23 @@ integrations.
 
 # REVISED ROADMAP
 
-1. **Workflow foundation (current):** declarative steps, deterministic runner,
+1. **Workflow foundation:** declarative steps, deterministic runner,
    observable state, cancellation, failure propagation, controller service,
    and a minimal Qt trigger.
 2. **Workflow persistence and validation:** versioned JSON workflows, SQLite
    execution history, schema validation, and restart-safe state.
-3. **File-management integration:** retain the existing scanner/planner/
+3. **GUI vertical slice:** saved workflow listing/opening/saving, execution,
+   and persisted history inspection through controller services.
+4. **Reliable action and verification primitives (current):** bounded,
+   read-only path inspection inside an explicitly authorized folder, structured
+   evidence, and persisted step evidence.
+5. **File-management integration:** retain the existing scanner/planner/
    validator/executor/recovery roadmap as one controlled integration.
-4. **Additional integrations:** implement and test one integration at a time
+6. **Additional integrations:** implement and test one integration at a time
    behind explicit interfaces; no integration is represented by a placeholder.
-5. **User workflow editor and history UI:** expose only capabilities that have
+7. **User workflow editor and history UI:** expose only capabilities that have
    real engine and integration implementations.
-6. **Packaging and release hardening:** Windows packaging, recovery testing,
+8. **Packaging and release hardening:** Windows packaging, recovery testing,
    documentation, and performance checks.
 
 # NON-NEGOTIABLE SAFETY INVARIANTS (each MUST have at least one automated test)

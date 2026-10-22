@@ -28,6 +28,35 @@ def test_history_round_trips_run_and_step_results(tmp_path) -> None:
     connection.close()
 
 
+def test_history_persists_step_evidence(tmp_path) -> None:
+    connection = connect(tmp_path / "history.db")
+    history = ExecutionHistory(connection)
+    target = tmp_path / "evidence.txt"
+    target.write_bytes(b"evidence")
+    workflow = Workflow(
+        "evidence-workflow",
+        "Evidence workflow",
+        (
+            WorkflowStep(
+                "inspect",
+                "Inspect",
+                StepKind.INSPECT_PATH,
+                "Verified",
+                str(target),
+            ),
+        ),
+    )
+
+    run = WorkflowService(history=history).run_workflow(workflow, allowed_root=tmp_path)
+
+    assert history.list_runs()[0].run.results[0].evidence == (
+        f"path={target.resolve()}",
+        "size=8",
+    )
+    assert run.status.value == "SUCCEEDED"
+    connection.close()
+
+
 def test_history_persists_failures_and_skipped_steps(tmp_path) -> None:
     connection = connect(tmp_path / "history.db")
     history = ExecutionHistory(connection)

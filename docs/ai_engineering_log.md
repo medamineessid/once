@@ -90,6 +90,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Milestones B/C: authorized action and verification   (commit: pending)
+- Task: Add a reusable, bounded read-only path action with observable evidence
+  and persistence of that evidence.
+- AI contribution: added `INSPECT_PATH` and `VERIFY_PATH_EXISTS` steps,
+  authorized-root checks, VERIFIED/INCONCLUSIVE outcomes, evidence capture,
+  JSON target persistence, SQLite evidence persistence, and schema migration.
+- Defect found: the first SQLite schema change did not account for existing
+  databases created before the evidence column; added a narrow additive
+  migration and regression coverage.
+- Verification: `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  full pytest printed `44 passed, 1 skipped`; the offscreen app smoke test
+  exited 0.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.

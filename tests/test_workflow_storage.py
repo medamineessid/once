@@ -29,6 +29,19 @@ def test_workflow_round_trips_as_utf8_json(tmp_path) -> None:
     assert "schema_version" in path.read_text(encoding="utf-8")
 
 
+def test_workflow_round_trips_action_target(tmp_path) -> None:
+    path = tmp_path / "workflow.json"
+    workflow = Workflow(
+        "inspect",
+        "Inspect",
+        (WorkflowStep("step", "Inspect", StepKind.INSPECT_PATH, "Found", str(tmp_path / "x")),),
+    )
+
+    save_workflow(workflow, path)
+
+    assert load_workflow(path) == workflow
+
+
 @pytest.mark.parametrize(
     "change",
     [
@@ -47,7 +60,13 @@ def test_load_rejects_unknown_or_invalid_json(tmp_path, change) -> None:
                 "workflow_id": "local",
                 "name": "Local workflow",
                 "steps": [
-                    {"step_id": "step-1", "name": "Report", "kind": "REPORT", "message": "Done"}
+                    {
+                        "step_id": "step-1",
+                        "name": "Report",
+                        "kind": "REPORT",
+                        "message": "Done",
+                        "target": None,
+                    }
                 ],
             }
         )

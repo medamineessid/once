@@ -6,12 +6,13 @@ applications, browser interfaces, logs, tests, and coding tools through
 explicit integrations. The deterministic engine controls execution; no
 unrestricted scripts or opaque AI actions are used.
 
-**Current status: workflow foundation, persistence, and history milestones.**
+**Current status: workflow foundation, persistence, history, GUI, and
+read-only verification milestones.**
 The application can validate and save/reopen versioned declarative workflows,
-run bounded local steps with success, failure, skipped-step, and cancellation
-states, and record real controller-triggered runs in SQLite. External
-integrations, file execution, and undo are not implemented yet. Do not use this
-build to manage real files.
+run bounded local steps with success, failure, skipped-step, cancellation, and
+authorized path-verification states, and record real controller-triggered runs
+and evidence in SQLite. External integrations, file execution, and undo are not
+implemented yet. Do not use this build to manage real files.
 
 ## Requirements
 

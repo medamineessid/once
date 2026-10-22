@@ -66,9 +66,9 @@ class WorkflowService:
         """Execute the demo through the same service path used by future workflows."""
         return self.run_workflow(self.demo_workflow())
 
-    def run_workflow(self, workflow: Workflow) -> WorkflowRun:
+    def run_workflow(self, workflow: Workflow, allowed_root: Path | None = None) -> WorkflowRun:
         """Execute a workflow and persist its real outcome when history is configured."""
-        run = self._runner.run(workflow)
+        run = self._runner.run(workflow, allowed_root=allowed_root)
         if self._history is not None:
             self._history.record(run)
         return run

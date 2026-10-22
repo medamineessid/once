@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from uuid import uuid4
 
 from .errors import WorkflowValidationError
@@ -19,6 +20,8 @@ class StepKind(StrEnum):
 
     REPORT = "REPORT"
     FAIL = "FAIL"
+    INSPECT_PATH = "INSPECT_PATH"
+    VERIFY_PATH_EXISTS = "VERIFY_PATH_EXISTS"
 
 
 class StepStatus(StrEnum):
@@ -29,6 +32,8 @@ class StepStatus(StrEnum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"
+    VERIFIED = "VERIFIED"
+    INCONCLUSIVE = "INCONCLUSIVE"
 
 
 class WorkflowStatus(StrEnum):
@@ -49,6 +54,7 @@ class WorkflowStep:
     name: str
     kind: StepKind
     message: str
+    target: str | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,7 @@ class StepResult:
     step_id: str
     status: StepStatus
     message: str
+    evidence: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -113,6 +120,10 @@ class WorkflowRunner:
                 raise WorkflowValidationError(
                     f"Step {step.step_id} contains text that is too long."
                 )
+            if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS) and (
+                not step.target or not Path(step.target).is_absolute()
+            ):
+                raise WorkflowValidationError(f"Step {step.step_id} needs an absolute target path.")
             step_ids.add(step.step_id)
 
     def run(
@@ -121,6 +132,7 @@ class WorkflowRunner:
         *,
         cancel_check: CancelCheck | None = None,
         run_id: str | None = None,
+        allowed_root: Path | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
         self.validate(workflow)
@@ -157,6 +169,20 @@ class WorkflowRunner:
                     message=f"Running: {step.name}",
                 )
             )
+            if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
+                result = self._run_path_step(step, allowed_root)
+                results[-1] = result
+                if result.status is not StepStatus.VERIFIED:
+                    results.extend(
+                        StepResult(
+                            step_id=remaining.step_id,
+                            status=StepStatus.SKIPPED,
+                            message="Skipped because an earlier step failed.",
+                        )
+                        for remaining in workflow.steps[index + 1 :]
+                    )
+                    return completed(WorkflowStatus.FAILED)
+                continue
             if step.kind is StepKind.FAIL:
                 results[-1] = StepResult(
                     step_id=step.step_id,
@@ -180,3 +206,46 @@ class WorkflowRunner:
             )
 
         return completed(WorkflowStatus.SUCCEEDED)
+
+    @staticmethod
+    def _run_path_step(step: WorkflowStep, allowed_root: Path | None) -> StepResult:
+        if allowed_root is None:
+            return StepResult(
+                step_id=step.step_id,
+                status=StepStatus.INCONCLUSIVE,
+                message="No authorized folder was provided for this path check.",
+            )
+        target = Path(step.target or "").resolve(strict=False)
+        try:
+            root = allowed_root.resolve(strict=True)
+        except FileNotFoundError:
+            return StepResult(
+                step_id=step.step_id,
+                status=StepStatus.INCONCLUSIVE,
+                message="The authorized folder is unavailable.",
+            )
+        try:
+            target.relative_to(root)
+        except ValueError:
+            return StepResult(
+                step_id=step.step_id,
+                status=StepStatus.FAILED,
+                message="The target is outside the authorized folder.",
+            )
+        if target.is_symlink() or not target.is_file():
+            return StepResult(
+                step_id=step.step_id,
+                status=StepStatus.FAILED,
+                message="The target is not an accessible regular file.",
+            )
+        stat = target.stat()
+        evidence = (
+            f"path={target}",
+            f"size={stat.st_size}",
+        )
+        return StepResult(
+            step_id=step.step_id,
+            status=StepStatus.VERIFIED,
+            message=step.message,
+            evidence=evidence,
+        )

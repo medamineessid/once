@@ -26,9 +26,17 @@ def connect(path: Path) -> sqlite3.Connection:
             step_id TEXT NOT NULL,
             status TEXT NOT NULL,
             message TEXT NOT NULL,
+            evidence TEXT NOT NULL DEFAULT '[]',
             PRIMARY KEY (run_id, position)
         );
         """
     )
+    columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(workflow_step_results)")
+    }
+    if "evidence" not in columns:
+        connection.execute(
+            "ALTER TABLE workflow_step_results ADD COLUMN evidence TEXT NOT NULL DEFAULT '[]'"
+        )
     connection.commit()
     return connection

@@ -11,7 +11,7 @@ from engine.workflow import StepKind, Workflow, WorkflowRunner, WorkflowStep
 
 SCHEMA_VERSION: Final = 1
 _ROOT_KEYS = frozenset({"schema_version", "workflow_id", "name", "steps"})
-_STEP_KEYS = frozenset({"step_id", "name", "kind", "message"})
+_STEP_KEYS = frozenset({"step_id", "name", "kind", "message", "target"})
 
 
 def _text(value: object, field: str) -> str:
@@ -33,6 +33,7 @@ def workflow_to_dict(workflow: Workflow) -> dict[str, object]:
                 "name": step.name,
                 "kind": step.kind.value,
                 "message": step.message,
+                "target": step.target,
             }
             for step in workflow.steps
         ],
@@ -63,6 +64,11 @@ def workflow_from_dict(data: object) -> Workflow:
                 name=_text(raw_step["name"], "Step name"),
                 kind=kind,
                 message=_text(raw_step["message"], "Step message"),
+                target=(
+                    _text(raw_step["target"], "Step target")
+                    if raw_step["target"] is not None
+                    else None
+                ),
             )
         )
 

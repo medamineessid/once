@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -43,11 +44,18 @@ class ExecutionHistory:
                 self._connection.executemany(
                     """
                     INSERT INTO workflow_step_results
-                        (run_id, position, step_id, status, message)
-                    VALUES (?, ?, ?, ?, ?)
+                        (run_id, position, step_id, status, message, evidence)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     [
-                        (run.run_id, position, result.step_id, result.status.value, result.message)
+                        (
+                            run.run_id,
+                            position,
+                            result.step_id,
+                            result.status.value,
+                            result.message,
+                            json.dumps(result.evidence),
+                        )
                         for position, result in enumerate(run.results)
                     ],
                 )
@@ -67,7 +75,7 @@ class ExecutionHistory:
         for row in rows:
             step_rows = self._connection.execute(
                 """
-                SELECT step_id, status, message
+                SELECT step_id, status, message, evidence
                 FROM workflow_step_results
                 WHERE run_id = ?
                 ORDER BY position
@@ -83,6 +91,7 @@ class ExecutionHistory:
                         step_id=step_row["step_id"],
                         status=StepStatus(step_row["status"]),
                         message=step_row["message"],
+                        evidence=tuple(json.loads(step_row["evidence"])),
                     )
                     for step_row in step_rows
                 ),
