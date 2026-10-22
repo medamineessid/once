@@ -7,12 +7,20 @@ from pathlib import Path
 from typing import Final
 
 from engine.errors import WorkflowValidationError
-from engine.workflow import StepKind, Workflow, WorkflowRunner, WorkflowStep
+from engine.workflow import (
+    PostconditionKind,
+    StepKind,
+    Workflow,
+    WorkflowRunner,
+    WorkflowStep,
+)
 
 SCHEMA_VERSION: Final = 2
 _SUPPORTED_SCHEMA_VERSIONS = frozenset({1, SCHEMA_VERSION})
 _ROOT_KEYS = frozenset({"schema_version", "workflow_id", "name", "steps"})
-_STEP_KEYS = frozenset({"step_id", "name", "kind", "message", "target"})
+_STEP_KEYS = frozenset(
+    {"step_id", "name", "kind", "message", "target", "max_attempts", "postcondition"}
+)
 _LEGACY_STEP_KEYS = frozenset({"step_id", "name", "kind", "message"})
 
 
@@ -36,6 +44,8 @@ def workflow_to_dict(workflow: Workflow) -> dict[str, object]:
                 "kind": step.kind.value,
                 "message": step.message,
                 "target": step.target,
+                "max_attempts": step.max_attempts,
+                "postcondition": step.postcondition.value if step.postcondition else None,
             }
             for step in workflow.steps
         ],
@@ -62,6 +72,16 @@ def workflow_from_dict(data: object) -> Workflow:
             kind = StepKind(_text(raw_step["kind"], "Step kind"))
         except ValueError as error:
             raise WorkflowValidationError("Workflow contains an unknown step kind.") from error
+        max_attempts = raw_step["max_attempts"] if schema_version == SCHEMA_VERSION else 1
+        if not isinstance(max_attempts, int):
+            raise WorkflowValidationError("Step max_attempts must be an integer.")
+        raw_postcondition = raw_step["postcondition"] if schema_version == SCHEMA_VERSION else None
+        try:
+            postcondition = (
+                PostconditionKind(raw_postcondition) if raw_postcondition is not None else None
+            )
+        except ValueError as error:
+            raise WorkflowValidationError("Workflow contains an unknown postcondition.") from error
         steps.append(
             WorkflowStep(
                 step_id=_text(raw_step["step_id"], "Step ID"),
@@ -73,6 +93,8 @@ def workflow_from_dict(data: object) -> Workflow:
                     if schema_version == SCHEMA_VERSION and raw_step["target"] is not None
                     else None
                 ),
+                max_attempts=max_attempts,
+                postcondition=postcondition,
             )
         )
 

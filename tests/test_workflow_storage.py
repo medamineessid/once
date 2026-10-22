@@ -7,7 +7,7 @@ import json
 import pytest
 
 from engine.errors import WorkflowValidationError
-from engine.workflow import StepKind, Workflow, WorkflowStep
+from engine.workflow import PostconditionKind, StepKind, Workflow, WorkflowStep
 from storage.workflows import load_workflow, save_workflow
 
 
@@ -59,6 +59,29 @@ def test_workflow_round_trips_action_target(tmp_path) -> None:
         "inspect",
         "Inspect",
         (WorkflowStep("step", "Inspect", StepKind.INSPECT_PATH, "Found", str(tmp_path / "x")),),
+    )
+
+    save_workflow(workflow, path)
+
+    assert load_workflow(path) == workflow
+
+
+def test_workflow_round_trips_retry_and_postcondition(tmp_path) -> None:
+    path = tmp_path / "workflow.json"
+    workflow = Workflow(
+        "retry",
+        "Retry",
+        (
+            WorkflowStep(
+                "step",
+                "Retry",
+                StepKind.REPORT,
+                "Done",
+                str(tmp_path / "result.txt"),
+                3,
+                PostconditionKind.PATH_EXISTS,
+            ),
+        ),
     )
 
     save_workflow(workflow, path)

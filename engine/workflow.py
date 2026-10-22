@@ -24,6 +24,12 @@ class StepKind(StrEnum):
     VERIFY_PATH_EXISTS = "VERIFY_PATH_EXISTS"
 
 
+class PostconditionKind(StrEnum):
+    """Built-in checks that may be required after a step succeeds."""
+
+    PATH_EXISTS = "PATH_EXISTS"
+
+
 class StepStatus(StrEnum):
     """Lifecycle state of one workflow step."""
 
@@ -55,6 +61,8 @@ class WorkflowStep:
     kind: StepKind
     message: str
     target: str | None = None
+    max_attempts: int = 1
+    postcondition: PostconditionKind | None = None
 
 
 @dataclass(frozen=True)
@@ -121,6 +129,18 @@ class WorkflowRunner:
                 raise WorkflowValidationError(
                     f"Step {step.step_id} contains text that is too long."
                 )
+            if not isinstance(step.max_attempts, int) or not 1 <= step.max_attempts <= 3:
+                raise WorkflowValidationError(
+                    f"Step {step.step_id} must allow between 1 and 3 attempts."
+                )
+            if step.postcondition is not None and not isinstance(
+                step.postcondition, PostconditionKind
+            ):
+                raise WorkflowValidationError(f"Step {step.step_id} has an unknown postcondition.")
+            if step.postcondition is not None and not step.target:
+                raise WorkflowValidationError(
+                    f"Step {step.step_id} needs a target for its postcondition."
+                )
             if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS) and (
                 not step.target or not Path(step.target).is_absolute()
             ):
@@ -164,37 +184,15 @@ class WorkflowRunner:
                 )
                 return completed(WorkflowStatus.CANCELLED)
 
-            results.append(
-                StepResult(
-                    step_id=step.step_id,
-                    status=StepStatus.RUNNING,
-                    message=f"Running: {step.name}",
-                )
+            result = self._run_with_retries(
+                step,
+                allowed_root,
+                is_cancelled,
             )
-            if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
-                result = self._run_path_step(step, allowed_root)
-                results[-1] = result
-                if progress_callback is not None:
-                    progress_callback(result)
-                if result.status is not StepStatus.VERIFIED:
-                    results.extend(
-                        StepResult(
-                            step_id=remaining.step_id,
-                            status=StepStatus.SKIPPED,
-                            message="Skipped because an earlier step failed.",
-                        )
-                        for remaining in workflow.steps[index + 1 :]
-                    )
-                    return completed(WorkflowStatus.FAILED)
-                continue
-            if step.kind is StepKind.FAIL:
-                results[-1] = StepResult(
-                    step_id=step.step_id,
-                    status=StepStatus.FAILED,
-                    message=step.message,
-                )
-                if progress_callback is not None:
-                    progress_callback(results[-1])
+            results.append(result)
+            if progress_callback is not None:
+                progress_callback(result)
+            if result.status not in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
                 results.extend(
                     StepResult(
                         step_id=remaining.step_id,
@@ -203,17 +201,81 @@ class WorkflowRunner:
                     )
                     for remaining in workflow.steps[index + 1 :]
                 )
-                return completed(WorkflowStatus.FAILED)
-
-            results[-1] = StepResult(
-                step_id=step.step_id,
-                status=StepStatus.SUCCEEDED,
-                message=step.message,
-            )
-            if progress_callback is not None:
-                progress_callback(results[-1])
+                return completed(
+                    WorkflowStatus.CANCELLED
+                    if result.status is StepStatus.SKIPPED
+                    else WorkflowStatus.FAILED
+                )
 
         return completed(WorkflowStatus.SUCCEEDED)
+
+    def _run_with_retries(
+        self,
+        step: WorkflowStep,
+        allowed_root: Path | None,
+        cancel_check: CancelCheck,
+    ) -> StepResult:
+        attempts: list[str] = []
+        for attempt in range(1, step.max_attempts + 1):
+            if attempt > 1 and cancel_check():
+                return StepResult(
+                    step.step_id,
+                    StepStatus.SKIPPED,
+                    "Skipped because the workflow was cancelled.",
+                    tuple(attempts),
+                )
+            result = self._run_once(step, allowed_root)
+            if result.status in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
+                if step.postcondition is None:
+                    if attempt == 1:
+                        return result
+                    return StepResult(
+                        step.step_id,
+                        result.status,
+                        f"{result.message} (attempt {attempt})",
+                        tuple(attempts),
+                    )
+                postcondition = self._check_postcondition(step, allowed_root)
+                if postcondition.status is StepStatus.VERIFIED:
+                    return StepResult(
+                        step.step_id,
+                        result.status,
+                        f"{result.message} (attempt {attempt})",
+                        result.evidence + postcondition.evidence,
+                    )
+                result = postcondition
+            attempts.append(f"attempt {attempt}: {result.message}")
+            if attempt < step.max_attempts:
+                continue
+            return StepResult(
+                step.step_id,
+                result.status,
+                f"{result.message} after {attempt} attempt(s).",
+                tuple(attempts) + result.evidence,
+            )
+        raise AssertionError("Retry loop must return a result.")
+
+    def _run_once(self, step: WorkflowStep, allowed_root: Path | None) -> StepResult:
+        if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
+            return self._run_path_step(step, allowed_root)
+        if step.kind is StepKind.FAIL:
+            return StepResult(step.step_id, StepStatus.FAILED, step.message)
+        return StepResult(step.step_id, StepStatus.SUCCEEDED, step.message)
+
+    @staticmethod
+    def _check_postcondition(step: WorkflowStep, allowed_root: Path | None) -> StepResult:
+        if step.postcondition is PostconditionKind.PATH_EXISTS:
+            return WorkflowRunner._run_path_step(
+                WorkflowStep(
+                    step.step_id,
+                    step.name,
+                    StepKind.VERIFY_PATH_EXISTS,
+                    "Postcondition verified.",
+                    step.target,
+                ),
+                allowed_root,
+            )
+        return StepResult(step.step_id, StepStatus.FAILED, "Postcondition was not met.")
 
     @staticmethod
     def _run_path_step(step: WorkflowStep, allowed_root: Path | None) -> StepResult:

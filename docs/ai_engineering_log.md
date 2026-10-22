@@ -41,6 +41,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Bounded retries and postconditions   (commit: pending)
+- Task: Add deterministic bounded retries, cancellation between attempts, and
+  an optional path-existence postcondition to workflow steps.
+- AI contribution: extended the workflow model and versioned JSON format,
+  implemented retry attempt evidence and postcondition checks, and added
+  engine/storage regression tests.
+- Defect found: the first retry implementation checked cancellation before the
+  initial attempt, changing the existing cancellation contract; the check now
+  occurs only between attempts.
+- Verification: `.\.venv\Scripts\ruff.exe format .` completed;
+  `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  focused pytest printed `20 passed, 1 skipped`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.
