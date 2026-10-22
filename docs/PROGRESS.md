@@ -1,8 +1,8 @@
 # Once progress
 
-- Last completed step: Workflow lifecycle validation
-- Last commit: d6c02af
-- Next action: add versioned workflow persistence and execution history
+- Last completed step: Versioned workflow JSON persistence
+- Last commit: pending
+- Next action: add SQLite execution history and controller integration
 - Currently failing tests or known breakage: none
 - Open items: file management is retained as a later integration; external
   desktop/browser/agent integrations are not implemented
