@@ -107,6 +107,8 @@ class WorkflowService:
 
     def save_approved(self, proposal: ApprovedProposal) -> Path:
         """Save only a proposal that passed the explicit approval gate."""
+        if not isinstance(proposal, ApprovedProposal):
+            raise WorkflowValidationError("Only an explicitly approved proposal can be saved.")
         return self.save(proposal.workflow)
 
     def run_approved(
@@ -117,6 +119,8 @@ class WorkflowService:
         progress_callback: Callable[[StepResult], None] | None = None,
     ) -> WorkflowRun:
         """Execute only a proposal that passed the explicit approval gate."""
+        if not isinstance(proposal, ApprovedProposal):
+            raise WorkflowValidationError("Only an explicitly approved proposal can run.")
         return self.run_replay(
             proposal.workflow,
             allowed_root=allowed_root,

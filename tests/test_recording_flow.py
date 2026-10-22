@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from ai.approval import approve_proposal, preview_proposal
 from ai.interview import InterviewSession
 from ai.models import AnalysisRequest, ProviderDraft, ProviderQuestion
 from ai.provider import FakeAnalysisProvider
 from controller.recording import RecordingService
 from controller.service import WorkflowService
+from engine.errors import WorkflowValidationError
 from engine.workflow import StepKind, Workflow, WorkflowStep
 from integrations.recorder import EventSink
 from recorder.drafts import build_raw_draft
@@ -71,3 +74,17 @@ def test_recording_to_approved_proposal(tmp_path) -> None:
 
     assert run.status.value == "SUCCEEDED"
     assert history.list_runs()[0].run.workflow_id == "journey-workflow"
+
+
+def test_unapproved_proposal_cannot_be_saved_or_executed(tmp_path) -> None:
+    service = WorkflowService(workflow_directory=tmp_path / "workflows")
+    workflow = Workflow(
+        "unapproved",
+        "Unapproved",
+        (WorkflowStep("step", "Step", StepKind.REPORT, "Not approved"),),
+    )
+
+    with pytest.raises(WorkflowValidationError, match="explicitly approved"):
+        service.save_approved(workflow)  # type: ignore[arg-type]
+    with pytest.raises(WorkflowValidationError, match="explicitly approved"):
+        service.run_approved(workflow)  # type: ignore[arg-type]

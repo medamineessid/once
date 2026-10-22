@@ -1,6 +1,6 @@
 # Once progress
 
-- Last completed step: First verified Windows UI Automation inspection
+- Last completed step: Runtime approval-gate hardening
 - Last commit: pending
 - Next action: add a controlled UI-element read action only if stable identity
   and postcondition verification remain available

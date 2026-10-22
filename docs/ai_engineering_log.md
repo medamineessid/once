@@ -219,6 +219,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Runtime approval-gate hardening   (commit: pending)
+- Task: Prevent callers from bypassing explicit proposal approval by ignoring
+  the `ApprovedProposal` type annotation.
+- AI contribution: added runtime type checks to controller save and execution
+  entry points and a regression test for both paths.
+- Defect found: the first targeted lint run found an unused import and import
+  ordering issue in the new regression test; both were corrected.
+- Verification: final full verification is recorded after this milestone
+  commit.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.
