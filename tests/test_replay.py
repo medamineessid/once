@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from controller.service import WorkflowService
 from engine.errors import ExecutionError
 from engine.replay import ReplayExecutor
 from engine.workflow import (
@@ -83,3 +84,33 @@ def test_replay_policy_rejects_unsupported_execution() -> None:
 
     with pytest.raises(ExecutionError, match="does not allow"):
         ReplayExecutor().execute(workflow, allowed_root=None)
+
+
+def test_controller_replay_persists_progress_and_cancellation(tmp_path) -> None:
+    first = tmp_path / "first.txt"
+    second = tmp_path / "second.txt"
+    first.write_text("one", encoding="utf-8")
+    second.write_text("two", encoding="utf-8")
+    workflow = Workflow(
+        "cancelled-replay",
+        "Cancelled replay",
+        (
+            WorkflowStep("first", "First", StepKind.VERIFY_PATH_EXISTS, "First", str(first)),
+            WorkflowStep("second", "Second", StepKind.VERIFY_PATH_EXISTS, "Second", str(second)),
+        ),
+    )
+    service = WorkflowService.for_app_data(tmp_path / "app-data")
+    checks = iter((False, True))
+    progress = []
+
+    run = service.run_replay(
+        workflow,
+        allowed_root=tmp_path,
+        cancel_check=lambda: next(checks),
+        progress_callback=progress.append,
+    )
+
+    assert run.status is WorkflowStatus.CANCELLED
+    assert [result.step_id for result in progress] == ["first"]
+    assert service.history()[0].status is WorkflowStatus.CANCELLED
+    service.close()

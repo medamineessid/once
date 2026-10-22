@@ -72,7 +72,8 @@ class ReplayExecutor:
                 f"expected={step.message}"
                 for step in workflow.steps
             ),
-            all(step.kind in self._policy.allowed_kinds for step in workflow.steps),
+            len(workflow.steps) <= self._policy.max_steps
+            and all(step.kind in self._policy.allowed_kinds for step in workflow.steps),
         )
 
     def execute(

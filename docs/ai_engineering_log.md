@@ -192,6 +192,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Replay cancellation and persisted-history coverage   (commit: pending)
+- Task: Verify replay cancellation, progress reporting, and history persistence
+  through the controller boundary.
+- AI contribution: bounded replay preview eligibility by policy step limits and
+  added a controller-level cancellation/history regression test.
+- Defect found: the first assertion treated `WorkflowService.history()` as
+  returning `HistoryRecord`; the actual service contract returns `WorkflowRun`.
+  The assertion was corrected.
+- Verification: targeted replay tests passed after the correction; final full
+  verification is recorded after this milestone commit.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.

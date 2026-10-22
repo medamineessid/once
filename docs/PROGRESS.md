@@ -1,6 +1,6 @@
 # Once progress
 
-- Last completed step: Honest observed-versus-inferred replay presentation
+- Last completed step: Replay cancellation and persisted-history coverage
 - Last commit: pending
 - Next action: expand only verified, allowlisted actions beyond path checks
 - Currently failing tests or known breakage: none
