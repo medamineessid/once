@@ -28,6 +28,17 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Milestone 1: workflow lifecycle validation   (commit: d6c02af)
+- Task: Ensure malformed workflow definitions are rejected before execution.
+- AI contribution: added bounded validation for workflow and step identifiers,
+  names, message sizes, and duplicate step IDs.
+- Defect found: the first new test expected wording that did not match the
+  deliberately plain-language validation message; corrected the test.
+- Verification: `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  targeted pytest printed `16 passed in 0.15s`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.
