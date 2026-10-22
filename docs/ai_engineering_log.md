@@ -140,6 +140,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Local recording review and approval flow   (commit: pending)
+- Task: Connect persisted recordings, deterministic raw drafts, bounded
+  interviews, proposal previews, explicit approval, and controller persistence.
+- AI contribution: added recording listing/loading/deletion, proposal preview
+  and approval types, an approved-save controller boundary, and a connected
+  local-first integration test.
+- Defect found: none after focused verification; the fake provider and
+  recorder are injected and no cloud call or real input capture is used.
+- Verification: `.\.venv\Scripts\ruff.exe format .` completed;
+  `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  focused pytest printed `6 passed`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.

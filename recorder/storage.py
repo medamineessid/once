@@ -75,3 +75,9 @@ class RecordingStore:
             (self._directory / f"{recording_id}.json").unlink()
         except FileNotFoundError as error:
             raise WorkflowValidationError(f"Recording was not found: {recording_id}.") from error
+
+    def list_ids(self) -> tuple[str, ...]:
+        """Return saved recording IDs in deterministic order."""
+        return tuple(
+            sorted((path.stem for path in self._directory.glob("*.json")), key=str.casefold)
+        )

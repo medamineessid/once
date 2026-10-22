@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from ai.approval import ApprovedProposal
 from engine.errors import WorkflowValidationError
 from engine.workflow import (
     StepKind,
@@ -93,6 +94,10 @@ class WorkflowService:
         destination = path or self._workflow_directory / f"{workflow.workflow_id}.json"
         save_workflow(workflow, destination)
         return destination
+
+    def save_approved(self, proposal: ApprovedProposal) -> Path:
+        """Save only a proposal that passed the explicit approval gate."""
+        return self.save(proposal.workflow)
 
     def list_saved(self) -> tuple[Path, ...]:
         """Return saved workflow files in deterministic order."""

@@ -6,7 +6,8 @@
 - Last commit: 16ee698
 - Last completed step: OS recorder adapters with password-field protection
 - Last commit: pending
-- Last completed step: Controller and UI Record/Stop wiring
+- Last completed step: Local recording review and proposal approval flow
+- Last commit: pending
 - Next action: connect recorder review and interview state to the Qt UI
 - Currently failing tests or known breakage: none
 - Open items: file management is retained as a later integration; external

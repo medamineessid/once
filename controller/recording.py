@@ -69,3 +69,15 @@ class RecordingService(EventSink):
         with self._lock:
             if self._recorder is not None:
                 self._events.append(event)
+
+    def list_recordings(self) -> tuple[str, ...]:
+        """List locally saved recordings without loading their contents."""
+        return self._store.list_ids()
+
+    def load(self, recording_id: str) -> Recording:
+        """Load and validate one selected local recording."""
+        return self._store.load(recording_id)
+
+    def delete(self, recording_id: str) -> None:
+        """Delete one explicitly selected local recording."""
+        self._store.delete(recording_id)
