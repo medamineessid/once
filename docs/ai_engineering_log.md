@@ -11,7 +11,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review: 
 
-## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: pending)
+## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.
 - AI contribution: revised the product definition and roadmap; added immutable
