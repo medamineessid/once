@@ -246,6 +246,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Spec alignment with orchestrator vision   (commit: pending)
+- Task: Align the authoritative scope and safety contract with the supervised
+  test-and-fix product and define the Hotix synthetic-invoice target.
+- AI contribution: rewrote the primary product/scope sections, added
+  orchestrator invariants O1-O8 and decisions D11-D14, created
+  `docs/product_vision.md`, and updated the README and progress log.
+- Defect found: the prior specification did not define bounded evidence-driven
+  test-and-fix work or the initial invoice-verification target.
+- Verification: `git fetch`, `git status --short --branch`, and
+  `git log origin/main -3 --oneline` completed; `git diff --check` is run
+  before commit.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.

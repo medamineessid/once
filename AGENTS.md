@@ -2,24 +2,27 @@
 
 You are a senior Python engineer building "Once", a local Windows desktop application, in small verified increments. You optimise for: correctness, safety of user files, testability, maintainability. You do NOT optimise for cleverness, novelty, or speed of typing.
 
-# PRODUCT — REVISED LONG-TERM VISION (2026-10-22)
+# PRODUCT — SUPERVISED TEST-AND-FIX ORCHESTRATOR (2026-10-22)
 
-Once is a local desktop workflow automation and orchestration application. It
-lets a user define a bounded sequence of controlled steps, run it, inspect
-each outcome, understand failures, and repeat a verified workflow. Files and
-folders are one integration capability, not the whole product.
+Once is a local-first supervised test-and-fix orchestrator. A user describes a
+task, Once runs configured allowlisted tools against controlled inputs, verifies
+observable results, packages redacted evidence for an authorized coding agent,
+reviews a proposed diff, and reruns tests within mandatory bounds. Files,
+desktop applications, invoice extractors, logs, monitoring systems, and
+coding agents are integrations, not implicit permissions.
 
-The long-term product may support desktop applications, browser interfaces,
-application output, logs, monitoring systems, coding agents, tests, and
-bounded diagnose-fix-test cycles. Each capability must be implemented behind a
-typed integration boundary and must report observable outcomes. Once must not
-claim an integration works until it has a real implementation and automated
+The target flow is: describe -> run -> verify -> send evidence -> propose and
+review a fix -> rerun. Each capability must be implemented behind a typed
+integration boundary and report observable outcomes. Once must not claim an
+integration works until it has a real implementation and automated
 verification.
 
-The product remains local-first and offline by default. It does not require a
-paid AI API, unrestricted scripts, arbitrary shell commands, or opaque
-AI-generated actions. Any future AI proposal must produce validated structured
-workflow data; deterministic Once components remain responsible for execution.
+The product remains local-first and offline by default. Network access exists
+only for integrations explicitly configured by the user. Commands are
+allowlisted and structured; arbitrary shell execution, opaque AI actions, and
+AI-generated executable code remain prohibited. Agent proposals are untrusted
+data and must become a reviewed diff that passes validation and tests before a
+human may approve it.
 
 ## AI-ASSISTED RECORDER AMENDMENT (2026-10-22)
 
@@ -50,11 +53,10 @@ recordings and queued AI input. Replay remains the responsibility of the
 deterministic engine and is subject to explicit application targeting,
 boundedness, cancellation, dry-run behavior, and postcondition verification.
 
-# PRODUCT — SUPERSEDED FILE-MANAGEMENT-FIRST DEFINITION
+# RETAINED FILE-MANAGEMENT SAFETY CONTRACT
 
-The following definition is retained as historical detail and as the safety
-requirements for the file-management integration. It is no longer the primary
-product definition.
+The following definition is retained as the safety requirements for the
+file-management integration. It is no longer the primary product definition.
 
 Once lets an ordinary, non-technical user automate repetitive file-management tasks (bulk rename, organise/sort into folders, copy, move) WITHOUT scripting.
 
@@ -62,9 +64,14 @@ User flow: choose a folder -> teach a task (steps or examples) -> PREVIEW every 
 
 Core principle: the user must not need to understand automation. The application's deterministic code — never an AI model — controls every file operation. The product must be fully functional offline with NO AI/API dependency. (If AI is ever added later, it may only emit structured workflow JSON that passes the same validator; it never executes anything.)
 
-# SCOPE — VERSION 1
+# SCOPE — CURRENT ORCHESTRATOR SLICE
 
-IN: bulk rename; organise by extension / filename / date; copy; move; save/reopen/rerun workflows; preview of every change; detection of duplicate names and destination conflicts; execution history (journal); undo for eligible operations; inferring simple filename rules from user-given examples; fully local operation.
+IN: bounded declarative workflows; allowlisted local verification commands;
+synthetic invoice acceptance cases; structured JSON stdout; per-field
+comparison; redacted evidence bundles; SQLite run/decision/approval history;
+explicit proposal review; separate coding-agent branches; rerun and stop
+limits; the existing safe file-management integration; and read-only UI
+Automation inspection.
 
 OUT (do not build, do not stub, do not "prepare for"): running arbitrary or
 AI-generated code/shell commands; permanent deletion; cloud sync / accounts /
@@ -74,6 +81,11 @@ changing file extensions; renaming/moving folders (only files are
 renamed/moved; folders are only CREATED). Desktop recording, AI proposals, and
 cloud-provider adapters are governed by the amendment above and the revised
 roadmap; they do not grant permission for unrestricted replay or execution.
+
+The orchestrator additionally defers silent network access, automatic agent
+merges or pushes, mutating desktop clicks or typing without a separately
+approved postcondition-verified action, browser automation, and invoice
+accuracy claims without synthetic or user-supplied ground truth.
 
 If a task seems to need something OUT of scope, stop and say so in your report instead of building it.
 
@@ -103,21 +115,26 @@ integrations.
    execution history, schema validation, and restart-safe state.
 3. **GUI vertical slice:** saved workflow listing/opening/saving, execution,
    and persisted history inspection through controller services.
-4. **Reliable action and verification primitives (current):** bounded,
-   read-only path inspection inside an explicitly authorized folder, structured
-   evidence, and persisted step evidence.
-5. **File-management integration:** retain the existing scanner/planner/
+4. **Reliable action and verification primitives:** bounded read-only path and
+   Windows UI Automation inspection, structured evidence, and persisted step
+   evidence.
+5. **Headless acceptance verification (current):** strictly validated
+   synthetic invoice cases, allowlisted extractor commands, JSON field
+   comparisons, redacted evidence bundles, and persisted outcomes.
+6. **File-management integration:** retain the existing scanner/planner/
    validator/executor/recovery roadmap as one controlled integration.
-6. **Additional integrations:** implement and test one integration at a time
+7. **Additional integrations:** implement and test one integration at a time
    behind explicit interfaces; no integration is represented by a placeholder.
-7. **User workflow editor and history UI:** expose only capabilities that have
+8. **User workflow editor and history UI:** expose only capabilities that have
    real engine and integration implementations.
-8. **AI-assisted recorder:** local event capture with redaction, keyframes,
+9. **AI-assisted recorder:** local event capture with redaction, keyframes,
    provider-independent analysis and bounded interview, validated draft
    review, and explicit consent for optional cloud analysis.
-9. **Controlled input replay:** allowlisted input steps, application targeting,
+10. **Controlled input replay:** allowlisted input steps, application targeting,
    dry-run, kill switch, postconditions, evidence, and bounded retries.
-10. **Packaging and release hardening:** Windows packaging, recovery testing,
+11. **Supervised coding-agent loop:** separate branches, diff review, explicit
+    human approval, bounded reruns, and no automatic merge or push.
+12. **Packaging and release hardening:** Windows packaging, recovery testing,
     documentation, and performance checks.
 
 # NON-NEGOTIABLE SAFETY INVARIANTS (each MUST have at least one automated test)
@@ -134,6 +151,24 @@ S9.  The `engine/` package never imports PySide6 or anything from `ui/`. (Archit
 S10. Workflows loaded from JSON are strictly validated (schema version, known step types, known keys only, bounded sizes, no path traversal, no executable content). Unknown/invalid => rejected with a clear error, never partially applied.
 S11. Approval gate: the executor only accepts a plan object produced by `approve_plan(plan)`, which refuses plans containing any ERROR-severity issue. Executing is impossible without passing that gate.
 S12. Tests and developers' machines are never harmed: tests only operate inside pytest `tmp_path`; no test touches the real home/Desktop/Documents/Downloads folders.
+
+O1. Every orchestrator action comes from an allowlist with declared
+preconditions and postconditions; unknown actions are rejected.
+O2. Targets must be uniquely identified; missing or ambiguous targets fail
+closed.
+O3. Any mutating action needs explicit approval semantics and a side-effect
+preview.
+O4. The diagnose-fix-test loop is bounded by mandatory maximum iterations,
+maximum wall time, and stop-on-no-progress limits.
+O5. Evidence (invoice text, logs, and monitoring events) is untrusted data:
+delimited, never executed, never allowed to alter instructions, and redacted
+for secrets, emails, and keys before transmission.
+O6. Coding agents work only on a separate Git branch; Once never merges or
+pushes agent changes without human approval. Changes are shown as a diff and
+rerun against tests before approval.
+O7. Every run, decision, and approval is persisted in the history database.
+O8. Network access is denied unless the corresponding integration was
+explicitly configured by the user.
 
 # TECH STACK AND VERSION POLICY
 
@@ -158,6 +193,14 @@ D7. A plan containing ERROR issues cannot be executed. The UI offers "Exclude pr
 D8. Scanning is non-recursive by default; skips directories, symlinks/junctions, and (by default) hidden/system files. The user can opt in to subfolders and to hidden files.
 D9. Long paths: any resulting path longer than 259 characters is an ERROR (`PATH_TOO_LONG`). Do not use the `\\?\` prefix in v1.
 D10. Inference of rules from examples is deterministic (no ML, no network): enumerate candidate rules, keep only those reproducing ALL examples exactly, then check whether surviving candidates disagree on other files in the folder; if they do, ASK the user instead of guessing.
+D11. Headless verifier commands are allowlisted integrations, receive only
+controlled input paths, and must return strictly validated JSON stdout.
+D12. Synthetic acceptance cases are the initial invoice ground truth; no
+precision or recall claim is made from absent real samples.
+D13. Evidence bundles contain bounded output tails and redacted data; they
+never contain credentials, secrets, or unrestricted raw process output.
+D14. A coding-agent integration may propose a patch only on a separate branch;
+human approval is required before merge, push, or any consequential action.
 
 # ARCHITECTURE (layering is enforced by tests)
 

@@ -6,8 +6,9 @@ applications, browser interfaces, logs, tests, and coding tools through
 explicit integrations. The deterministic engine controls execution; no
 unrestricted scripts or opaque AI actions are used.
 
-**Current status: workflow foundation, persistence, history, GUI, local
-recording, offline proposal review, and explicit approval milestones.**
+**Current status: supervised orchestration foundation, persistence, history,
+local recording, offline proposal review, explicit approval, and read-only
+Windows inspection. The headless verifier slice is next.**
 The application can validate and save/reopen versioned declarative workflows,
 run bounded local steps with success, failure, skipped-step, cancellation, and
 authorized path-verification states, and record real controller-triggered runs
@@ -116,3 +117,9 @@ an exact parent-window identity and a stable `AutomationId` plus `ControlType`.
 The element must be unique within that window. Inspection records only
 non-sensitive metadata such as control type, class name, and enabled state; it
 does not read control text.
+
+The product direction is now a supervised test-and-fix orchestrator. See
+[docs/product_vision.md](docs/product_vision.md) for the six-step flow and the
+Hotix invoice-extractor target. The first verifier uses synthetic acceptance
+cases; it does not call a coding agent, mutate desktop applications, or claim
+invoice accuracy without ground truth.
