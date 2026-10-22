@@ -56,6 +56,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Recorder compatibility and local event-log foundation   (commit: pending)
+- Task: Verify recorder-library compatibility on Windows/Python 3.14 and add
+  privacy-filtered local recording storage with deterministic raw drafts.
+- AI contribution: pinned and smoke-tested `mss`, `pynput`, `pywinauto`, and
+  `pywin32`; added immutable recording models, password redaction, JSON
+  storage/deletion, and a non-runnable raw draft representation.
+- Defect found: the initial redaction condition was unnecessarily complex and
+  could obscure the password-only rule; simplified it to redact only events
+  explicitly identified as password-field input.
+- Verification: PyPI metadata was reviewed; package installation completed;
+  monitor and UI Automation probes succeeded; `.\.venv\Scripts\ruff.exe
+  check .` printed `All checks passed!`; recorder tests printed `3 passed`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.

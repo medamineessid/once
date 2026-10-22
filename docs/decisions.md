@@ -45,6 +45,28 @@ Decisions D1–D10 below are copied verbatim from `AGENTS.md` (they are pre-made
   compatibility spike and real local installation tests before pinning
   dependencies.
 
+## 2026-10-22 — Recorder library compatibility spike
+
+- **Question:** Which libraries can support the first local recorder milestone
+  on Windows with Python 3.14.3?
+- **Evidence:** PyPI reports `mss 10.2.0` with Python 3.9+ and Windows
+  classifiers; `pywin32 312` has a CPython 3.14 Windows wheel and Python 3.14
+  classifier; `pywinauto 0.6.9` provides Windows UI Automation support but
+  publishes no `Requires-Python` bound; `pynput 1.8.2` imports on this
+  interpreter but its PyPI classifiers stop at Python 3.9.
+- **Local verification:** Installed `mss==10.2.0`, `pynput==1.8.2`,
+  `pywinauto==0.6.9`, and `pywin32==312` into `.venv`. Imports succeeded.
+  `mss.MSS().monitors` detected 2 monitors. `pywinauto.Desktop(backend="uia")`
+  enumerated a live Windows taskbar window. A probe that printed
+  `pynput.__version__` failed because that attribute is not exposed; the
+  package import itself succeeded.
+- **Choice:** Pin these versions, keep OS capture behind replaceable adapters,
+  and treat `pynput` Python 3.14 support as empirically verified for import
+  only, not as a formal upstream compatibility guarantee.
+- **Reason:** These libraries provide the needed Windows capabilities without
+  placing OS APIs in the UI or engine. Automated tests continue to use fake
+  event sources and do not send input.
+
 ---
 
 ## 2026-10-21 — Step 0: Pre-flight evidence and toolchain decision
