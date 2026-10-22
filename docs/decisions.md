@@ -67,6 +67,19 @@ Decisions D1–D10 below are copied verbatim from `AGENTS.md` (they are pre-made
   placing OS APIs in the UI or engine. Automated tests continue to use fake
   event sources and do not send input.
 
+## 2026-10-22 — Gemini request authentication
+
+- **Question:** Where should the Gemini API credential be sent?
+- **Evidence:** Official Gemini API documentation at
+  `https://ai.google.dev/gemini-api/docs` shows REST requests using the
+  `x-goog-api-key` header. The API-key documentation also recommends
+  environment variables for local development.
+- **Choice:** Send the key only in the `x-goog-api-key` header, never in the
+  URL query string. Keep the adapter disabled unless explicitly enabled by the
+  caller.
+- **Reason:** URLs can be copied into logs, browser history, proxies, or error
+  reports. Header transport reduces accidental credential exposure.
+
 ---
 
 ## 2026-10-21 — Step 0: Pre-flight evidence and toolchain decision

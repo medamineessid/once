@@ -36,3 +36,36 @@ def test_fake_provider_rejects_unbounded_interview() -> None:
 def test_gemini_is_disabled_by_default() -> None:
     with pytest.raises(AIProviderError, match="disabled"):
         GeminiProvider("not-used").analyze(request())
+
+
+def test_gemini_does_not_put_key_in_url(monkeypatch) -> None:
+    captured = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return (
+                b'{"candidates":[{"content":{"parts":[{"text":"{\\"type\\":'
+                b'\\"question\\",\\"text\\":\\"ok\\"}"}]}}]}'
+            )
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["key"] = request.get_header("X-goog-api-key")
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr("ai.gemini.urlopen", fake_urlopen)
+    result = GeminiProvider("secret-key", enabled=True).analyze(request())
+
+    assert isinstance(result, ProviderQuestion)
+    assert captured == {
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+        "key": "secret-key",
+        "timeout": 20.0,
+    }

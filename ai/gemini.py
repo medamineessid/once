@@ -47,10 +47,10 @@ class GeminiProvider:
                 }
             ]
         }
-        http_request = Request(  # noqa: S310 - endpoint is the fixed HTTPS Gemini API.
-            f"{GEMINI_ENDPOINT}?key={self._api_key}",
+        http_request = Request(
+            GEMINI_ENDPOINT,
             data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", "x-goog-api-key": self._api_key},
             method="POST",
         )
         try:

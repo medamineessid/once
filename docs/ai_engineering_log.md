@@ -127,6 +127,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
+- Task: Verify the official Gemini authentication guidance and prevent API keys
+  from appearing in request URLs.
+- AI contribution: changed the REST adapter to use the documented
+  `x-goog-api-key` header and added a regression test covering the request URL,
+  header, and timeout.
+- Defect found: the adapter initially appended the API key to the URL query
+  string.
+- Verification: official Gemini documentation was fetched; focused provider
+  tests passed; no live network request was made.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.
