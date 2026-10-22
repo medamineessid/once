@@ -154,6 +154,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Policy-gated read-only replay subset   (commit: pending)
+- Task: Provide a real, safe replay boundary with an explicit allowlist and
+  dry-run behavior.
+- AI contribution: added `ReplayPolicy` and `ReplayExecutor`, allowing only
+  read-only path inspection and existence verification with bounded steps.
+- Defect found: the first test pass exposed an import-order lint error; the
+  test imports were formatted and rerun.
+- Verification: `ruff format engine\replay.py tests\test_replay.py`;
+  `ruff check engine\replay.py tests\test_replay.py` passed; `pytest -q
+  tests\test_replay.py` passed with 3 tests; `git diff --check` passed.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.
