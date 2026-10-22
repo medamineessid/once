@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: Step 1 (project foundation)
-- Last commit: pending
+- Last commit: d1375f0
 - Next action: begin Step 2 read-only models and scanner
 - Currently failing tests or known breakage: none
 - Open items: Step 2 scanner and model implementation
