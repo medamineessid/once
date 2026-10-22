@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: Verification safety and workflow schema compatibility
-- Last commit: pending
+- Last commit: b0bc57c
 - Next action: add background execution and cancellation through a worker boundary
 - Next action: add a real workflow editor for supported declarative steps
 - Currently failing tests or known breakage: none

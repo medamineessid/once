@@ -142,7 +142,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Verification safety and schema compatibility   (commit: pending)
+## 2026-10-22 — Verification safety and schema compatibility   (commit: b0bc57c)
 - Task: Prevent symlink targets from bypassing authorized-root checks and keep
   existing schema-version-one workflows loadable after adding target fields.
 - AI contribution: added explicit pre-resolution symlink rejection, schema
