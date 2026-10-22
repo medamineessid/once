@@ -260,6 +260,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Headless acceptance-case verifier slice   (commit: pending)
+- Task: Verify synthetic invoice outputs through an allowlisted command and
+  produce bounded redacted JSON and Markdown evidence.
+- AI contribution: added strict acceptance-case models, exact argv command
+  allowlisting, bounded subprocess execution, exact/numeric-tolerance/
+  case-insensitive comparisons, failure statuses, redaction, and evidence
+  persistence.
+- Defect found: the first test run used an overly short timeout for crash and
+  malformed-output cases and asserted against a redaction marker; both tests
+  were corrected. Ruff also required an explicit no-shell subprocess boundary.
+- Verification: targeted verifier tests pass (`9 passed`); full suite and
+  smoke verification are pending.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.
