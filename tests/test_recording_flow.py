@@ -36,8 +36,17 @@ def test_recording_to_approved_proposal(tmp_path) -> None:
     workflow = Workflow(
         "journey-workflow",
         "Journey workflow",
-        (WorkflowStep("summary", "Summary", StepKind.REPORT, "Observed click."),),
+        (
+            WorkflowStep(
+                "summary",
+                "Summary",
+                StepKind.VERIFY_PATH_EXISTS,
+                "Recorded result exists.",
+                str(tmp_path / "result.txt"),
+            ),
+        ),
     )
+    (tmp_path / "result.txt").write_text("done", encoding="utf-8")
     provider = FakeAnalysisProvider(
         (ProviderQuestion("What confirms success?"), ProviderDraft("Goal", workflow))
     )
@@ -50,11 +59,14 @@ def test_recording_to_approved_proposal(tmp_path) -> None:
     approved = approve_proposal(proposal)
 
     assert preview.goal == "Goal"
-    assert preview.steps == ("summary: Summary [REPORT] target=none attempts=1 postcondition=none",)
+    assert preview.steps == (
+        "summary: Summary [VERIFY_PATH_EXISTS] "
+        f"target={tmp_path / 'result.txt'} attempts=1 postcondition=none",
+    )
     assert approved.workflow == workflow
 
     history = ExecutionHistory(connect(tmp_path / "history.db"))
-    run = WorkflowService(history=history).run_approved(approved)
+    run = WorkflowService(history=history).run_approved(approved, allowed_root=tmp_path)
 
     assert run.status.value == "SUCCEEDED"
     assert history.list_runs()[0].run.workflow_id == "journey-workflow"

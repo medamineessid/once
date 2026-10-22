@@ -55,3 +55,31 @@ def test_replay_rejects_unallowlisted_actions() -> None:
 
     with pytest.raises(ExecutionError, match="does not allow"):
         ReplayExecutor().validate(workflow)
+
+
+def test_replay_preview_marks_unsupported_steps_without_executing() -> None:
+    workflow = Workflow(
+        "mixed",
+        "Mixed",
+        (
+            WorkflowStep("check", "Check", StepKind.VERIFY_PATH_EXISTS, "Check", "C:\\missing"),
+            WorkflowStep("report", "Report", StepKind.REPORT, "Unsupported"),
+        ),
+    )
+
+    preview = ReplayExecutor().preview(workflow)
+
+    assert preview.executable is False
+    assert "permission=ALLOWED" in preview.steps[0]
+    assert "permission=UNSUPPORTED" in preview.steps[1]
+
+
+def test_replay_policy_rejects_unsupported_execution() -> None:
+    workflow = Workflow(
+        "report",
+        "Report",
+        (WorkflowStep("report", "Report", StepKind.REPORT, "Unsupported"),),
+    )
+
+    with pytest.raises(ExecutionError, match="does not allow"):
+        ReplayExecutor().execute(workflow, allowed_root=None)

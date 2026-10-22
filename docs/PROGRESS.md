@@ -1,8 +1,8 @@
 # Once progress
 
-- Last completed step: Policy-gated read-only replay subset
+- Last completed step: Controller and UI replay preview integration
 - Last commit: pending
-- Next action: connect the replay policy to the controller/UI preview
+- Next action: expand only verified, allowlisted actions beyond path checks
 - Currently failing tests or known breakage: none
 - Open items: live Gemini use is opt-in and unverified; screenshots are
   supported as references but are not automatically captured for every event;

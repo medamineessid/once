@@ -29,6 +29,15 @@ class ReplayPolicy:
     max_steps: int = 20
 
 
+@dataclass(frozen=True)
+class ReplayPreview:
+    """A user-facing description of replay permission and expected outcomes."""
+
+    workflow_id: str
+    steps: tuple[str, ...]
+    executable: bool
+
+
 class ReplayExecutor:
     """Execute only policy-approved, read-only workflow actions."""
 
@@ -50,6 +59,21 @@ class ReplayExecutor:
             raise ExecutionError(
                 f"Replay does not allow these step kinds: {', '.join(unsupported)}."
             )
+
+    def preview(self, workflow: Workflow) -> ReplayPreview:
+        """Describe every step without reading or changing the target."""
+        WorkflowRunner.validate(workflow)
+        return ReplayPreview(
+            workflow.workflow_id,
+            tuple(
+                f"{step.step_id}: action={step.kind.value} "
+                f"target={step.target or 'none'} permission="
+                f"{'ALLOWED' if step.kind in self._policy.allowed_kinds else 'UNSUPPORTED'} "
+                f"expected={step.message}"
+                for step in workflow.steps
+            ),
+            all(step.kind in self._policy.allowed_kinds for step in workflow.steps),
+        )
 
     def execute(
         self,

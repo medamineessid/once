@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ai.approval import ApprovedProposal
 from engine.errors import WorkflowValidationError
+from engine.replay import ReplayExecutor, ReplayPreview
 from engine.workflow import (
     StepKind,
     StepResult,
@@ -30,6 +31,7 @@ class WorkflowService:
         workflow_directory: Path | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
+        self._replay = ReplayExecutor()
         self._history = history
         self._workflow_directory = workflow_directory
         if workflow_directory is not None:
@@ -107,12 +109,34 @@ class WorkflowService:
         progress_callback: Callable[[StepResult], None] | None = None,
     ) -> WorkflowRun:
         """Execute only a proposal that passed the explicit approval gate."""
-        return self.run_workflow(
+        return self.run_replay(
             proposal.workflow,
             allowed_root=allowed_root,
             cancel_check=cancel_check,
             progress_callback=progress_callback,
         )
+
+    def preview_replay(self, workflow: Workflow) -> ReplayPreview:
+        """Return a policy check and readable preview without executing."""
+        return self._replay.preview(workflow)
+
+    def run_replay(
+        self,
+        workflow: Workflow,
+        allowed_root: Path | None,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[StepResult], None] | None = None,
+    ) -> WorkflowRun:
+        """Execute and persist only actions allowed by the replay policy."""
+        run = self._replay.execute(
+            workflow,
+            allowed_root=allowed_root,
+            cancel_check=cancel_check,
+            progress_callback=progress_callback,
+        )
+        if self._history is not None:
+            self._history.record(run)
+        return run
 
     def list_saved(self) -> tuple[Path, ...]:
         """Return saved workflow files in deterministic order."""

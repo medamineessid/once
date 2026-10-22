@@ -167,6 +167,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Controller and UI replay preview integration   (commit: pending)
+- Task: Connect the replay allowlist to controller and Qt preview/execution
+  actions with explicit authorized-folder selection and confirmation.
+- AI contribution: added replay previews, controller `preview_replay` and
+  `run_replay` entry points, replay-aware workers, and UI policy status,
+  cancellation, progress, and confirmation controls.
+- Defect found: the first lint run found an import-order issue in the worker;
+  it was corrected before full verification.
+- Verification: targeted replay, recording-flow, worker, and GUI tests passed;
+  final full verification is recorded after this milestone commit.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Gemini credential transport hardening   (commit: pending)
 - Task: Verify the official Gemini authentication guidance and prevent API keys
   from appearing in request URLs.

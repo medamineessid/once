@@ -31,6 +31,7 @@ from ai.provider import deterministic_demo_provider
 from controller.recording import RecordingService
 from controller.service import WorkflowService
 from engine.errors import AIProviderError, WorkflowValidationError
+from engine.replay import ReplayPreview
 from engine.workflow import StepKind, Workflow, WorkflowRun, WorkflowStep
 from recorder.drafts import build_raw_draft
 from ui.workers import WorkflowWorker
@@ -52,6 +53,8 @@ class MainWindow(QMainWindow):
         self._service = service or WorkflowService()
         self._recording_service = recording_service
         self._current_workflow: Workflow | None = None
+        self._authorized_root: Path | None = None
+        self._replay_preview: ReplayPreview | None = None
         self._status_label = QLabel(STARTUP_MESSAGE, self)
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._workflow_list = QListWidget(self)
@@ -61,7 +64,11 @@ class MainWindow(QMainWindow):
         self._recording_list = QListWidget(self)
         self._recording_events = QListWidget(self)
         self._proposal_list = QListWidget(self)
-        self._run_button = QPushButton("Run selected workflow", self)
+        self._run_button = QPushButton("Preview selected replay", self)
+        self._choose_root_button = QPushButton("Choose authorized folder", self)
+        self._execute_replay_button = QPushButton("Execute approved replay", self)
+        self._execute_replay_button.setEnabled(False)
+        self._authorized_root_label = QLabel("Authorized folder: none selected", self)
         self._demo_button = QPushButton("Run local demo", self)
         self._cancel_button = QPushButton("Cancel run", self)
         self._record_button = QPushButton("Record", self)
@@ -92,7 +99,9 @@ class MainWindow(QMainWindow):
         self._worker: WorkflowWorker | None = None
 
         self._workflow_list.currentItemChanged.connect(self._select_workflow)
-        self._run_button.clicked.connect(self._run_selected)
+        self._run_button.clicked.connect(self._preview_selected_replay)
+        self._choose_root_button.clicked.connect(self._choose_authorized_root)
+        self._execute_replay_button.clicked.connect(self._execute_replay)
         self._demo_button.clicked.connect(self._run_demo)
         self._cancel_button.clicked.connect(self._cancel_run)
         self._record_button.clicked.connect(self._start_recording)
@@ -154,7 +163,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._approve_button)
         layout.addWidget(QLabel("Saved workflows", self))
         layout.addWidget(self._workflow_list)
-        layout.addLayout(actions)
+        replay_actions = QHBoxLayout()
+        replay_actions.addWidget(self._run_button)
+        replay_actions.addWidget(self._choose_root_button)
+        replay_actions.addWidget(self._execute_replay_button)
+        layout.addLayout(replay_actions)
+        layout.addWidget(self._authorized_root_label)
+        layout.addWidget(self._demo_button)
+        layout.addWidget(self._cancel_button)
+        layout.addWidget(self._open_button)
+        layout.addWidget(self._save_button)
         layout.addWidget(QLabel("Execution history", self))
         layout.addWidget(self._history_list)
         layout.addWidget(QLabel("Latest step results", self))
@@ -185,16 +203,70 @@ class MainWindow(QMainWindow):
         path = current.data(Qt.ItemDataRole.UserRole)
         try:
             self._current_workflow = self._service.load(Path(path))
+            self._replay_preview = None
+            self._execute_replay_button.setEnabled(False)
             self._status_label.setText(f"Loaded: {self._current_workflow.name}")
         except WorkflowValidationError as error:
             self._current_workflow = None
             self._show_error(str(error))
 
     def _run_selected(self) -> None:
+        self._preview_selected_replay()
+
+    def _preview_selected_replay(self) -> None:
         if self._current_workflow is None:
-            self._show_error("Select a saved workflow before running it.")
+            self._show_error("Select a saved workflow before previewing it.")
             return
-        self._start_run(self._current_workflow)
+        try:
+            self._replay_preview = self._service.preview_replay(self._current_workflow)
+        except WorkflowValidationError as error:
+            self._show_error(str(error))
+            return
+        self._result_list.clear()
+        self._result_list.addItems(self._replay_preview.steps)
+        if self._replay_preview.executable:
+            self._status_label.setText(
+                "Replay preview ready. Choose a folder, then confirm execution."
+            )
+        else:
+            self._status_label.setText(
+                "Replay preview contains unsupported actions. It cannot be executed."
+            )
+        self._update_execute_replay_enabled()
+
+    def _choose_authorized_root(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Choose authorized folder")
+        if not directory:
+            return
+        self._authorized_root = Path(directory)
+        self._authorized_root_label.setText(f"Authorized folder: {self._authorized_root}")
+        self._update_execute_replay_enabled()
+
+    def _update_execute_replay_enabled(self) -> None:
+        self._execute_replay_button.setEnabled(
+            self._replay_preview is not None
+            and self._replay_preview.executable
+            and self._authorized_root is not None
+        )
+
+    def _execute_replay(self) -> None:
+        if self._current_workflow is None or self._authorized_root is None:
+            self._show_error("Preview a supported workflow and choose an authorized folder first.")
+            return
+        if (
+            QMessageBox.question(
+                self,
+                "Confirm replay",
+                "Execute the approved read-only replay in the selected folder?",
+            )
+            is not QMessageBox.StandardButton.Yes
+        ):
+            return
+        self._start_run(
+            self._current_workflow,
+            replay=True,
+            allowed_root=self._authorized_root,
+        )
 
     def _create_from_form(self) -> None:
         name = self._workflow_name.text().strip()
@@ -220,13 +292,24 @@ class MainWindow(QMainWindow):
     def _run_demo(self) -> None:
         self._start_run(self._service.demo_workflow())
 
-    def _start_run(self, workflow: Workflow) -> None:
+    def _start_run(
+        self,
+        workflow: Workflow,
+        *,
+        replay: bool = False,
+        allowed_root: Path | None = None,
+    ) -> None:
         if self._thread is not None:
             self._show_error("A workflow is already running.")
             return
         self._set_running(True)
         self._thread = QThread(self)
-        self._worker = WorkflowWorker(self._service, workflow)
+        self._worker = WorkflowWorker(
+            self._service,
+            workflow,
+            replay=replay,
+            allowed_root=allowed_root,
+        )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.progress.connect(self._show_step_result)
@@ -256,6 +339,8 @@ class MainWindow(QMainWindow):
     def _set_running(self, running: bool) -> None:
         for button in (
             self._run_button,
+            self._choose_root_button,
+            self._execute_replay_button,
             self._demo_button,
             self._open_button,
             self._save_button,
