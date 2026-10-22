@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: Local recording-to-approved-workflow journey
-- Last commit: pending
+- Last commit: b578c03
 - Next action: add controlled replay for one allowlisted local action
 - Currently failing tests or known breakage: none
 - Open items: live Gemini use is opt-in and unverified; screenshots are

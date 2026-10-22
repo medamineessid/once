@@ -99,6 +99,21 @@ class WorkflowService:
         """Save only a proposal that passed the explicit approval gate."""
         return self.save(proposal.workflow)
 
+    def run_approved(
+        self,
+        proposal: ApprovedProposal,
+        allowed_root: Path | None = None,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[StepResult], None] | None = None,
+    ) -> WorkflowRun:
+        """Execute only a proposal that passed the explicit approval gate."""
+        return self.run_workflow(
+            proposal.workflow,
+            allowed_root=allowed_root,
+            cancel_check=cancel_check,
+            progress_callback=progress_callback,
+        )
+
     def list_saved(self) -> tuple[Path, ...]:
         """Return saved workflow files in deterministic order."""
         if self._workflow_directory is None:

@@ -54,7 +54,7 @@ def test_recording_to_approved_proposal(tmp_path) -> None:
     assert approved.workflow == workflow
 
     history = ExecutionHistory(connect(tmp_path / "history.db"))
-    run = WorkflowService(history=history).run_workflow(approved.workflow)
+    run = WorkflowService(history=history).run_approved(approved)
 
     assert run.status.value == "SUCCEEDED"
     assert history.list_runs()[0].run.workflow_id == "journey-workflow"

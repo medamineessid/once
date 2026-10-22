@@ -6,13 +6,15 @@ applications, browser interfaces, logs, tests, and coding tools through
 explicit integrations. The deterministic engine controls execution; no
 unrestricted scripts or opaque AI actions are used.
 
-**Current status: workflow foundation, persistence, history, GUI, and
-read-only verification milestones.**
+**Current status: workflow foundation, persistence, history, GUI, local
+recording, offline proposal review, and explicit approval milestones.**
 The application can validate and save/reopen versioned declarative workflows,
 run bounded local steps with success, failure, skipped-step, cancellation, and
 authorized path-verification states, and record real controller-triggered runs
-and evidence in SQLite. External integrations, file execution, and undo are not
-implemented yet. Do not use this build to manage real files.
+and evidence in SQLite. It can also record local observations, redact
+password-field input, review recordings, run deterministic offline analysis,
+preview a proposal, and require explicit approval before saving and executing
+it. Live Gemini analysis and input replay remain opt-in or unimplemented.
 
 ## Requirements
 
@@ -91,3 +93,14 @@ Version and compatibility evidence is recorded in `docs/decisions.md`.
 - `AGENTS.md` — authoritative specification, safety invariants and decisions.
 - `docs/decisions.md` — evidence-backed decision log.
 - `docs/ai_engineering_log.md` — append-only implementation log.
+
+## Local recording and proposal demo
+
+Run the application, click **Record**, perform a short task, and click **Stop
+recording**. Select the saved recording, inspect its event timeline, then click
+**Analyze selected recording (offline)**. Answer the bounded question, review
+the proposed workflow, and click **Approve and save proposal**. The saved
+workflow can then be selected and run through the normal deterministic engine.
+
+The offline demo does not send recording data over the network. Gemini remains
+disabled unless a caller explicitly enables it and supplies a credential.

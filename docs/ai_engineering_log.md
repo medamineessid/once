@@ -127,7 +127,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Recording review and local-first approval UI   (commit: pending)
+## 2026-10-22 — Recording review and local-first approval UI   (commit: b578c03)
 - Task: Connect saved recordings to review, offline analysis, bounded
   interview, proposal preview, explicit approval, deletion, execution, and
   persisted history.
@@ -139,6 +139,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   to target the dedicated answer input.
 - Verification: focused UI journey printed `1 passed`; full verification is
   recorded after this milestone commit.
+- Outcome: PASSED
+- Human review:
+
+## 2026-10-22 — Approved proposal execution boundary   (commit: pending)
+- Task: Ensure approved proposals have a dedicated controller execution path
+  and document the complete local-first recording journey.
+- AI contribution: added `run_approved`, updated the README demo instructions,
+  and clarified current recording and offline-analysis capabilities.
+- Defect found: none after adding the approval execution regression to the
+  connected journey test.
+- Verification: final full verification is recorded after this milestone
+  commit.
 - Outcome: PASSED
 - Human review:
 
