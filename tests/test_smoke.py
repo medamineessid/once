@@ -111,6 +111,12 @@ def test_main_window_runs_demo_workflow(qtbot: QtBot) -> None:
         button for button in window.findChildren(QPushButton) if button.text() == "Run local demo"
     )
     qtbot.mouseClick(demo_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(
+        lambda: (
+            "SUCCEEDED: 2 steps recorded" in [label.text() for label in window.findChildren(QLabel)]
+        ),
+        timeout=2000,
+    )
 
     assert "SUCCEEDED: 2 steps recorded" in [label.text() for label in window.findChildren(QLabel)]
 
@@ -143,6 +149,13 @@ def test_main_window_displays_each_step_result(qtbot: QtBot) -> None:
         button for button in window.findChildren(QPushButton) if button.text() == "Run local demo"
     )
     qtbot.mouseClick(demo_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(
+        lambda: any(
+            result_list.count() == 2 and "inspect: SUCCEEDED" in result_list.item(0).text()
+            for result_list in window.findChildren(QListWidget)
+        ),
+        timeout=2000,
+    )
 
     result_lists = window.findChildren(QListWidget)
     assert any(

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from engine.errors import WorkflowValidationError
 from engine.workflow import (
     StepKind,
+    StepResult,
     Workflow,
     WorkflowRun,
     WorkflowRunner,
@@ -66,9 +68,20 @@ class WorkflowService:
         """Execute the demo through the same service path used by future workflows."""
         return self.run_workflow(self.demo_workflow())
 
-    def run_workflow(self, workflow: Workflow, allowed_root: Path | None = None) -> WorkflowRun:
+    def run_workflow(
+        self,
+        workflow: Workflow,
+        allowed_root: Path | None = None,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[StepResult], None] | None = None,
+    ) -> WorkflowRun:
         """Execute a workflow and persist its real outcome when history is configured."""
-        run = self._runner.run(workflow, allowed_root=allowed_root)
+        run = self._runner.run(
+            workflow,
+            allowed_root=allowed_root,
+            cancel_check=cancel_check,
+            progress_callback=progress_callback,
+        )
         if self._history is not None:
             self._history.record(run)
         return run

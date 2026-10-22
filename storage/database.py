@@ -8,7 +8,7 @@ from pathlib import Path
 
 def connect(path: Path) -> sqlite3.Connection:
     """Open a local SQLite database and create the current schema."""
-    connection = sqlite3.connect(path)
+    connection = sqlite3.connect(path, check_same_thread=False)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     connection.executescript(

@@ -41,6 +41,18 @@ def test_workflow_runner_records_successful_steps() -> None:
     ]
 
 
+def test_workflow_runner_reports_progress_for_completed_steps() -> None:
+    progress = []
+
+    WorkflowRunner().run(
+        make_workflow(StepKind.REPORT, StepKind.REPORT),
+        progress_callback=progress.append,
+    )
+
+    assert [result.step_id for result in progress] == ["step-0", "step-1"]
+    assert all(result.status is StepStatus.SUCCEEDED for result in progress)
+
+
 def test_workflow_runner_stops_after_controlled_failure() -> None:
     run = WorkflowRunner().run(
         make_workflow(StepKind.REPORT, StepKind.FAIL, StepKind.REPORT),

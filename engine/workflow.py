@@ -89,6 +89,7 @@ class WorkflowRun:
 
 
 CancelCheck = Callable[[], bool]
+ProgressCallback = Callable[[StepResult], None]
 
 
 class WorkflowRunner:
@@ -133,6 +134,7 @@ class WorkflowRunner:
         cancel_check: CancelCheck | None = None,
         run_id: str | None = None,
         allowed_root: Path | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
         self.validate(workflow)
@@ -172,6 +174,8 @@ class WorkflowRunner:
             if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
                 result = self._run_path_step(step, allowed_root)
                 results[-1] = result
+                if progress_callback is not None:
+                    progress_callback(result)
                 if result.status is not StepStatus.VERIFIED:
                     results.extend(
                         StepResult(
@@ -189,6 +193,8 @@ class WorkflowRunner:
                     status=StepStatus.FAILED,
                     message=step.message,
                 )
+                if progress_callback is not None:
+                    progress_callback(results[-1])
                 results.extend(
                     StepResult(
                         step_id=remaining.step_id,
@@ -204,6 +210,8 @@ class WorkflowRunner:
                 status=StepStatus.SUCCEEDED,
                 message=step.message,
             )
+            if progress_callback is not None:
+                progress_callback(results[-1])
 
         return completed(WorkflowStatus.SUCCEEDED)
 

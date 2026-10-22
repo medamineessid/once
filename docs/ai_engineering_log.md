@@ -154,6 +154,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Responsive cancellable workflow execution   (commit: pending)
+- Task: Move workflow execution off the Qt GUI thread and expose cooperative
+  progress/cancellation without introducing Qt into the engine.
+- AI contribution: added engine progress callbacks, controller callback
+  plumbing, a Qt worker wrapper, busy/cancel UI state, threaded SQLite
+  serialization, and worker/UI regression tests.
+- Defect found: SQLite connections were created on the GUI thread but used by
+  the worker thread; enabled explicit cross-thread connection support and
+  serialized repository access with an `RLock`.
+- Verification: `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  full pytest printed `51 passed, 2 skipped`; the offscreen app smoke test
+  exited 0; coverage printed `84%` with `51 passed, 2 skipped, 1 warning`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.
