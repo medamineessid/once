@@ -1,9 +1,8 @@
 # Once progress
 
-- Last completed step: Declarative workflow editor
-- Last commit: ae43b85
-- Next action: implement controlled process or desktop integration only after
-  defining permissions and test fixtures
+- Last completed step: Multi-step editor and result evidence view
+- Last commit: pending
+- Next action: add background execution and cancellation through a worker boundary
 - Next action: add a real workflow editor for supported declarative steps
 - Currently failing tests or known breakage: none
 - Open items: file management is retained as a later integration; external

@@ -131,6 +131,17 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Multi-step editor and result evidence view   (commit: pending)
+- Task: Let the GUI assemble multiple supported steps and expose every
+  execution result and evidence item.
+- AI contribution: added draft step accumulation, multi-step workflow saving,
+  and per-step result/evidence rendering in the main window.
+- Defect found: none after focused GUI and engine verification.
+- Verification: `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  focused pytest printed `14 passed in 1.72s`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.

@@ -135,6 +135,22 @@ def test_main_window_creates_and_saves_workflow_from_form(qtbot: QtBot, tmp_path
     assert window.findChildren(QListWidget)[0].count() == 1
 
 
+def test_main_window_displays_each_step_result(qtbot: QtBot) -> None:
+    window = MainWindow()
+    qtbot.addWidget(window)
+
+    demo_button = next(
+        button for button in window.findChildren(QPushButton) if button.text() == "Run local demo"
+    )
+    qtbot.mouseClick(demo_button, Qt.MouseButton.LeftButton)
+
+    result_lists = window.findChildren(QListWidget)
+    assert any(
+        result_list.count() == 2 and "inspect: SUCCEEDED" in result_list.item(0).text()
+        for result_list in result_lists
+    )
+
+
 def test_app_smoke_test_exits_zero(tmp_path) -> None:
     environment = os.environ.copy()
     environment["QT_QPA_PLATFORM"] = "offscreen"

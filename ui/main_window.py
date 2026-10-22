@@ -43,16 +43,19 @@ class MainWindow(QMainWindow):
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._workflow_list = QListWidget(self)
         self._history_list = QListWidget(self)
+        self._result_list = QListWidget(self)
         self._run_button = QPushButton("Run selected workflow", self)
         self._demo_button = QPushButton("Run local demo", self)
         self._open_button = QPushButton("Open workflow JSON", self)
         self._save_button = QPushButton("Save current workflow", self)
         self._create_button = QPushButton("Create workflow from form", self)
+        self._add_step_button = QPushButton("Add step to draft", self)
         self._workflow_name = QLineEdit(self)
         self._step_name = QLineEdit(self)
         self._step_message = QLineEdit(self)
         self._step_kind = QComboBox(self)
         self._step_kind.addItems([StepKind.REPORT.value, StepKind.FAIL.value])
+        self._draft_steps: list[WorkflowStep] = []
 
         self._workflow_list.currentItemChanged.connect(self._select_workflow)
         self._run_button.clicked.connect(self._run_selected)
@@ -60,6 +63,7 @@ class MainWindow(QMainWindow):
         self._open_button.clicked.connect(self._open_workflow)
         self._save_button.clicked.connect(self._save_current)
         self._create_button.clicked.connect(self._create_from_form)
+        self._add_step_button.clicked.connect(self._add_step)
 
         form = QFormLayout()
         form.addRow("Workflow name", self._workflow_name)
@@ -72,12 +76,15 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         layout.addWidget(self._status_label)
         layout.addLayout(form)
+        layout.addWidget(self._add_step_button)
         layout.addWidget(self._create_button)
         layout.addWidget(QLabel("Saved workflows", self))
         layout.addWidget(self._workflow_list)
         layout.addLayout(actions)
         layout.addWidget(QLabel("Execution history", self))
         layout.addWidget(self._history_list)
+        layout.addWidget(QLabel("Latest step results", self))
+        layout.addWidget(self._result_list)
         central = QWidget(self)
         central.setLayout(layout)
         self.setCentralWidget(central)
@@ -118,14 +125,16 @@ class MainWindow(QMainWindow):
         message = self._step_message.text().strip()
         workflow_id = "-".join(name.casefold().split())
         kind = StepKind(self._step_kind.currentText())
+        steps = tuple(self._draft_steps) or (WorkflowStep("step-1", step_name, kind, message),)
         self._current_workflow = Workflow(
             workflow_id=workflow_id,
             name=name,
-            steps=(WorkflowStep("step-1", step_name, kind, message),),
+            steps=steps,
         )
         try:
             path = self._service.save(self._current_workflow)
             self._status_label.setText(f"Created and saved: {path.name}")
+            self._draft_steps.clear()
             self._refresh()
         except WorkflowValidationError as error:
             self._show_error(str(error))
@@ -161,7 +170,22 @@ class MainWindow(QMainWindow):
 
     def _show_run(self, run: WorkflowRun) -> None:
         self._status_label.setText(f"{run.status.value}: {len(run.results)} steps recorded")
+        self._result_list.clear()
+        for result in run.results:
+            evidence = f" [{'; '.join(result.evidence)}]" if result.evidence else ""
+            self._result_list.addItem(
+                f"{result.step_id}: {result.status.value} — {result.message}{evidence}"
+            )
         self._refresh()
+
+    def _add_step(self) -> None:
+        step_name = self._step_name.text().strip()
+        message = self._step_message.text().strip()
+        kind = StepKind(self._step_kind.currentText())
+        self._draft_steps.append(
+            WorkflowStep(f"step-{len(self._draft_steps) + 1}", step_name, kind, message)
+        )
+        self._status_label.setText(f"Draft contains {len(self._draft_steps)} step(s).")
 
     @staticmethod
     def _history_text(run: WorkflowRun) -> str:
