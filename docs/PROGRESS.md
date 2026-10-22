@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: Declarative workflow editor
-- Last commit: pending
+- Last commit: ae43b85
 - Next action: implement controlled process or desktop integration only after
   defining permissions and test fixtures
 - Next action: add a real workflow editor for supported declarative steps

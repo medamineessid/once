@@ -105,7 +105,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Milestone A extension: declarative workflow editor   (commit: pending)
+## 2026-10-22 — Milestone A extension: declarative workflow editor   (commit: cdedb09)
 - Task: Allow users to create and save supported workflows from the GUI rather
   than requiring hand-authored JSON.
 - AI contribution: added a small controller-backed form for workflow name,
@@ -118,7 +118,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Application resource shutdown hardening   (commit: pending)
+## 2026-10-22 — Application resource shutdown hardening   (commit: ae43b85)
 - Task: Close controller-owned SQLite history connections when the Qt
   application exits.
 - AI contribution: added explicit service/history close methods, a Qt close
