@@ -4,10 +4,17 @@ target-version = "py314"
 src = ["."]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "B", "UP", "SIM", "N", "PTH", "S", "RUF"]
+per-file-ignores = {"tests/**/*.py" = ["N802", "S101", "S603"]}
 
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
 addopts = "-ra"
 pythonpath = ["."]
+markers = [
+    "windows_only: test requires Windows-specific filesystem behavior",
+    "slow: test may take longer than the normal suite",
+    "gui: test exercises the Qt GUI",
+    "manual: test is not part of the automated suite",
+]

@@ -12,9 +12,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-FORBIDDEN_ENGINE_IMPORT_ROOTS = frozenset(
-    {"PySide6", "shiboken6", "ui", "controller", "storage"}
-)
+FORBIDDEN_ENGINE_IMPORT_ROOTS = frozenset({"PySide6", "shiboken6", "ui", "controller", "storage"})
 
 # Calls that can mutate the file system. The UI must reach these only through
 # the controller and engine; mutations are allowed solely in
@@ -74,9 +72,12 @@ def find_forbidden_engine_imports(source: str, filename: str = "<string>") -> li
                 violations.append(
                     f"{filename}:{node.lineno}: relative import escapes the engine package"
                 )
-            elif node.level == 0 and node.module:
-                if node.module.split(".")[0] in FORBIDDEN_ENGINE_IMPORT_ROOTS:
-                    violations.append(f"{filename}:{node.lineno}: from {node.module} import ...")
+            elif (
+                node.level == 0
+                and node.module
+                and node.module.split(".")[0] in FORBIDDEN_ENGINE_IMPORT_ROOTS
+            ):
+                violations.append(f"{filename}:{node.lineno}: from {node.module} import ...")
 
     return violations
 
@@ -130,9 +131,7 @@ def _instance_types(tree: ast.Module, aliases: dict[str, str]) -> dict[str, str]
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 record(target, node.value)
-        elif isinstance(node, ast.AnnAssign):
-            record(node.target, node.value)
-        elif isinstance(node, ast.NamedExpr):
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
             record(node.target, node.value)
 
     return instances

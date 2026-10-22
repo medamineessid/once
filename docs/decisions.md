@@ -122,3 +122,10 @@ the Step 1 skeleton, and the pre-existing Phase 0 decision/log files were presen
 The existing Git identity is `medamineessid <mohamedamin.essid@musteducation.tn>`.
 The baseline command showed one fixture failure caused by Windows text newline
 translation (`"a\n"` is stored as three bytes), and Ruff reported one unformatted file.
+
+## 2026-10-22 — Step 1: Project foundation
+
+The selected Python 3.14 environment installed all exact pins successfully.
+`PySide6 import ok` was confirmed with `.\.venv\Scripts\python.exe -c
+"import PySide6.QtWidgets; print('PySide6 import ok')"`. PyInstaller 6.22.3
+was added to the development requirements and installed successfully.

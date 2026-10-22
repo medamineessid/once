@@ -78,7 +78,7 @@ tests enforce:
 Runtime (`requirements.txt`): PySide6 6.12.0, send2trash 2.1.0.
 
 Development (`requirements-dev.txt`): pytest 9.1.1, pytest-cov 7.1.0,
-pytest-qt 4.5.0, Ruff 0.17.1. PyInstaller is deferred to the packaging step.
+pytest-qt 4.5.0, Ruff 0.17.1, PyInstaller 6.22.3.
 
 Version and compatibility evidence is recorded in `docs/decisions.md`.
 

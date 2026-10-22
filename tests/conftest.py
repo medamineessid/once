@@ -45,7 +45,7 @@ def make_tree(tmp_path: Path) -> Callable[..., Path]:
                 target.mkdir(parents=True, exist_ok=True)
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            target.write_bytes(content.encode("utf-8"))
             os.utime(target, ns=(FIXED_MTIME_NS, FIXED_MTIME_NS))
 
         # Stamp directories last, deepest first, so later writes do not leave
