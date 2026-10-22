@@ -41,7 +41,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Bounded retries and postconditions   (commit: pending)
+## 2026-10-22 — Bounded retries and postconditions   (commit: 7f65d76)
 - Task: Add deterministic bounded retries, cancellation between attempts, and
   an optional path-existence postcondition to workflow steps.
 - AI contribution: extended the workflow model and versioned JSON format,
@@ -56,7 +56,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Recorder compatibility and local event-log foundation   (commit: pending)
+## 2026-10-22 — Recorder compatibility and local event-log foundation   (commit: e12872e)
 - Task: Verify recorder-library compatibility on Windows/Python 3.14 and add
   privacy-filtered local recording storage with deterministic raw drafts.
 - AI contribution: pinned and smoke-tested `mss`, `pynput`, `pywinauto`, and
@@ -71,7 +71,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Provider-independent AI proposal boundary   (commit: pending)
+## 2026-10-22 — Provider-independent AI proposal boundary   (commit: e9af2bc)
 - Task: Add an offline-testable AI provider contract, bounded interview
   behavior, approved credential sources, and an opt-in Gemini adapter.
 - AI contribution: added provider request/response models, deterministic fake
@@ -85,7 +85,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Bounded provider-driven interview   (commit: pending)
+## 2026-10-22 — Bounded provider-driven interview   (commit: 6ceb702)
 - Task: Coordinate provider questions and user answers without placing
   orchestration logic in Qt or allowing unbounded interview loops.
 - AI contribution: added immutable interview state, bounded answer handling,
@@ -99,7 +99,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — OS recorder adapter boundary   (commit: pending)
+## 2026-10-22 — OS recorder adapter boundary   (commit: 1ac2ae8)
 - Task: Add replaceable Windows capture adapters without placing OS APIs in
   the Qt UI or deterministic workflow engine.
 - AI contribution: added injected `pynput` mouse/key capture, MSS keyframe
@@ -113,7 +113,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Controller and UI recording lifecycle   (commit: pending)
+## 2026-10-22 — Controller and UI recording lifecycle   (commit: 16ee698)
 - Task: Expose explicit Record/Stop controls through the controller without
   putting capture or persistence logic in the Qt layer.
 - AI contribution: added a controller-owned recording service, application-data
