@@ -215,7 +215,14 @@ class WorkflowRunner:
                 status=StepStatus.INCONCLUSIVE,
                 message="No authorized folder was provided for this path check.",
             )
-        target = Path(step.target or "").resolve(strict=False)
+        target_path = Path(step.target or "")
+        if target_path.is_symlink():
+            return StepResult(
+                step_id=step.step_id,
+                status=StepStatus.FAILED,
+                message="The target must not be a symbolic link.",
+            )
+        target = target_path.resolve(strict=False)
         try:
             root = allowed_root.resolve(strict=True)
         except FileNotFoundError:
@@ -232,7 +239,7 @@ class WorkflowRunner:
                 status=StepStatus.FAILED,
                 message="The target is outside the authorized folder.",
             )
-        if target.is_symlink() or not target.is_file():
+        if not target.is_file():
             return StepResult(
                 step_id=step.step_id,
                 status=StepStatus.FAILED,

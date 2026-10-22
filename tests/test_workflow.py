@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from engine.workflow import (
     StepKind,
     StepStatus,
@@ -105,3 +107,23 @@ def test_workflow_runner_rejects_path_outside_authorized_root(tmp_path) -> None:
 
     assert run.status is WorkflowStatus.FAILED
     assert "authorized folder" in run.results[0].message
+
+
+def test_workflow_runner_rejects_symlink_target(tmp_path) -> None:
+    target = tmp_path / "real.txt"
+    target.write_bytes(b"real")
+    link = tmp_path / "link.txt"
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("symbolic links are not available on this machine")
+    workflow = Workflow(
+        "inspect",
+        "Inspect",
+        (WorkflowStep("check", "Check file", StepKind.INSPECT_PATH, "Found", str(link)),),
+    )
+
+    run = WorkflowRunner().run(workflow, allowed_root=tmp_path)
+
+    assert run.status is WorkflowStatus.FAILED
+    assert "symbolic link" in run.results[0].message

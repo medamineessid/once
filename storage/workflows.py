@@ -9,9 +9,11 @@ from typing import Final
 from engine.errors import WorkflowValidationError
 from engine.workflow import StepKind, Workflow, WorkflowRunner, WorkflowStep
 
-SCHEMA_VERSION: Final = 1
+SCHEMA_VERSION: Final = 2
+_SUPPORTED_SCHEMA_VERSIONS = frozenset({1, SCHEMA_VERSION})
 _ROOT_KEYS = frozenset({"schema_version", "workflow_id", "name", "steps"})
 _STEP_KEYS = frozenset({"step_id", "name", "kind", "message", "target"})
+_LEGACY_STEP_KEYS = frozenset({"step_id", "name", "kind", "message"})
 
 
 def _text(value: object, field: str) -> str:
@@ -44,7 +46,8 @@ def workflow_from_dict(data: object) -> Workflow:
     """Parse and strictly validate a decoded workflow object."""
     if not isinstance(data, dict) or set(data) != _ROOT_KEYS:
         raise WorkflowValidationError("Workflow JSON has unknown or missing fields.")
-    if data["schema_version"] != SCHEMA_VERSION:
+    schema_version = data["schema_version"]
+    if schema_version not in _SUPPORTED_SCHEMA_VERSIONS:
         raise WorkflowValidationError("Workflow JSON uses an unsupported schema version.")
     raw_steps = data["steps"]
     if not isinstance(raw_steps, list):
@@ -52,7 +55,8 @@ def workflow_from_dict(data: object) -> Workflow:
 
     steps: list[WorkflowStep] = []
     for raw_step in raw_steps:
-        if not isinstance(raw_step, dict) or set(raw_step) != _STEP_KEYS:
+        expected_keys = _STEP_KEYS if schema_version == SCHEMA_VERSION else _LEGACY_STEP_KEYS
+        if not isinstance(raw_step, dict) or set(raw_step) != expected_keys:
             raise WorkflowValidationError("A workflow step has unknown or missing fields.")
         try:
             kind = StepKind(_text(raw_step["kind"], "Step kind"))
@@ -66,7 +70,7 @@ def workflow_from_dict(data: object) -> Workflow:
                 message=_text(raw_step["message"], "Step message"),
                 target=(
                     _text(raw_step["target"], "Step target")
-                    if raw_step["target"] is not None
+                    if schema_version == SCHEMA_VERSION and raw_step["target"] is not None
                     else None
                 ),
             )

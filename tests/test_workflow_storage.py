@@ -29,6 +29,30 @@ def test_workflow_round_trips_as_utf8_json(tmp_path) -> None:
     assert "schema_version" in path.read_text(encoding="utf-8")
 
 
+def test_workflow_loads_legacy_schema_one(tmp_path) -> None:
+    path = tmp_path / "legacy.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "workflow_id": "legacy",
+                "name": "Legacy",
+                "steps": [
+                    {
+                        "step_id": "step-1",
+                        "name": "Report",
+                        "kind": "REPORT",
+                        "message": "Done",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert load_workflow(path).steps[0].target is None
+
+
 def test_workflow_round_trips_action_target(tmp_path) -> None:
     path = tmp_path / "workflow.json"
     workflow = Workflow(

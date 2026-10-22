@@ -104,3 +104,4 @@ class WorkflowService:
         """Release controller-owned persistence resources."""
         if self._history is not None:
             self._history.close()
+            self._history = None

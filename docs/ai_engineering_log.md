@@ -142,6 +142,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Verification safety and schema compatibility   (commit: pending)
+- Task: Prevent symlink targets from bypassing authorized-root checks and keep
+  existing schema-version-one workflows loadable after adding target fields.
+- AI contribution: added explicit pre-resolution symlink rejection, schema
+  version two with safe version-one loading, and regression tests.
+- Defect found: path verification originally resolved the target before
+  checking whether the user-selected path itself was a symlink.
+- Verification: `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  focused pytest printed `14 passed, 1 skipped`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.
