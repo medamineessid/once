@@ -1,12 +1,11 @@
-"""Domain enums for Once.
-
-These definitions mirror the domain model in ``AGENTS.md``. Dataclasses
-(operations, plans, reports) arrive with the steps that first need them.
-"""
+"""Domain models for Once."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 
 
 class OperationType(StrEnum):
@@ -27,7 +26,7 @@ class Severity(StrEnum):
 
 
 class OpStatus(StrEnum):
-    """Lifecycle of one operation during and after execution."""
+    """Lifecycle state for a single operation."""
 
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
@@ -41,7 +40,7 @@ class OpStatus(StrEnum):
 
 
 class RunStatus(StrEnum):
-    """Lifecycle of a whole run."""
+    """Lifecycle state for an execution run."""
 
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
@@ -53,7 +52,7 @@ class RunStatus(StrEnum):
 
 
 class IssueCode(StrEnum):
-    """Stable machine-readable reason codes for planner and execution issues."""
+    """Stable machine-readable issue codes."""
 
     NAME_EMPTY = "NAME_EMPTY"
     NAME_INVALID_CHARS = "NAME_INVALID_CHARS"
@@ -77,3 +76,97 @@ class IssueCode(StrEnum):
     DEPENDENCY_FAILED = "DEPENDENCY_FAILED"
     CANCELLED_BY_USER = "CANCELLED_BY_USER"
     UNEXPECTED_OS_ERROR = "UNEXPECTED_OS_ERROR"
+
+
+@dataclass(frozen=True)
+class Fingerprint:
+    """Immutable file fingerprint used for revalidation."""
+
+    size: int
+    mtime_ns: int
+
+    @classmethod
+    def from_stat(cls, stat_result: object) -> Fingerprint:
+        """Build a fingerprint from an ``os.stat_result`` object."""
+        return cls(size=stat_result.st_size, mtime_ns=stat_result.st_mtime_ns)
+
+
+@dataclass(frozen=True)
+class FileEntry:
+    """Metadata for a file found during scanning."""
+
+    path: Path
+    name: str
+    stem: str
+    suffix: str
+    size: int
+    mtime_ns: int
+    birthtime_ns: int | None
+    is_hidden: bool
+
+
+@dataclass(frozen=True)
+class Issue:
+    """Structured issue record with a plain-language explanation."""
+
+    code: IssueCode
+    severity: Severity
+    message: str
+
+
+@dataclass(frozen=True)
+class Operation:
+    """Single planned filesystem action."""
+
+    op_id: str
+    op_type: OperationType
+    source: Path | None
+    destination: Path
+    expected_source: Fingerprint | None
+    issues: tuple[Issue, ...]
+    depends_on: tuple[str, ...]
+    note: str
+
+
+@dataclass(frozen=True)
+class Plan:
+    """A sequence of operations produced by the planner."""
+
+    plan_id: str
+    source_folder: Path
+    workflow_name: str | None
+    created_at: datetime
+    operations: tuple[Operation, ...]
+    excluded: tuple[object, ...]
+
+
+@dataclass(frozen=True)
+class ApprovedPlan:
+    """Validated plan approved for execution."""
+
+    plan: Plan
+    approved_at: datetime
+
+
+@dataclass(frozen=True)
+class OperationResult:
+    """Outcome of a single operation in a run report."""
+
+    op_id: str
+    op_type: OperationType
+    source: Path | None
+    destination: Path
+    status: str
+    issue: Issue | None
+    undo_eligible_hint: bool
+
+
+@dataclass(frozen=True)
+class RunReport:
+    """Summary of a completed execution run."""
+
+    run_id: str
+    status: RunStatus
+    started_at: datetime
+    finished_at: datetime
+    results: tuple[OperationResult, ...]
