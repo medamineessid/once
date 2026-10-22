@@ -131,7 +131,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-22 — Multi-step editor and result evidence view   (commit: pending)
+## 2026-10-22 — Multi-step editor and result evidence view   (commit: dfcf14a)
 - Task: Let the GUI assemble multiple supported steps and expose every
   execution result and evidence item.
 - AI contribution: added draft step accumulation, multi-step workflow saving,

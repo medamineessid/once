@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: Multi-step editor and result evidence view
-- Last commit: pending
+- Last commit: dfcf14a
 - Next action: add background execution and cancellation through a worker boundary
 - Next action: add a real workflow editor for supported declarative steps
 - Currently failing tests or known breakage: none
