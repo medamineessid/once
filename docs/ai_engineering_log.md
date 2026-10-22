@@ -99,6 +99,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — OS recorder adapter boundary   (commit: pending)
+- Task: Add replaceable Windows capture adapters without placing OS APIs in
+  the Qt UI or deterministic workflow engine.
+- AI contribution: added injected `pynput` mouse/key capture, MSS keyframe
+  capture, and best-effort pywinauto element metadata capture.
+- Defect found: none after focused adapter tests; keyboard capture is opt-in
+  and password-field key events are omitted.
+- Verification: `.\.venv\Scripts\ruff.exe format .` completed;
+  `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`;
+  focused pytest printed `2 passed`; tests used injected callbacks and did not
+  start global listeners or send input.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Revised vision milestone: workflow foundation   (commit: 2eaecb4)
 - Task: Reconcile the file-management-first specification with the broader
   workflow automation vision and implement a real, testable orchestration base.

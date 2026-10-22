@@ -4,7 +4,7 @@
 - Last commit: 53e4ce0
 - Last completed step: Bounded retry and postcondition workflow steps
 - Last commit: pending
-- Last completed step: Bounded provider-driven interview orchestration
+- Last completed step: OS recorder adapters with password-field protection
 - Last commit: pending
 - Next action: connect recorder review and interview state to the Qt UI
 - Currently failing tests or known breakage: none
