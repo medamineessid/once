@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import override
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -168,3 +170,8 @@ class MainWindow(QMainWindow):
     def _show_error(self, message: str) -> None:
         self._status_label.setText(f"Error: {message}")
         QMessageBox.warning(self, "Workflow error", message)
+
+    @override
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self._service.close()
+        event.accept()

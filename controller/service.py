@@ -99,3 +99,8 @@ class WorkflowService:
         if self._history is None:
             return ()
         return tuple(record.run for record in self._history.list_runs())
+
+    def close(self) -> None:
+        """Release controller-owned persistence resources."""
+        if self._history is not None:
+            self._history.close()

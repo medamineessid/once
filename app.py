@@ -34,7 +34,8 @@ def main(argv: list[str] | None = None) -> int:
 
     app = build_application(qt_args)
     app_data_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Once"
-    window = MainWindow(WorkflowService.for_app_data(app_data_dir))
+    service = WorkflowService.for_app_data(app_data_dir)
+    window = MainWindow(service)
     window.show()
 
     if smoke_test:
@@ -44,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         app.processEvents()
         window.close()
         app.processEvents()
+        service.close()
         return 0
 
     return app.exec()

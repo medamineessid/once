@@ -23,6 +23,10 @@ class ExecutionHistory:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
 
+    def close(self) -> None:
+        """Close the history database connection owned by this repository."""
+        self._connection.close()
+
     def record(self, run: WorkflowRun) -> None:
         """Atomically insert one run and all of its step results."""
         try:

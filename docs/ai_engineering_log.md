@@ -118,6 +118,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-10-22 — Application resource shutdown hardening   (commit: pending)
+- Task: Close controller-owned SQLite history connections when the Qt
+  application exits.
+- AI contribution: added explicit service/history close methods, a Qt close
+  event hook, and smoke-path shutdown.
+- Defect found: coverage still reports one ResourceWarning during the combined
+  subprocess/Qt coverage run; the focused GUI test does not reproduce it.
+- Verification: full pytest printed `45 passed, 1 skipped`; Ruff printed
+  `All checks passed!`; the offscreen smoke test exited 0; coverage printed
+  `83%` with `45 passed, 1 skipped, 1 warning`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-10-22 — Step 1: Project foundation   (commit: d1375f0)
 - Task: Establish the launchable Qt skeleton, pinned development environment, test fixtures, architecture guards, and quality configuration.
 - AI contribution: completed the dependency manifest, Ruff and pytest configuration, deterministic Windows-safe fixture writes, and Step 1 validation.
