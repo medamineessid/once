@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from uuid import uuid4
 
+from .errors import WorkflowValidationError
+
+MAX_WORKFLOW_STEPS = 100
+MAX_TEXT_LENGTH = 500
+
 
 class StepKind(StrEnum):
     """Built-in step behaviours available without external integrations."""
@@ -79,6 +84,32 @@ CancelCheck = Callable[[], bool]
 class WorkflowRunner:
     """Execute known step kinds in order and retain an inspectable run result."""
 
+    @staticmethod
+    def validate(workflow: Workflow) -> None:
+        """Reject malformed definitions before any step can start."""
+        if not workflow.workflow_id.strip():
+            raise WorkflowValidationError("Workflow ID must not be empty.")
+        if not workflow.name.strip():
+            raise WorkflowValidationError("Workflow name must not be empty.")
+        if len(workflow.steps) > MAX_WORKFLOW_STEPS:
+            raise WorkflowValidationError(
+                f"Workflow cannot contain more than {MAX_WORKFLOW_STEPS} steps."
+            )
+
+        step_ids: set[str] = set()
+        for step in workflow.steps:
+            if not step.step_id.strip():
+                raise WorkflowValidationError("Every workflow step needs an ID.")
+            if step.step_id in step_ids:
+                raise WorkflowValidationError(f"Step ID is duplicated: {step.step_id}.")
+            if not step.name.strip():
+                raise WorkflowValidationError(f"Step {step.step_id} needs a name.")
+            if len(step.name) > MAX_TEXT_LENGTH or len(step.message) > MAX_TEXT_LENGTH:
+                raise WorkflowValidationError(
+                    f"Step {step.step_id} contains text that is too long."
+                )
+            step_ids.add(step.step_id)
+
     def run(
         self,
         workflow: Workflow,
@@ -87,6 +118,7 @@ class WorkflowRunner:
         run_id: str | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
+        self.validate(workflow)
         results: list[StepResult] = []
         is_cancelled = cancel_check or (lambda: False)
 
