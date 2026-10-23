@@ -544,3 +544,73 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `python app.py --smoke-test` -> exit 0; `git diff --check` -> clean.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Targeted lint fixes on the worktree/proposal-review work   (commit: uncommitted, working tree only)
+- Task: clear the current `ruff check` diagnostics without touching the
+  in-progress worktree-verification and proposal-review features: unused
+  imports (CaseResult, EvidenceBundle, pytest), unused F841 exception binding,
+  four unused `noqa: BLE001` directives, unused `noqa: ANN001`, three RUF043
+  `match=` patterns, S607 in `integrations/coding_agent.py`, and I001 import
+  ordering in `ui/workers.py`.
+- AI contribution: replaced the inline `# noqa: S607` suppressions in
+  `integrations/coding_agent.py` with an explicit `git_executable()` helper
+  (shutil.which("git"), fails closed with a plain-language error when Git is
+  missing) resolved once per GitRepository/WorktreeCheckout instance and reused
+  for every git subprocess call; removed now-unused S607 noqas; added two tests
+  for executable resolution and the missing-Git case; aligned the two new test
+  `run_git` fixtures with the existing inline `# noqa: S607` convention from
+  test_coding_agent.py (no per-file-ignore/config change; production linting
+  unchanged).
+- Defect found: first version of the new resolution test returned non-empty
+  stdout for the `status --porcelain` probe, so `ensure_clean()` correctly
+  treated the fake repository as dirty; the fake now returns empty status.
+  S607 finding: the bare-`"git"` pattern fires in the existing GitRepository
+  calls too (suppressed there by inline noqa) — the new WorktreeCheckout calls
+  reproduced it unsuppressed; fixed by the explicit resolution instead of more
+  suppressions.
+- Verification: `.venv/Scripts/ruff.exe check .` -> `All checks passed!`;
+  `ruff format --check` -> 6 files would be reformatted, all pre-existing in
+  the uncommitted in-progress work (verified by stash round-trip: at HEAD
+  `68 files already formatted`); full suite -> `144 passed, 2 skipped in
+  99.11s` (2 skips are pre-existing symlink unavailable on this machine);
+  `git diff --check` -> clean (exit 0). No lint-rule was weakened; pyproject
+  untouched; working tree restored intact after the stash probe.
+- Outcome: PASSED
+- Human review:
+## 2026-10-24 — Worktree-based pre-merge verification and GUI proposal review   (commit: beed7e3)
+- Task: resume and complete the known gap from the 2026-10-23 proposal slice —
+  run the required acceptance checks against the exact proposal commit inside a
+  disposable git worktree BEFORE approval, persist that evidence, gate
+  approval on it, and surface the whole flow (diff, verification runs,
+  redacted evidence, blockers, explicit approve/reject, post-merge rerun) in a
+  real Qt tab. Preserve all earlier worktree-verification and proposal-review
+  work already in the tree, and the targeted Ruff cleanup.
+- AI contribution: inspected the working tree diff (all of it written in
+  earlier sessions of this stage); preserved it and the lint cleanup; removed
+  one dead test fixture (`loop_policy_guard`, never requested by any test),
+  one redundant duplicated assertion in
+  `test_pre_merge_verification_runs_in_worktree_and_gates_approval`, and fixed
+  a misspelled test name (`test_panel_rejectpersists…` →
+  `test_panel_rejection_persists…`); formatted the six outstanding files with
+  `ruff format` (no unrelated line-ending churn, `git diff --check` clean);
+  set repo-local git identity (WSL had none) matching prior commit authorship.
+- Defect found: the committed `tests/test_scanner.py` contained
+  `except OSError, NotImplementedError:` (Python 2 syntax — the file could
+  never import); the working tree already fixed it and this session kept that
+  fix. No other defects found in a full re-read of the uncommitted work.
+- Verification (all on the real Windows Python 3.14.3 venv, real Git, real
+  PySide6; not mocked): `.venv/Scripts/python.exe -m pytest -q` -> `144
+  passed, 2 skipped` (2 skips: symlink unavailability on this machine);
+  `.venv/Scripts/ruff.exe check .` -> `All checks passed!`;
+  `ruff format --check .` -> `71 files already formatted`; targeted rerun of
+  `test_worktree_verification.py test_review_ui.py test_coding_agent.py
+  test_smoke.py` -> `42 passed`; real-GUI entry point
+  `.venv/Scripts/python.exe app.py --smoke-test` -> exit 0 (real window built
+  on Windows by the real app, including the new "Agent proposals" tab);
+  `git diff --check` -> clean. Refusal paths exercised by named tests run on
+  real Git worktrees: failed checks, stale amended agent tip, moved base
+  branch, duplicate decisions, cancelled verification, timeout evidence, and
+  crashed/leftover worktree directories all refuse with recorded history
+  (test_worktree_verification.py: 14 tests).
+- Outcome: PASSED
+- Human review:

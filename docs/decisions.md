@@ -224,3 +224,26 @@ was added to the development requirements and installed successfully.
   every proposal, approval, and rejection is persisted (O7).
 - Known gap: verification reruns happen after the approved merge, not before,
   because pre-approval sandboxed reruns would need git worktree machinery.
+## 2026-10-24 — Pre-approval verification in a disposable git worktree (A6)
+- Question: where exactly does the required verification run before a human
+  approves a proposal, so that approved content is verified content?
+- Choice: pre-merge verification runs the user's allowlisted checker argv
+  against the exact proposal commit checked out as a detached worktree
+  (`<worktree_root>/proposal-<first 8 hex of proposal id>`). The checker binds
+  the worktree via an explicit `{checkout}` argv placeholder (at most one, in
+  addition to the existing `{input}`; fail-closed when required but missing).
+  Worktree lifecycle is journaled (`proposal_verifications` PRE_MERGE /
+  POST_MERGE rows bound to the commit; `worktree_checkouts` rows ACTIVE /
+  CLOSED / LEFTOVER / REFUSED). Approval refuses unless the proposal is
+  PENDING and its current agent tip has a passing, non-cancelled PRE_MERGE
+  record that is still the branch tip; applying still requires base and tip
+  to be unchanged and a local ff-only merge. Cancellation marks remaining
+  cases cancelled and cannot pass.
+- Reason: closes the recorded known gap "verification reruns happen after the
+  merge, not before"; approval is now grounded in persisted evidence of the
+  exact reviewed commit without ever touching the main checkout (verified:
+  main checkout content unchanged during verification).
+- Known gap: no packaged Windows installer has been exercised end-to-end; the
+  GUI starts without a configured checker unless the session provides one
+  (main window currently passes no verifier_config, so real first-run usage
+  of the tab still needs an operator-provided checker configuration).
