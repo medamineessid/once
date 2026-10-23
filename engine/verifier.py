@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from .errors import ExecutionError
 MAX_OUTPUT_TAIL = 2_000
 MAX_TIMEOUT_SECONDS = 300.0
 INPUT_PLACEHOLDER = "{input}"
+CHECKOUT_PLACEHOLDER = "{checkout}"
 
 
 @dataclass(frozen=True)
@@ -26,17 +28,28 @@ class AllowlistedCommand:
     timeout_seconds: float = 30.0
 
     def __post_init__(self) -> None:
-        if not self.argv or sum(argument == INPUT_PLACEHOLDER for argument in self.argv) != 1:
-            raise ExecutionError("Allowlisted command must contain exactly one {input} argument.")
-        if not 0 < self.timeout_seconds <= MAX_TIMEOUT_SECONDS:
-            raise ExecutionError("Command timeout must be between 0 and 300 seconds.")
         if any(not isinstance(argument, str) or not argument for argument in self.argv):
             raise ExecutionError("Allowlisted command arguments must be non-empty text.")
+        if sum(argument.count(INPUT_PLACEHOLDER) for argument in self.argv) != 1:
+            raise ExecutionError("Allowlisted command must contain exactly one {input} argument.")
+        checkout_count = sum(argument.count(CHECKOUT_PLACEHOLDER) for argument in self.argv)
+        if checkout_count > 1:
+            raise ExecutionError(
+                "Allowlisted command may reference at most one {checkout} directory."
+            )
+        if not 0 < self.timeout_seconds <= MAX_TIMEOUT_SECONDS:
+            raise ExecutionError("Command timeout must be between 0 and 300 seconds.")
 
-    def for_input(self, input_file: Path) -> tuple[str, ...]:
-        return tuple(
-            str(input_file) if argument == INPUT_PLACEHOLDER else argument for argument in self.argv
-        )
+    def for_input(self, input_file: Path, checkout: Path | None = None) -> tuple[str, ...]:
+        arguments = list(self.argv)
+        references_checkout = any(CHECKOUT_PLACEHOLDER in argument for argument in arguments)
+        if references_checkout and checkout is None:
+            raise ExecutionError("This allowlisted command requires a checkout directory to run.")
+        if checkout is not None:
+            arguments = [
+                argument.replace(CHECKOUT_PLACEHOLDER, str(checkout)) for argument in arguments
+            ]
+        return tuple(argument.replace(INPUT_PLACEHOLDER, str(input_file)) for argument in arguments)
 
 
 @dataclass(frozen=True)
@@ -72,6 +85,7 @@ class EvidenceBundle:
     finished_at: str
     cases: tuple[CaseResult, ...]
     redaction_applied: bool = True
+    cancelled: bool = False
 
     @property
     def passed(self) -> bool:
@@ -84,6 +98,7 @@ class EvidenceBundle:
             "finished_at": self.finished_at,
             "passed": self.passed,
             "redaction_applied": self.redaction_applied,
+            "cancelled": self.cancelled,
             "cases": [
                 {
                     "case_id": case.case_id,
@@ -115,6 +130,7 @@ class EvidenceBundle:
             f"# Verification run `{self.run_id}`",
             "",
             f"- Passed: **{self.passed}**",
+            *(["- Cancelled: **True**"] if self.cancelled else []),
             f"- Started: `{self.started_at}`",
             f"- Finished: `{self.finished_at}`",
             "- Redaction applied: **True**",
@@ -168,17 +184,41 @@ class AcceptanceVerifier:
     def __init__(self, command: AllowlistedCommand) -> None:
         self._command = command
 
-    def verify(self, cases: tuple[AcceptanceCase, ...]) -> EvidenceBundle:
+    def verify(
+        self,
+        cases: tuple[AcceptanceCase, ...],
+        cancel_check: Callable[[], bool] | None = None,
+        checkout: Path | None = None,
+    ) -> EvidenceBundle:
+        """Run every case in order; cancellation skips the remaining cases."""
         started = datetime.now(UTC)
-        results = tuple(self._run_case(case) for case in cases)
+        results: list[CaseResult] = []
+        cancelled = False
+        for case in cases:
+            if cancel_check is not None and cancel_check():
+                cancelled = True
+                results.append(
+                    CaseResult(
+                        case.case_id,
+                        False,
+                        (),
+                        None,
+                        False,
+                        "",
+                        "Cancelled before this case ran.",
+                    )
+                )
+                continue
+            results.append(self._run_case(case, checkout))
         return EvidenceBundle(
             str(uuid4()),
             started.isoformat(),
             datetime.now(UTC).isoformat(),
-            results,
+            tuple(results),
+            cancelled=cancelled,
         )
 
-    def _run_case(self, case: AcceptanceCase) -> CaseResult:
+    def _run_case(self, case: AcceptanceCase, checkout: Path | None = None) -> CaseResult:
         if not case.input_file.is_file():
             return CaseResult(
                 case.case_id,
@@ -194,7 +234,7 @@ class AcceptanceVerifier:
             )
         try:
             completed = subprocess.run(  # noqa: S603 - exact configured argv, shell disabled
-                self._command.for_input(case.input_file),
+                self._command.for_input(case.input_file, checkout),
                 capture_output=True,
                 text=True,
                 encoding="utf-8",

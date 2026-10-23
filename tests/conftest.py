@@ -7,10 +7,22 @@ real user folder (safety invariant S12).
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
+
+
+def pytest_collection_modifyitems(config, items):  # type: ignore[no-untyped-def]
+    """Skip Windows-only tests off Windows; report the skip on any platform."""
+    if sys.platform.startswith("win"):
+        return
+    skip_windows = pytest.mark.skip(reason="requires Windows")
+    for item in items:
+        if "windows_only" in item.keywords:
+            item.add_marker(skip_windows)
+
 
 # Run Qt headlessly for the whole test session unless the caller chose another
 # platform explicitly. This must be set before PySide6 is imported.

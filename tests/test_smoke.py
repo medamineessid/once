@@ -27,6 +27,11 @@ from ui.main_window import MainWindow
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+def show(window) -> None:
+    """Show the window before synthetic clicks; unshown QTab pages have no geometry."""
+    window.show()
+
+
 class FakeRecorder:
     def __init__(self, sink) -> None:
         self._sink = sink
@@ -129,6 +134,7 @@ def test_main_window_exposes_stable_replay_control_ids(qtbot: QtBot) -> None:
 def test_main_window_runs_demo_workflow(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
+    show(window)
 
     demo_button = next(
         button for button in window.findChildren(QPushButton) if button.text() == "Run local demo"
@@ -148,6 +154,7 @@ def test_main_window_creates_and_saves_workflow_from_form(qtbot: QtBot, tmp_path
     service = WorkflowService(workflow_directory=tmp_path / "workflows")
     window = MainWindow(service)
     qtbot.addWidget(window)
+    show(window)
     edits = window.findChildren(QLineEdit)
     edits[0].setText("Invoices")
     edits[1].setText("Report extraction")
@@ -170,6 +177,7 @@ def test_main_window_creates_and_saves_workflow_from_form(qtbot: QtBot, tmp_path
 def test_main_window_displays_each_step_result(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
+    show(window)
 
     demo_button = next(
         button for button in window.findChildren(QPushButton) if button.text() == "Run local demo"
@@ -193,6 +201,7 @@ def test_main_window_displays_each_step_result(qtbot: QtBot) -> None:
 def test_main_window_reorders_and_removes_draft_steps(qtbot: QtBot) -> None:
     window = MainWindow()
     qtbot.addWidget(window)
+    show(window)
     edits = window.findChildren(QLineEdit)
     add_button = next(
         button
@@ -228,6 +237,7 @@ def test_main_window_reviews_analyzes_and_approves_recording(qtbot: QtBot, tmp_p
     recording_service = RecordingService(tmp_path / "recordings", recorder_factory=FakeRecorder)
     window = MainWindow(service, recording_service)
     qtbot.addWidget(window)
+    show(window)
 
     buttons = {button.text(): button for button in window.findChildren(QPushButton)}
     qtbot.mouseClick(buttons["Record"], Qt.MouseButton.LeftButton)

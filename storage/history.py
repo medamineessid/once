@@ -31,6 +31,31 @@ class AgentProposalRecord:
     decided_at: str | None
 
 
+@dataclass(frozen=True)
+class ProposalVerificationRecord:
+    """One pre-merge or post-merge verification bound to a proposal commit."""
+
+    proposal_id: str
+    agent_tip: str
+    phase: str
+    verification_run_id: str
+    passed: bool
+    cancelled: bool
+    checked_at: str
+
+
+@dataclass(frozen=True)
+class WorktreeRecord:
+    """One disposable verification worktree and its cleanup state."""
+
+    proposal_id: str
+    agent_tip: str
+    path: str
+    status: str  # ACTIVE, CLOSED, LEFTOVER, REFUSED
+    created_at: str
+    closed_at: str | None
+
+
 class ExecutionHistory:
     """Store and retrieve immutable workflow run snapshots."""
 
@@ -88,8 +113,8 @@ class ExecutionHistory:
             self._connection.execute(
                 """
                 INSERT INTO acceptance_runs
-                    (run_id, started_at, finished_at, passed, redaction_applied)
-                VALUES (?, ?, ?, ?, ?)
+                    (run_id, started_at, finished_at, passed, redaction_applied, cancelled)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     bundle.run_id,
@@ -97,6 +122,7 @@ class ExecutionHistory:
                     bundle.finished_at,
                     int(bundle.passed),
                     int(bundle.redaction_applied),
+                    int(bundle.cancelled),
                 ),
             )
             self._connection.executemany(
@@ -138,7 +164,7 @@ class ExecutionHistory:
         with self._lock:
             rows = self._connection.execute(
                 """
-                SELECT run_id, started_at, finished_at, redaction_applied
+                SELECT run_id, started_at, finished_at, redaction_applied, cancelled
                 FROM acceptance_runs
                 ORDER BY started_at DESC, run_id DESC
                 """
@@ -183,6 +209,7 @@ class ExecutionHistory:
                             for case_row in case_rows
                         ),
                         redaction_applied=bool(row["redaction_applied"]),
+                        cancelled=bool(row["cancelled"]),
                     )
                 )
         return tuple(bundles)
@@ -362,6 +389,134 @@ class ExecutionHistory:
                     )
                 )
         return tuple(records)
+
+    def record_proposal_verification(self, record: ProposalVerificationRecord) -> None:
+        """Persist one pre-merge or post-merge verification of a proposal."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO proposal_verifications
+                    (proposal_id, agent_tip, phase, verification_run_id,
+                     passed, cancelled, checked_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.proposal_id,
+                    record.agent_tip,
+                    record.phase,
+                    record.verification_run_id,
+                    int(record.passed),
+                    int(record.cancelled),
+                    record.checked_at,
+                ),
+            )
+
+    def list_proposal_verifications(
+        self, proposal_id: str | None = None
+    ) -> tuple[ProposalVerificationRecord, ...]:
+        """Return persisted proposal verifications, newest first."""
+        with self._lock:
+            if proposal_id is None:
+                rows = self._connection.execute(
+                    """
+                    SELECT proposal_id, agent_tip, phase, verification_run_id,
+                           passed, cancelled, checked_at
+                    FROM proposal_verifications
+                    ORDER BY checked_at DESC, verification_run_id DESC
+                    """
+                ).fetchall()
+            else:
+                rows = self._connection.execute(
+                    """
+                    SELECT proposal_id, agent_tip, phase, verification_run_id,
+                           passed, cancelled, checked_at
+                    FROM proposal_verifications
+                    WHERE proposal_id = ?
+                    ORDER BY checked_at DESC, verification_run_id DESC
+                    """,
+                    (proposal_id,),
+                ).fetchall()
+        return tuple(
+            ProposalVerificationRecord(
+                proposal_id=row["proposal_id"],
+                agent_tip=row["agent_tip"],
+                phase=row["phase"],
+                verification_run_id=row["verification_run_id"],
+                passed=bool(row["passed"]),
+                cancelled=bool(row["cancelled"]),
+                checked_at=row["checked_at"],
+            )
+            for row in rows
+        )
+
+    def record_worktree(self, record: WorktreeRecord) -> None:
+        """Persist one worktree lifecycle event for cleanup-state tracking."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO worktree_checkouts
+                    (proposal_id, agent_tip, path, status, created_at, closed_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.proposal_id,
+                    record.agent_tip,
+                    record.path,
+                    record.status,
+                    record.created_at,
+                    record.closed_at,
+                ),
+            )
+
+    def list_worktree_records(self) -> tuple[WorktreeRecord, ...]:
+        """Return persisted worktree lifecycle records, newest first."""
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT proposal_id, agent_tip, path, status, created_at, closed_at
+                FROM worktree_checkouts
+                ORDER BY created_at DESC, path DESC
+                """
+            ).fetchall()
+        return tuple(
+            WorktreeRecord(
+                proposal_id=row["proposal_id"],
+                agent_tip=row["agent_tip"],
+                path=row["path"],
+                status=row["status"],
+                created_at=row["created_at"],
+                closed_at=row["closed_at"],
+            )
+            for row in rows
+        )
+
+    def stale_worktrees(self) -> tuple[WorktreeRecord, ...]:
+        """Return worktrees whose latest lifecycle state is not cleanly closed."""
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT w.proposal_id, w.agent_tip, w.path, w.status, w.created_at, w.closed_at
+                FROM worktree_checkouts w
+                WHERE w.status != 'CLOSED'
+                  AND w.created_at = (
+                      SELECT MAX(w2.created_at)
+                      FROM worktree_checkouts w2
+                      WHERE w2.path = w.path
+                  )
+                ORDER BY w.created_at DESC, w.path DESC
+                """
+            ).fetchall()
+        return tuple(
+            WorktreeRecord(
+                proposal_id=row["proposal_id"],
+                agent_tip=row["agent_tip"],
+                path=row["path"],
+                status=row["status"],
+                created_at=row["created_at"],
+                closed_at=row["closed_at"],
+            )
+            for row in rows
+        )
 
     def list_runs(self) -> tuple[HistoryRecord, ...]:
         """Return persisted runs newest first with their step results."""

@@ -12,7 +12,11 @@ from engine.agent_change import ApprovedChange, ChangeReview, approve_change
 from engine.errors import AgentIntegrationError, WorkflowValidationError
 from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
 from engine.replay import ReplayExecutor, ReplayPreview
-from engine.verifier import AcceptanceVerifier, AllowlistedCommand, EvidenceBundle
+from engine.verifier import (
+    AcceptanceVerifier,
+    AllowlistedCommand,
+    EvidenceBundle,
+)
 from engine.workflow import (
     StepKind,
     StepResult,
@@ -23,9 +27,14 @@ from engine.workflow import (
     WorkflowRunner,
     WorkflowStep,
 )
-from integrations.coding_agent import GitRepository, run_agent_for_proposal
+from integrations.coding_agent import GitRepository, WorktreeCheckout, run_agent_for_proposal
 from storage.database import connect
-from storage.history import AgentProposalRecord, ExecutionHistory
+from storage.history import (
+    AgentProposalRecord,
+    ExecutionHistory,
+    ProposalVerificationRecord,
+    WorktreeRecord,
+)
 from storage.workflows import load_workflow, save_workflow
 
 
@@ -173,10 +182,14 @@ class WorkflowService:
         cases_path: Path,
         argv: tuple[str, ...],
         timeout_seconds: float = 30.0,
+        checkout: Path | None = None,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> EvidenceBundle:
         """Run allowlisted acceptance verification and persist the outcome."""
         verifier = AcceptanceVerifier(AllowlistedCommand(argv, timeout_seconds))
-        bundle = verifier.verify(load_acceptance_cases(cases_path))
+        bundle = verifier.verify(
+            load_acceptance_cases(cases_path), cancel_check=cancel_check, checkout=checkout
+        )
         if self._history is not None:
             self._history.record_verification(bundle)
         return bundle
@@ -186,6 +199,179 @@ class WorkflowService:
         if self._history is None:
             return ()
         return self._history.list_verification_runs()
+
+    def verification_run(self, run_id: str) -> EvidenceBundle | None:
+        """Return one persisted verification run by id, or None."""
+        if self._history is None:
+            return None
+        for bundle in self._history.list_verification_runs():
+            if bundle.run_id == run_id:
+                return bundle
+        return None
+
+    def verify_proposal_pre_merge(
+        self,
+        review: object,
+        cases_path: Path,
+        verifier_argv: tuple[str, ...],
+        timeout_seconds: float,
+        worktree_root: Path,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> EvidenceBundle:
+        """Verify a proposal's exact commit inside a disposable worktree.
+
+        Verification refuses a proposal whose commit no longer matches its
+        branch tip or that was already decided, runs the allowlisted checkers
+        with {checkout} bound to the worktree, and always restores the main
+        checkout unchanged.
+        """
+        if not isinstance(review, ChangeReview):
+            raise WorkflowValidationError("Only a recorded review can be verified.")
+        repository = GitRepository(Path(review.repo_path))
+        if repository.run_git("rev-parse", f"refs/heads/{review.agent_branch}") != review.agent_tip:
+            raise AgentIntegrationError(
+                "The proposal commit is no longer the tip of its branch, so it "
+                "must be proposed and reviewed again before verification."
+            )
+        status = self._proposal_status(review.proposal_id)
+        if status not in (None, "PENDING"):
+            raise AgentIntegrationError(
+                "This proposal has already been approved or rejected, so it "
+                "cannot be verified again."
+            )
+        worktree = WorktreeCheckout(
+            Path(review.repo_path),
+            Path(worktree_root) / f"proposal-{review.proposal_id[:8]}",
+        )
+        worktree_path = str(worktree.path)
+        try:
+            worktree.create(review.agent_tip)
+        except AgentIntegrationError:
+            self._record_worktree(review, worktree_path, "REFUSED")
+            raise
+        self._record_worktree(review, worktree_path, "ACTIVE")
+        try:
+            verifier = AcceptanceVerifier(AllowlistedCommand(tuple(verifier_argv), timeout_seconds))
+            bundle = verifier.verify(
+                load_acceptance_cases(cases_path),
+                cancel_check=cancel_check,
+                checkout=worktree.path,
+            )
+        finally:
+            closed = worktree.close()
+            self._record_worktree(review, worktree_path, "CLOSED" if closed else "LEFTOVER")
+        if self._history is not None:
+            self._history.record_verification(bundle)
+            self._history.record_proposal_verification(
+                ProposalVerificationRecord(
+                    proposal_id=review.proposal_id,
+                    agent_tip=review.agent_tip,
+                    phase="PRE_MERGE",
+                    verification_run_id=bundle.run_id,
+                    passed=bundle.passed and not bundle.cancelled,
+                    cancelled=bundle.cancelled,
+                    checked_at=datetime.now(UTC).isoformat(),
+                )
+            )
+        return bundle
+
+    def verify_post_merge(
+        self,
+        repo_path: Path,
+        cases_path: Path,
+        verifier_argv: tuple[str, ...],
+        timeout_seconds: float,
+        review: object,
+    ) -> EvidenceBundle:
+        """Rerun the required verification against the merged main checkout."""
+        if not isinstance(review, ChangeReview):
+            raise WorkflowValidationError("Only a recorded review can be verified.")
+        verifier = AcceptanceVerifier(AllowlistedCommand(tuple(verifier_argv), timeout_seconds))
+        bundle = verifier.verify(
+            load_acceptance_cases(cases_path), checkout=Path(repo_path).resolve()
+        )
+        if self._history is not None:
+            self._history.record_verification(bundle)
+            self._history.record_proposal_verification(
+                ProposalVerificationRecord(
+                    proposal_id=review.proposal_id,
+                    agent_tip=review.agent_tip,
+                    phase="POST_MERGE",
+                    verification_run_id=bundle.run_id,
+                    passed=bundle.passed,
+                    cancelled=bundle.cancelled,
+                    checked_at=datetime.now(UTC).isoformat(),
+                )
+            )
+        return bundle
+
+    def proposal_verifications(self, proposal_id: str) -> tuple[ProposalVerificationRecord, ...]:
+        """Return persisted verifications for one proposal, newest first."""
+        if self._history is None:
+            return ()
+        return self._history.list_proposal_verifications(proposal_id)
+
+    def _record_worktree(self, review: object, path: str, status: str) -> None:
+        """Persist one worktree lifecycle event when history is configured."""
+        if not isinstance(review, ChangeReview) or self._history is None:
+            return
+        self._history.record_worktree(
+            WorktreeRecord(
+                proposal_id=review.proposal_id,
+                agent_tip=review.agent_tip,
+                path=path,
+                status=status,
+                created_at=datetime.now(UTC).isoformat(),
+                closed_at=datetime.now(UTC).isoformat() if status != "ACTIVE" else None,
+            )
+        )
+
+    def stale_worktrees(self) -> tuple[WorktreeRecord, ...]:
+        """Return un-closed or refused worktree records, for safe recovery."""
+        if self._history is None:
+            return ()
+        return self._history.stale_worktrees()
+
+    def approval_blockers(self, review: object) -> tuple[str, ...]:
+        """Return plain-language reasons why this proposal cannot be approved."""
+        if not isinstance(review, ChangeReview):
+            raise WorkflowValidationError("Only a recorded review can be approved.")
+        blockers: list[str] = []
+        status = self._proposal_status(review.proposal_id)
+        if status == "APPROVED":
+            blockers.append("This proposal was already approved.")
+        elif status == "REJECTED":
+            blockers.append("This proposal was rejected.")
+        elif status is None:
+            blockers.append("This proposal is not recorded in the history database.")
+        pre_merge = [
+            record
+            for record in self.proposal_verifications(review.proposal_id)
+            if record.phase == "PRE_MERGE" and record.agent_tip == review.agent_tip
+        ]
+        if not pre_merge:
+            blockers.append(
+                "This proposal has no passed pre-merge verification record. Run "
+                "the acceptance checks in the isolated worktree first."
+            )
+        elif pre_merge[0].cancelled:
+            blockers.append(
+                "The last pre-merge verification was cancelled, so it must run "
+                "again before approval."
+            )
+        elif not pre_merge[0].passed:
+            blockers.append(
+                "The last pre-merge verification did not pass, so this proposal cannot be approved."
+            )
+        repository = GitRepository(Path(review.repo_path))
+        if repository.run_git("rev-parse", f"refs/heads/{review.agent_branch}") != review.agent_tip:
+            blockers.append(
+                "The proposal commit is no longer its branch tip, so it must be "
+                "re-proposed and reviewed again."
+            )
+        if repository.run_git("rev-parse", review.base_branch) != review.base_commit:
+            blockers.append("The target repository has moved since the proposal was reviewed.")
+        return tuple(blockers)
 
     def run_supervised_loop(
         self,
@@ -236,13 +422,17 @@ class WorkflowService:
         return self._history.list_agent_proposals()
 
     def approve_agent_change(self, review: object) -> ApprovedChange:
-        """Record the human approval and return the gate-approved change."""
+        """Record the human approval only when no blocker remains."""
         if not isinstance(review, ChangeReview):
             raise WorkflowValidationError("Only a real review can be approved.")
         status = self._proposal_status(review.proposal_id)
-        if status is None:
+        if status == "PENDING":
+            blockers = self.approval_blockers(review)
+            if blockers:
+                raise AgentIntegrationError(" ".join(blockers))
+        elif status is None:
             raise AgentIntegrationError("This proposal is not recorded in the history.")
-        if status != "PENDING":
+        else:
             raise AgentIntegrationError("This proposal has already been approved or rejected.")
         decided_at = datetime.now(UTC).isoformat()
         if self._history is not None:

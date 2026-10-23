@@ -94,11 +94,37 @@ def connect(path: Path) -> sqlite3.Connection:
             evidence_run_id TEXT,
             PRIMARY KEY (loop_id, position)
         );
+        CREATE TABLE IF NOT EXISTS proposal_verifications (
+            proposal_id TEXT NOT NULL REFERENCES agent_proposals(proposal_id),
+            agent_tip TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            verification_run_id TEXT NOT NULL REFERENCES acceptance_runs(run_id),
+            passed INTEGER NOT NULL,
+            cancelled INTEGER NOT NULL,
+            checked_at TEXT NOT NULL,
+            PRIMARY KEY (proposal_id, phase, verification_run_id)
+        );
+        CREATE TABLE IF NOT EXISTS worktree_checkouts (
+            proposal_id TEXT NOT NULL REFERENCES agent_proposals(proposal_id),
+            agent_tip TEXT NOT NULL,
+            path TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            closed_at TEXT,
+            PRIMARY KEY (path, created_at)
+        );
         """
     )
     columns = {
         row["name"] for row in connection.execute("PRAGMA table_info(workflow_step_results)")
     }
+    acceptance_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(acceptance_runs)")
+    }
+    if "cancelled" not in acceptance_columns:
+        connection.execute(
+            "ALTER TABLE acceptance_runs ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0"
+        )
     if "evidence" not in columns:
         connection.execute(
             "ALTER TABLE workflow_step_results ADD COLUMN evidence TEXT NOT NULL DEFAULT '[]'"

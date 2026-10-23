@@ -59,6 +59,7 @@ def test_replay_rejects_unallowlisted_actions() -> None:
         ReplayExecutor().validate(workflow)
 
 
+@pytest.mark.windows_only
 def test_replay_preview_marks_unsupported_steps_without_executing() -> None:
     workflow = Workflow(
         "mixed",
@@ -253,6 +254,7 @@ def test_ui_element_target_requires_stable_selector() -> None:
         ReplayExecutor().validate(workflow)
 
 
+@pytest.mark.windows_only
 def test_ui_element_action_is_policy_allowed_and_persisted(tmp_path) -> None:
     workflow = Workflow(
         "element",

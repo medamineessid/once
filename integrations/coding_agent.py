@@ -8,6 +8,7 @@ approval-gated local fast-forward merge lives in the controller.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,18 @@ MAX_TIMEOUT_SECONDS = 600.0
 MAX_AGENT_OUTPUT_CHARS = 2_000
 EVIDENCE_PLACEHOLDER = "{evidence}"
 BRANCH_PREFIX = "once/agent"
+
+
+def git_executable() -> str:
+    """Return the absolute Git path resolved from PATH, failing when Git is missing."""
+    resolved = shutil.which("git")
+    if resolved is None:
+        raise AgentIntegrationError(
+            "Git was not found on the PATH, so proposal and verification "
+            "operations that need Git cannot run. Install Git and make sure "
+            "the 'git' command is available on the PATH."
+        )
+    return resolved
 
 
 @dataclass(frozen=True)
@@ -53,11 +66,12 @@ class GitRepository:
 
     def __init__(self, path: Path) -> None:
         self._path = Path(path)
+        self._git = git_executable()
 
     def run_git(self, *args: str) -> str:
         """Run one exact git argv with the shell disabled and fail closed."""
         completed = subprocess.run(  # noqa: S603 - exact git argv, shell disabled
-            ("git", *args),  # noqa: S607 - git is on the managed tool path
+            (self._git, *args),
             cwd=self._path,
             capture_output=True,
             text=True,
@@ -93,7 +107,7 @@ class GitRepository:
         while True:
             branch = f"{BRANCH_PREFIX}/{uuid4().hex[:8]}"
             completed = subprocess.run(  # noqa: S603 - exact git argv, shell disabled
-                ("git", "checkout", "-b", branch),  # noqa: S607 - managed tool path
+                (self._git, "checkout", "-b", branch),
                 cwd=self._path,
                 capture_output=True,
                 text=True,
@@ -134,6 +148,100 @@ class GitRepository:
         """Fast-forward the current branch only; never creates commits or pushes."""
         self.run_git("merge", "--ff-only", branch)
         return self.head()
+
+
+class WorktreeCheckout:
+    """A disposable, detached git worktree bound to one exact proposal commit.
+
+    The worktree only ever contains committed proposal state; cleanup uses a
+    plain `git worktree remove` and never deletes data. If the worktree is
+    dirty, cleanup reports failure and leaves it in place for inspection.
+    """
+
+    def __init__(self, repo_path: Path, path: Path) -> None:
+        self._repo_path = Path(repo_path).resolve()
+        self._path = Path(path).resolve()
+        self._git = git_executable()
+
+    @property
+    def path(self) -> Path:
+        """Return the checked-out directory used as the {checkout} substitute."""
+        return self._path
+
+    def create(self, commit: str) -> None:
+        """Add a detached worktree at the exact commit, or fail closed."""
+        if self._repo_path in self._path.parents or self._path == self._repo_path:
+            raise AgentIntegrationError("The worktree path must be outside the repository.")
+        if self._path.exists():
+            raise AgentIntegrationError(
+                f"A leftover worktree directory exists at {self._path}. Restore or "
+                "remove it safely before verification can run again."
+            )
+        if not self._path.parent.exists():
+            # The root is a dedicated Once-owned worktree directory; create it
+            # deterministically instead of failing on a fresh machine.
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        identity = subprocess.run(  # noqa: S603 - exact git argv, shell disabled
+            (self._git, "-C", str(self._repo_path), "cat-file", "-e", f"{commit}^{{commit}}"),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            shell=False,
+        )
+        if identity.returncode != 0:
+            raise AgentIntegrationError(
+                "The proposal commit no longer exists in this repository, so it "
+                "must be re-proposed before verification."
+            )
+        created = subprocess.run(  # noqa: S603 - exact git argv, shell disabled
+            (
+                self._git,
+                "-C",
+                str(self._repo_path),
+                "worktree",
+                "add",
+                "--detach",
+                str(self._path),
+                commit,
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            shell=False,
+        )
+        if created.returncode != 0:
+            raise AgentIntegrationError(
+                "Could not create the verification worktree: "
+                f"{_tail(created.stdout + created.stderr) or 'no error details.'}"
+            )
+        confirmed = subprocess.run(  # noqa: S603 - exact git argv, shell disabled
+            (self._git, "-C", str(self._path), "rev-parse", "HEAD"),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            shell=False,
+        )
+        if confirmed.returncode != 0 or confirmed.stdout.strip() != commit:
+            self.close()
+            raise AgentIntegrationError(
+                "The created worktree does not match the proposal commit, so "
+                "verification was refused rather than run in a wrong tree."
+            )
+
+    def close(self) -> bool:
+        """Remove the worktree if it is clean; never force-delete anything."""
+        completed = subprocess.run(  # noqa: S603 - exact git argv, shell disabled
+            (self._git, "-C", str(self._repo_path), "worktree", "remove", str(self._path)),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            shell=False,
+        )
+        return completed.returncode == 0
 
 
 def _tail(value: str | None) -> str:

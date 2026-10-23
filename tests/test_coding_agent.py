@@ -75,6 +75,40 @@ def make_service(tmp_path: Path) -> WorkflowService:
     return service
 
 
+def pass_pre_merge(service: WorkflowService, review: object, tmp_path: Path) -> None:
+    """Record a passing pre-merge verification for review's exact commit."""
+    checker = tmp_path / "checker.py"
+    checker.write_text(
+        "import json, sys\nimport pathlib\n"
+        "assert pathlib.Path(sys.argv[1]).exists()\n"
+        "print(json.dumps({'ok': True}))\n",
+        encoding="utf-8",
+    )
+    input_path = tmp_path / "in.json"
+    input_path.write_text("{}", encoding="utf-8")
+    cases_path = tmp_path / "cases.json"
+    cases_path.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "c1",
+                    "input_file": str(input_path),
+                    "expected": {"ok": {"value": True, "mode": "exact", "required": True}},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    bundle = service.verify_proposal_pre_merge(
+        review,
+        cases_path,
+        (sys.executable, str(checker), "{input}"),
+        10.0,
+        tmp_path / "worktrees",
+    )
+    assert bundle.passed, bundle
+
+
 def current_branch(repo: Path) -> str:
     return run_git(repo, "rev-parse", "--abbrev-ref", "HEAD")
 
@@ -179,6 +213,7 @@ def test_apply_requires_an_explicitly_approved_change(tmp_path) -> None:
         service.apply_agent_change(review)  # type: ignore[arg-type]
     assert "fixed" not in (repo / "fixme.txt").read_text(encoding="utf-8")
 
+    pass_pre_merge(service, review, tmp_path)
     approved = service.approve_agent_change(review)
     service.apply_agent_change(approved)
 
@@ -217,6 +252,7 @@ def test_apply_refuses_when_the_base_branch_has_moved(tmp_path) -> None:
     repo = make_repo(tmp_path)
     service = make_service(tmp_path)
     review = service.request_agent_fix(repo, agent_command(tmp_path), 10.0, evidence(tmp_path))
+    pass_pre_merge(service, review, tmp_path)
     approved = service.approve_agent_change(review)
     (repo / "other.txt").write_text("moving on\n", encoding="utf-8")
     run_git(repo, "add", "-A")
@@ -273,3 +309,46 @@ def test_unbounded_agent_commands_are_rejected(tmp_path) -> None:
         AgentCommand((sys.executable, "-c", "print(1)"))
     with pytest.raises(AgentIntegrationError):
         AgentCommand((sys.executable, str(tmp_path / "a"), "{evidence}"), 601)
+
+
+def test_git_calls_reuse_the_resolved_executable(monkeypatch, tmp_path) -> None:
+    from integrations import coding_agent
+
+    monkeypatch.setattr(coding_agent, "git_executable", lambda: "/resolved/git")
+    argvs: list[tuple[str, ...]] = []
+
+    class FakeCompleted:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(argv, **kwargs):
+        argvs.append(tuple(argv))
+        completed = FakeCompleted()
+        completed.stdout = "" if "status" in argv else "abc123\n"
+        return completed
+
+    monkeypatch.setattr(coding_agent.subprocess, "run", fake_run)
+
+    repository = coding_agent.GitRepository(tmp_path)
+    assert repository.run_git("rev-parse", "HEAD") == "abc123"
+    repository.create_agent_branch()
+
+    assert argvs[0] == ("/resolved/git", "rev-parse", "HEAD")
+    assert argvs[-1][0] == "/resolved/git"
+    assert argvs[-1][1:3] == ("checkout", "-b")
+
+
+def test_missing_git_fails_closed(monkeypatch, tmp_path) -> None:
+    from integrations import coding_agent
+
+    def no_git(name):
+        return None
+
+    monkeypatch.setattr(coding_agent.shutil, "which", no_git)
+
+    with pytest.raises(AgentIntegrationError, match="Git was not found"):
+        coding_agent.git_executable()
+    with pytest.raises(AgentIntegrationError, match="Git was not found"):
+        coding_agent.GitRepository(tmp_path)
+    with pytest.raises(AgentIntegrationError, match="Git was not found"):
+        coding_agent.WorktreeCheckout(tmp_path, tmp_path / "worktrees")

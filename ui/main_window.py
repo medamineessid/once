@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -34,6 +35,7 @@ from engine.errors import AIProviderError, WorkflowValidationError
 from engine.replay import ReplayPreview
 from engine.workflow import StepKind, Workflow, WorkflowRun, WorkflowStep
 from recorder.drafts import build_raw_draft
+from ui.review_view import ProposalReviewPanel, VerifierConfig
 from ui.workers import WorkflowWorker
 
 WINDOW_TITLE = "Once"
@@ -47,6 +49,7 @@ class MainWindow(QMainWindow):
         self,
         service: WorkflowService | None = None,
         recording_service: RecordingService | None = None,
+        verifier_config: VerifierConfig | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
@@ -186,7 +189,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._result_list)
         central = QWidget(self)
         central.setLayout(layout)
-        self.setCentralWidget(central)
+        self._review_panel = ProposalReviewPanel(self._service, verifier_config=verifier_config)
+        tabs = QTabWidget(self)
+        tabs.addTab(central, "Workflows")
+        tabs.addTab(self._review_panel, "Agent proposals")
+        self.setCentralWidget(tabs)
         self.resize(800, 600)
         self._refresh()
 
