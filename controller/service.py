@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from ai.approval import ApprovedProposal
 from engine.acceptance import load_acceptance_cases
-from engine.errors import WorkflowValidationError
+from engine.agent_change import ApprovedChange, ChangeReview, approve_change
+from engine.errors import AgentIntegrationError, WorkflowValidationError
 from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
 from engine.replay import ReplayExecutor, ReplayPreview
 from engine.verifier import AcceptanceVerifier, AllowlistedCommand, EvidenceBundle
@@ -21,8 +23,9 @@ from engine.workflow import (
     WorkflowRunner,
     WorkflowStep,
 )
+from integrations.coding_agent import GitRepository, run_agent_for_proposal
 from storage.database import connect
-from storage.history import ExecutionHistory
+from storage.history import AgentProposalRecord, ExecutionHistory
 from storage.workflows import load_workflow, save_workflow
 
 
@@ -213,6 +216,89 @@ class WorkflowService:
             return ()
         return self._history.list_loops()
 
+    def request_agent_fix(
+        self,
+        repo_path: Path,
+        argv: tuple[str, ...],
+        timeout_seconds: float,
+        evidence_path: Path,
+    ) -> ChangeReview:
+        """Run the allowlisted agent on a separate branch and record the proposal."""
+        result = run_agent_for_proposal(repo_path, argv, timeout_seconds, evidence_path)
+        if self._history is not None:
+            self._history.record_agent_proposal(result.review, datetime.now(UTC).isoformat())
+        return result.review
+
+    def agent_proposals(self) -> tuple[AgentProposalRecord, ...]:
+        """Return persisted agent proposals, newest first."""
+        if self._history is None:
+            return ()
+        return self._history.list_agent_proposals()
+
+    def approve_agent_change(self, review: object) -> ApprovedChange:
+        """Record the human approval and return the gate-approved change."""
+        if not isinstance(review, ChangeReview):
+            raise WorkflowValidationError("Only a real review can be approved.")
+        status = self._proposal_status(review.proposal_id)
+        if status is None:
+            raise AgentIntegrationError("This proposal is not recorded in the history.")
+        if status != "PENDING":
+            raise AgentIntegrationError("This proposal has already been approved or rejected.")
+        decided_at = datetime.now(UTC).isoformat()
+        if self._history is not None:
+            self._history.record_agent_decision(review.proposal_id, "APPROVED", decided_at)
+        return approve_change(review)
+
+    def reject_agent_proposal(self, review: object) -> str:
+        """Record the human rejection of one pending proposal."""
+        if not isinstance(review, ChangeReview):
+            raise WorkflowValidationError("Only a real review can be rejected.")
+        status = self._proposal_status(review.proposal_id)
+        if status != "PENDING":
+            raise AgentIntegrationError("This proposal has already been approved or rejected.")
+        decided_at = datetime.now(UTC).isoformat()
+        if self._history is not None:
+            self._history.record_agent_decision(review.proposal_id, "REJECTED", decided_at)
+        return decided_at
+
+    def _proposal_status(self, proposal_id: str) -> str | None:
+        if self._history is None:
+            return None
+        return self._history.proposal_status(proposal_id)
+
+    def apply_agent_change(self, approved: object) -> str:
+        """Fast-forward only a gate-approved agent change; never push or rebase."""
+        if not isinstance(approved, ApprovedChange):
+            raise WorkflowValidationError(
+                "Only an explicitly approved change can be applied. "
+                "Review the diff and approve it first."
+            )
+        review = approved.review
+        status = self._proposal_status(review.proposal_id)
+        if status != "APPROVED":
+            raise AgentIntegrationError("Only a proposal with a recorded approval can be applied.")
+        repository = GitRepository(Path(review.repo_path))
+        repository.ensure_clean()
+        if repository.current_branch() != review.base_branch:
+            raise AgentIntegrationError(
+                "The repository is not on the proposal's original branch, so the "
+                "change cannot be applied right now."
+            )
+        if repository.head() != review.base_commit:
+            raise AgentIntegrationError(
+                "The repository has moved since the proposal was reviewed, so this "
+                "proposal must be reviewed again before it can be applied."
+            )
+        if (
+            repository.head() != review.agent_tip
+            and repository.run_git("rev-parse", review.agent_branch) != review.agent_tip
+        ):
+            raise AgentIntegrationError(
+                "The agent branch changed after the review, so this proposal must "
+                "be reviewed again before it can be applied."
+            )
+        return repository.fast_forward(review.agent_branch)
+
     def list_saved(self) -> tuple[Path, ...]:
         """Return saved workflow files in deterministic order."""
         if self._workflow_directory is None:
@@ -237,3 +323,35 @@ class WorkflowService:
         if self._history is not None:
             self._history.close()
             self._history = None
+
+
+class AgentFixProposer:
+    """A bounded-loop proposer that requests an allowlisted coding-agent fix.
+
+    The proposer writes the redacted verification evidence to an explicit
+    directory and records the agent's diff as a pending human review. It never
+    executes agent output and never merges anything.
+    """
+
+    def __init__(
+        self,
+        service: WorkflowService,
+        repo_path: Path,
+        argv: tuple[str, ...],
+        timeout_seconds: float,
+        evidence_directory: Path,
+    ) -> None:
+        self._service = service
+        self._repo_path = repo_path
+        self._argv = argv
+        self._timeout_seconds = timeout_seconds
+        self._evidence_directory = evidence_directory
+
+    def propose(self, evidence: EvidenceBundle) -> None:
+        """Send redacted evidence to the agent and file its diff for review."""
+        evidence_directory = Path(self._evidence_directory)
+        evidence_directory.mkdir(parents=True, exist_ok=True)
+        json_path, _ = evidence.write(evidence_directory)
+        self._service.request_agent_fix(
+            self._repo_path, self._argv, self._timeout_seconds, json_path
+        )

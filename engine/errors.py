@@ -30,3 +30,7 @@ class RecoveryError(OnceError):
 
 class AIProviderError(OnceError):
     """An AI provider is unavailable or returned invalid proposal data."""
+
+
+class AgentIntegrationError(OnceError):
+    """A coding-agent proposal could not be produced, verified, or applied."""

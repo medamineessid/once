@@ -56,6 +56,29 @@ def connect(path: Path) -> sqlite3.Connection:
     )
     connection.executescript(
         """
+        CREATE TABLE IF NOT EXISTS agent_proposals (
+            proposal_id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            repo_path TEXT NOT NULL,
+            base_branch TEXT NOT NULL,
+            agent_branch TEXT NOT NULL,
+            base_commit TEXT NOT NULL,
+            agent_tip TEXT NOT NULL,
+            diff TEXT NOT NULL,
+            changed_files TEXT NOT NULL DEFAULT '[]',
+            untracked_files TEXT NOT NULL DEFAULT '[]',
+            truncated INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS agent_decisions (
+            proposal_id TEXT NOT NULL REFERENCES agent_proposals(proposal_id),
+            decision TEXT NOT NULL,
+            decided_at TEXT NOT NULL,
+            PRIMARY KEY (proposal_id, decision)
+        );
+        """
+    )
+    connection.executescript(
+        """
         CREATE TABLE IF NOT EXISTS loop_runs (
             loop_id TEXT PRIMARY KEY,
             status TEXT NOT NULL,

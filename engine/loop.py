@@ -10,7 +10,7 @@ from time import monotonic
 from typing import Protocol
 from uuid import uuid4
 
-from engine.errors import WorkflowValidationError
+from engine.errors import OnceError, WorkflowValidationError
 from engine.verifier import EvidenceBundle
 
 MAX_ATTEMPTS = 50
@@ -22,6 +22,9 @@ STOP_NO_PROPOSER_TEXT = (
 )
 STOP_MAX_ATTEMPTS_TEXT = "The diagnose-fix-test loop reached its configured attempt limit."
 STOP_WALL_TIME_TEXT = "The diagnose-fix-test loop reached its time limit."
+STOP_PROPOSER_FAILED_TEXT = (
+    "The fix proposer failed, so the loop stopped instead of retrying blind."
+)
 STOP_NO_PROGRESS_TEXT = (
     "The same verification failures repeated, so the loop stopped instead of "
     "retrying without change."
@@ -36,11 +39,13 @@ class LoopStatus(StrEnum):
     STOPPED_WALL_TIME = "STOPPED_WALL_TIME"
     STOPPED_NO_PROGRESS = "STOPPED_NO_PROGRESS"
     STOPPED_NO_PROPOSER = "STOPPED_NO_PROPOSER"
+    STOPPED_PROPOSER_FAILED = "STOPPED_PROPOSER_FAILED"
 
 
 class DecisionCode(StrEnum):
     """One recorded loop event."""
 
+    PROPOSER_FAILED = "proposer_failed"
     VERIFIED_PASS = "verified_pass"  # noqa: S105 - decision code, not a secret
     VERIFIED_FAIL = "verified_fail"
     PROPOSER_NOTIFIED = "proposer_notified"
@@ -174,7 +179,22 @@ class LoopController:
                     started_clock, started_at, LoopStatus.STOPPED_NO_PROPOSER, decisions
                 )
             previous_failures = current_failures
-            self._proposer.propose(bundle)
+            try:
+                self._proposer.propose(bundle)
+            except OnceError as error:
+                decisions.append(
+                    LoopDecision(
+                        verify_calls,
+                        DecisionCode.PROPOSER_FAILED,
+                        f"{STOP_PROPOSER_FAILED_TEXT} {error}",
+                    )
+                )
+                return self._finish(
+                    started_clock,
+                    started_at,
+                    LoopStatus.STOPPED_PROPOSER_FAILED,
+                    decisions,
+                )
             decisions.append(
                 LoopDecision(
                     verify_calls,

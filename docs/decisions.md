@@ -206,3 +206,21 @@ The selected Python 3.14 environment installed all exact pins successfully.
 `PySide6 import ok` was confirmed with `.\.venv\Scripts\python.exe -c
 "import PySide6.QtWidgets; print('PySide6 import ok')"`. PyInstaller 6.22.3
 was added to the development requirements and installed successfully.
+
+## 2026-10-23 — Coding-agent proposal slice (A5)
+- Question: How does a proposed agent change get from "agent ran" to "merged"
+  without violating O6/D14, given no live agent service exists?
+- Choice: (a) The agent command is an exactly-configured argv template with one
+  {evidence} placeholder, no shell, timeout <= 600 s. (b) Once always creates a
+  unique `once/agent/<id>` branch, refuses dirty repositories, and returns to
+  the original branch after capture. (c) The agent's result is snapshotted into
+  one clearly-labelled commit on that branch so the reviewed diff and the
+  approved branch tip are the same content. (d) Approval is a gate type
+  (ApprovedChange, constructible only via approve_change with a ChangeReview)
+  and each proposal can be decided at most once. (e) Applying a change is a
+  local `git merge --ff-only` that refuses if base or agent tip moved; there is
+  no push, rebase, or merge-commit code path at all.
+- Reason: deterministic, fail-closed behavior; proposals are untrusted data;
+  every proposal, approval, and rejection is persisted (O7).
+- Known gap: verification reruns happen after the approved merge, not before,
+  because pre-approval sandboxed reruns would need git worktree machinery.

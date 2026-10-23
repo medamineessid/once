@@ -520,3 +520,27 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `python app.py --smoke-test` -> exit 0; `git diff --check` -> clean.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-23 — Coding-agent proposal integration   (commit: pending A5)
+- Task: Implement branches + diff review + the approval gate per D14/O6: an
+  allowlisted agent command runs on a separate branch, its diff becomes a
+  bounded review, and only an explicitly approved change can be locally
+  fast-forwarded. No push/rebase/merge-commit path exists.
+- AI contribution: integrations/coding_agent.py (AgentCommand, GitRepository,
+  run_agent_for_proposal), engine/agent_change.py (ChangeReview,
+  ApprovedChange, approve_change), storage tables agent_proposals/
+  agent_decisions with history methods, controller methods (request_agent_fix,
+  agent_proposals, approve_agent_change, reject_agent_proposal,
+  apply_agent_change), AgentFixProposer loop adapter, and a
+  STOPPED_PROPOSER_FAILED loop outcome so proposer errors cannot silently drop
+  a run record; tests/test_coding_agent.py.
+- Defect found: first design captured uncommitted agent work into a reviewed
+  diff while the approved branch tip would have excluded it (review/merge
+  content mismatch); fixed by snapshotting the agent result into one commit on
+  its own branch. A loop test wrongly expected a second proposal after the
+  no-progress stop; the engine was right and the test expectation was corrected.
+- Verification: tests/test_coding_agent.py -> `12 passed`; full suite ->
+  `124 passed, 2 skipped in 27.06s`; ruff format/check -> all checks passed;
+  `python app.py --smoke-test` -> exit 0; `git diff --check` -> clean.
+- Outcome: PASSED
+- Human review:

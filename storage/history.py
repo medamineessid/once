@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from threading import RLock
 
+from engine.agent_change import ChangeReview
+from engine.errors import AgentIntegrationError
 from engine.loop import DecisionCode, LoopDecision, LoopRun, LoopStatus
 from engine.verifier import CaseResult, EvidenceBundle, FieldResult
 from engine.workflow import StepResult, StepStatus, WorkflowRun, WorkflowStatus
@@ -18,6 +20,15 @@ class HistoryRecord:
     """A persisted run and its step outcomes."""
 
     run: WorkflowRun
+
+
+@dataclass(frozen=True)
+class AgentProposalRecord:
+    """A persisted agent proposal and its review decision."""
+
+    review: ChangeReview
+    status: str
+    decided_at: str | None
 
 
 class ExecutionHistory:
@@ -245,6 +256,112 @@ class ExecutionHistory:
                     )
                 )
         return tuple(runs)
+
+    def record_agent_proposal(self, review: ChangeReview, created_at: str) -> None:
+        """Atomically insert one agent proposal in PENDING state."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO agent_proposals
+                    (proposal_id, created_at, repo_path, base_branch, agent_branch,
+                     base_commit, agent_tip, diff, changed_files, untracked_files, truncated)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    review.proposal_id,
+                    created_at,
+                    review.repo_path,
+                    review.base_branch,
+                    review.agent_branch,
+                    review.base_commit,
+                    review.agent_tip,
+                    review.diff,
+                    json.dumps(list(review.changed_files)),
+                    json.dumps(list(review.untracked_files)),
+                    int(review.truncated),
+                ),
+            )
+
+    def record_agent_decision(self, proposal_id: str, decision: str, decided_at: str) -> None:
+        """Record exactly one approval or rejection per proposal."""
+        try:
+            with self._lock, self._connection:
+                self._connection.execute(
+                    """
+                    INSERT INTO agent_decisions (proposal_id, decision, decided_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (proposal_id, decision, decided_at),
+                )
+        except sqlite3.IntegrityError as error:
+            raise AgentIntegrationError(
+                "This proposal has already been approved or rejected."
+            ) from error
+
+    def proposal_status(self, proposal_id: str) -> str | None:
+        """Return PENDING, APPROVED, or REJECTED for one proposal."""
+        with self._lock:
+            exists = self._connection.execute(
+                "SELECT 1 FROM agent_proposals WHERE proposal_id = ?", (proposal_id,)
+            ).fetchone()
+            if exists is None:
+                return None
+        with self._lock:
+            decisions = self._connection.execute(
+                """
+                SELECT decision FROM agent_decisions WHERE proposal_id = ?
+                ORDER BY decided_at
+                """,
+                (proposal_id,),
+            ).fetchall()
+        if not decisions:
+            return "PENDING"
+        return decisions[0]["decision"]
+
+    def list_agent_proposals(self) -> tuple[AgentProposalRecord, ...]:
+        """Return persisted agent proposals newest first with decisions."""
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT proposal_id, created_at, repo_path, base_branch, agent_branch,
+                       base_commit, agent_tip, diff, changed_files, untracked_files, truncated
+                FROM agent_proposals
+                ORDER BY created_at DESC, proposal_id DESC
+                """
+            ).fetchall()
+        records: list[AgentProposalRecord] = []
+        with self._lock:
+            for row in rows:
+                decision_row = self._connection.execute(
+                    """
+                    SELECT decision, decided_at FROM agent_decisions WHERE proposal_id = ?
+                    ORDER BY decided_at
+                    """,
+                    (row["proposal_id"],),
+                ).fetchone()
+                if decision_row is None:
+                    status, decided_at = "PENDING", None
+                else:
+                    status, decided_at = decision_row["decision"], decision_row["decided_at"]
+                records.append(
+                    AgentProposalRecord(
+                        review=ChangeReview(
+                            proposal_id=row["proposal_id"],
+                            repo_path=row["repo_path"],
+                            base_branch=row["base_branch"],
+                            agent_branch=row["agent_branch"],
+                            base_commit=row["base_commit"],
+                            agent_tip=row["agent_tip"],
+                            diff=row["diff"],
+                            changed_files=tuple(json.loads(row["changed_files"])),
+                            untracked_files=tuple(json.loads(row["untracked_files"])),
+                            truncated=bool(row["truncated"]),
+                        ),
+                        status=status,
+                        decided_at=decided_at,
+                    )
+                )
+        return tuple(records)
 
     def list_runs(self) -> tuple[HistoryRecord, ...]:
         """Return persisted runs newest first with their step results."""
