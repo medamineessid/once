@@ -6,8 +6,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ai.approval import ApprovedProposal
+from engine.acceptance import load_acceptance_cases
 from engine.errors import WorkflowValidationError
 from engine.replay import ReplayExecutor, ReplayPreview
+from engine.verifier import AcceptanceVerifier, AllowlistedCommand, EvidenceBundle
 from engine.workflow import (
     StepKind,
     StepResult,
@@ -161,6 +163,25 @@ class WorkflowService:
         if self._history is not None:
             self._history.record(run)
         return run
+
+    def verify_acceptance(
+        self,
+        cases_path: Path,
+        argv: tuple[str, ...],
+        timeout_seconds: float = 30.0,
+    ) -> EvidenceBundle:
+        """Run allowlisted acceptance verification and persist the outcome."""
+        verifier = AcceptanceVerifier(AllowlistedCommand(argv, timeout_seconds))
+        bundle = verifier.verify(load_acceptance_cases(cases_path))
+        if self._history is not None:
+            self._history.record_verification(bundle)
+        return bundle
+
+    def acceptance_history(self) -> tuple[EvidenceBundle, ...]:
+        """Return persisted verification runs, newest first."""
+        if self._history is None:
+            return ()
+        return self._history.list_verification_runs()
 
     def list_saved(self) -> tuple[Path, ...]:
         """Return saved workflow files in deterministic order."""

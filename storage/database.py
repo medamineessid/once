@@ -31,6 +31,29 @@ def connect(path: Path) -> sqlite3.Connection:
         );
         """
     )
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS acceptance_runs (
+            run_id TEXT PRIMARY KEY,
+            started_at TEXT NOT NULL,
+            finished_at TEXT NOT NULL,
+            passed INTEGER NOT NULL,
+            redaction_applied INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS acceptance_case_results (
+            run_id TEXT NOT NULL REFERENCES acceptance_runs(run_id),
+            position INTEGER NOT NULL,
+            case_id TEXT NOT NULL,
+            passed INTEGER NOT NULL,
+            exit_code INTEGER,
+            timed_out INTEGER NOT NULL,
+            stdout_tail TEXT NOT NULL,
+            stderr_tail TEXT NOT NULL,
+            fields TEXT NOT NULL DEFAULT '[]',
+            PRIMARY KEY (run_id, position)
+        );
+        """
+    )
     columns = {
         row["name"] for row in connection.execute("PRAGMA table_info(workflow_step_results)")
     }

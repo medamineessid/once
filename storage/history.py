@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from threading import RLock
 
+from engine.verifier import CaseResult, EvidenceBundle, FieldResult
 from engine.workflow import StepResult, StepStatus, WorkflowRun, WorkflowStatus
 
 
@@ -68,6 +69,111 @@ class ExecutionHistory:
                 )
         except sqlite3.IntegrityError:
             raise
+
+    def record_verification(self, bundle: EvidenceBundle) -> None:
+        """Atomically insert one verification run and its case results."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO acceptance_runs
+                    (run_id, started_at, finished_at, passed, redaction_applied)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    bundle.run_id,
+                    bundle.started_at,
+                    bundle.finished_at,
+                    int(bundle.passed),
+                    int(bundle.redaction_applied),
+                ),
+            )
+            self._connection.executemany(
+                """
+                INSERT INTO acceptance_case_results
+                    (run_id, position, case_id, passed, exit_code, timed_out,
+                     stdout_tail, stderr_tail, fields)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        bundle.run_id,
+                        position,
+                        case.case_id,
+                        int(case.passed),
+                        case.exit_code,
+                        int(case.timed_out),
+                        case.stdout_tail,
+                        case.stderr_tail,
+                        json.dumps(
+                            [
+                                {
+                                    "field": field.field,
+                                    "passed": field.passed,
+                                    "status": field.status,
+                                    "expected": field.expected,
+                                    "actual": field.actual,
+                                }
+                                for field in case.fields
+                            ]
+                        ),
+                    )
+                    for position, case in enumerate(bundle.cases)
+                ],
+            )
+
+    def list_verification_runs(self) -> tuple[EvidenceBundle, ...]:
+        """Return persisted verification runs newest first."""
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT run_id, started_at, finished_at, redaction_applied
+                FROM acceptance_runs
+                ORDER BY started_at DESC, run_id DESC
+                """
+            ).fetchall()
+        bundles: list[EvidenceBundle] = []
+        with self._lock:
+            for row in rows:
+                case_rows = self._connection.execute(
+                    """
+                    SELECT case_id, passed, exit_code, timed_out,
+                           stdout_tail, stderr_tail, fields
+                    FROM acceptance_case_results
+                    WHERE run_id = ?
+                    ORDER BY position
+                    """,
+                    (row["run_id"],),
+                ).fetchall()
+                bundles.append(
+                    EvidenceBundle(
+                        run_id=row["run_id"],
+                        started_at=row["started_at"],
+                        finished_at=row["finished_at"],
+                        cases=tuple(
+                            CaseResult(
+                                case_id=case_row["case_id"],
+                                passed=bool(case_row["passed"]),
+                                fields=tuple(
+                                    FieldResult(
+                                        field=field_row["field"],
+                                        passed=bool(field_row["passed"]),
+                                        status=field_row["status"],
+                                        expected=field_row["expected"],
+                                        actual=field_row["actual"],
+                                    )
+                                    for field_row in json.loads(case_row["fields"])
+                                ),
+                                exit_code=case_row["exit_code"],
+                                timed_out=bool(case_row["timed_out"]),
+                                stdout_tail=case_row["stdout_tail"],
+                                stderr_tail=case_row["stderr_tail"],
+                            )
+                            for case_row in case_rows
+                        ),
+                        redaction_applied=bool(row["redaction_applied"]),
+                    )
+                )
+        return tuple(bundles)
 
     def list_runs(self) -> tuple[HistoryRecord, ...]:
         """Return persisted runs newest first with their step results."""

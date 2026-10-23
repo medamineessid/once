@@ -483,3 +483,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: `git rev-parse --show-toplevel` returned `C:/Users/DELL/once` with no commits; `py -0p`, `python --version`, and `git --version` returned the recorded environment; `.venv` package list showed the pinned packages; smoke test passed; pytest reported `1 failed, 12 passed`; Ruff check passed and format check reported `tests/test_architecture.py`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-23 — Verifier run persistence   (commit: pending A3)
+- Task: Persist acceptance verification runs (EvidenceBundle) in the SQLite
+  history per invariant O7, exposed through the controller service.
+- AI contribution: added `acceptance_runs` and `acceptance_case_results`
+  tables to storage/database.py, `record_verification`/`list_verification_runs`
+  on `ExecutionHistory`, `verify_acceptance`/`acceptance_history` on
+  `WorkflowService`, and tests/test_verifier_history.py.
+- Defect found: the first test-file draft had a missing import, inconsistent
+  helper names, and a stray brace; it was rewritten before being committed.
+  A later full-verification command contained a venv path typo so its pytest
+  portion silently did not run; it was rerun correctly.
+- Verification: `.venv/Scripts/python.exe -m pytest -q tests/test_verifier_history.py`
+  -> `4 passed`; full suite -> `103 passed, 2 skipped in 12.69s`; ruff format
+  and check -> `All checks passed!`; `python app.py --smoke-test` -> exit 0;
+  `git diff --check` -> clean.
+- Outcome: PASSED
+- Human review:
