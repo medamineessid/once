@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -410,4 +411,210 @@ def test_verification_cleanup_failure_leaves_reported_stale_state(tmp_path) -> N
             review, cases_path, PASSING_VERIFY_ARGV, 10.0, worktree_root
         )
     assert (repo / "extractor.py").read_text(encoding="utf-8") == main_before
+    service.close()
+
+
+def test_verified_review_must_be_the_recorded_proposal(tmp_path) -> None:
+    """A review object is only usable when it is byte-identical to the record."""
+    from dataclasses import replace
+
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    # A different branch at the exact same tip must still be a different review.
+    run_git(repo, "branch", "once/agent/impostor", review.agent_tip)
+    impostor = replace(review, agent_branch="once/agent/impostor")
+    assert impostor.proposal_id == review.proposal_id
+    assert impostor.agent_tip == review.agent_tip
+
+    with pytest.raises(AgentIntegrationError, match="recorded proposal"):
+        service.verify_proposal_pre_merge(
+            impostor, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "worktrees"
+        )
+    blockers = service.approval_blockers(impostor)
+    assert any("does not match the recorded proposal" in blocker for blocker in blockers)
+    with pytest.raises(AgentIntegrationError, match="does not match the recorded proposal"):
+        service.approve_agent_change(impostor)
+
+    # Even with a passing in-worktree check recorded for the real proposal,
+    # applying an impostor-shaped change must be refused.
+    assert "totals" not in (repo / "extractor.py").read_text(encoding="utf-8")
+    assert not (tmp_path / "worktrees" / f"proposal-{review.proposal_id[:8]}").exists()
+    service.close()
+
+
+def test_modified_diff_after_review_cannot_be_approved(tmp_path) -> None:
+    """A presented diff that differs from the recorded one must be refused."""
+    from dataclasses import replace
+
+    repo, _ = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    doctored_diff = review.diff.replace("105.0", "999.0")
+    pretender = replace(review, diff=doctored_diff)
+
+    blockers = service.approval_blockers(pretender)
+    assert any("does not match the recorded proposal" in blocker for blocker in blockers)
+    with pytest.raises(AgentIntegrationError, match="does not match the recorded proposal"):
+        service.approve_agent_change(pretender)
+    assert "totals" not in (repo / "extractor.py").read_text(encoding="utf-8")
+    service.close()
+
+
+def test_partially_cancelled_verification_refuses_then_recovers(tmp_path) -> None:
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    second_input = tmp_path / "invoice-2.json"
+    second_input.write_text(
+        json.dumps({"invoice_number": "INV-1", "total": 100.0}), encoding="utf-8"
+    )
+    multi_cases = tmp_path / "cases-multi.json"
+    first_case = json.loads(cases_path.read_text(encoding="utf-8"))[0]
+    clones = [_clone_case(first_case, second_input, index) for index in (2, 3)]
+    multi_cases.write_text(json.dumps([first_case, *clones]), encoding="utf-8")
+    calls = {"count": 0}
+
+    def cancel_after_first() -> bool:
+        calls["count"] += 1
+        return calls["count"] > 1
+
+    partially = service.verify_proposal_pre_merge(
+        review,
+        multi_cases,
+        PASSING_VERIFY_ARGV,
+        10.0,
+        tmp_path / "worktrees",
+        cancel_check=cancel_after_first,
+    )
+    assert partially.cases[0].passed is True  # the first case really ran
+    assert partially.cancelled is True
+    with pytest.raises(AgentIntegrationError, match="cancelled"):
+        service.approve_agent_change(review)
+    with pytest.raises(AgentIntegrationError, match="cancelled"):
+        service.approve_agent_change(review)  # idempotent refusal
+
+    recovered = service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "worktrees"
+    )
+    assert recovered.passed is True and recovered.cancelled is False
+    approved = service.approve_agent_change(review)
+    service.apply_agent_change(approved)
+    assert "totals.get" in (repo / "extractor.py").read_text(encoding="utf-8")
+    service.close()
+
+
+def test_failed_post_merge_check_is_persisted(tmp_path) -> None:
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "wt"
+    )
+    approved = service.approve_agent_change(review)
+    service.apply_agent_change(approved)
+
+    wrong = tmp_path / "cases-wrong.json"
+    wrong.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "inv-1",
+                    "input_file": str(
+                        json.loads(cases_path.read_text(encoding="utf-8"))[0]["input_file"]
+                    ),
+                    "expected": {
+                        "total": {
+                            "value": -5.0,
+                            "mode": "numeric_tolerance",
+                            "tolerance": 0.01,
+                            "required": True,
+                        }
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    bundle = service.verify_post_merge(repo, wrong, PASSING_VERIFY_ARGV, 10.0, review)
+    assert bundle.passed is False
+    records = service.proposal_verifications(review.proposal_id)
+    post = [record for record in records if record.phase == "POST_MERGE"]
+    assert len(post) == 1 and post[0].passed is False
+    assert service._proposal_status(review.proposal_id) == "APPROVED"
+    service.close()
+
+
+def _clone_case(case: dict, input_path: Path, case_id: int) -> dict:
+    return {
+        "case_id": f"inv-{case_id}",
+        "input_file": str(input_path),
+        "expected": case["expected"],
+    }
+
+
+def test_full_lifecycle_survives_a_restart(tmp_path) -> None:
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "wt"
+    )
+    approved = service.approve_agent_change(review)
+    service.apply_agent_change(approved)
+    service.verify_post_merge(repo, cases_path, PASSING_VERIFY_ARGV, 10.0, review)
+    service.close()
+
+    reopened = WorkflowService(history=ExecutionHistory(connect(tmp_path / "history.db")))
+    records = reopened.agent_proposals()
+    assert len(records) == 1
+    assert records[0].status == "APPROVED"
+    assert records[0].review == review  # the exact reviewed proposal is what persisted
+    phases = {record.phase for record in reopened.proposal_verifications(review.proposal_id)}
+    assert phases == {"PRE_MERGE", "POST_MERGE"}
+    for record in reopened.proposal_verifications(review.proposal_id):
+        stored = reopened.verification_run(record.verification_run_id)
+        assert stored is not None
+    with pytest.raises(AgentIntegrationError, match="already been approved"):
+        reopened.reject_agent_proposal(review)
+    reopened.close()
+
+
+def test_persisted_evidence_is_redacted(tmp_path) -> None:
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    leaky = tmp_path / "leaky.py"
+    leaky.write_text(
+        "import sys\n"
+        "print('connecting to service', 'api_key=hunter2secret', 'user@example.org')\n"
+        "sys.exit(3)\n",
+        encoding="utf-8",
+    )
+    service.verify_proposal_pre_merge(
+        review, cases_path, (sys.executable, str(leaky), "{input}"), 10.0, tmp_path / "wt"
+    )
+
+    with sqlite3.connect(tmp_path / "history.db") as database:
+        tails = database.execute(
+            "SELECT stdout_tail, stderr_tail FROM acceptance_case_results"
+        ).fetchall()
+    everything = "\n".join(cell for tail in tails for cell in tail)
+    assert "hunter2secret" not in everything
+    assert "user@example.org" not in everything
+    assert "[REDACTED_SECRET]" in everything
+    assert "[REDACTED_EMAIL]" in everything
     service.close()

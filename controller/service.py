@@ -227,6 +227,13 @@ class WorkflowService:
         """
         if not isinstance(review, ChangeReview):
             raise WorkflowValidationError("Only a recorded review can be verified.")
+        record = self._proposal_record(review.proposal_id)
+        if record is not None and record.review != review:
+            raise AgentIntegrationError(
+                "The proposal you are verifying does not match the recorded "
+                "proposal with the same id, so it must be re-proposed and "
+                "reviewed again."
+            )
         repository = GitRepository(Path(review.repo_path))
         if repository.run_git("rev-parse", f"refs/heads/{review.agent_branch}") != review.agent_tip:
             raise AgentIntegrationError(
@@ -332,6 +339,28 @@ class WorkflowService:
             return ()
         return self._history.stale_worktrees()
 
+    def _identity_blocker(self, review: ChangeReview) -> str | None:
+        """Return a plain-language message when review differs from the record.
+
+        The reviewed diff, branch names, and commits must be exactly the ones
+        recorded when the agent proposed the change; a stale or re-created
+        review object must never be approved, applied, or verified.
+        """
+        record = self._proposal_record(review.proposal_id)
+        if record is not None and record.review != review:
+            return (
+                "The proposal you are viewing does not match the recorded "
+                "proposal with the same id. Close and reopen the Agent "
+                "proposals tab to show the recorded diff, or reject it and "
+                "request the fix again."
+            )
+        return None
+
+    def _proposal_record(self, proposal_id: str) -> AgentProposalRecord | None:
+        if self._history is None:
+            return None
+        return self._history.proposal_record(proposal_id)
+
     def approval_blockers(self, review: object) -> tuple[str, ...]:
         """Return plain-language reasons why this proposal cannot be approved."""
         if not isinstance(review, ChangeReview):
@@ -344,6 +373,10 @@ class WorkflowService:
             blockers.append("This proposal was rejected.")
         elif status is None:
             blockers.append("This proposal is not recorded in the history database.")
+        else:
+            identity = self._identity_blocker(review)
+            if identity is not None:
+                blockers.append(identity)
         pre_merge = [
             record
             for record in self.proposal_verifications(review.proposal_id)
@@ -364,13 +397,25 @@ class WorkflowService:
                 "The last pre-merge verification did not pass, so this proposal cannot be approved."
             )
         repository = GitRepository(Path(review.repo_path))
-        if repository.run_git("rev-parse", f"refs/heads/{review.agent_branch}") != review.agent_tip:
+        try:
+            tip_matches = (
+                repository.run_git("rev-parse", f"refs/heads/{review.agent_branch}")
+                == review.agent_tip
+            )
+            base_matches = repository.run_git("rev-parse", review.base_branch) == review.base_commit
+        except AgentIntegrationError:
             blockers.append(
-                "The proposal commit is no longer its branch tip, so it must be "
+                "The proposal's branches no longer exist, so it must be "
                 "re-proposed and reviewed again."
             )
-        if repository.run_git("rev-parse", review.base_branch) != review.base_commit:
-            blockers.append("The target repository has moved since the proposal was reviewed.")
+        else:
+            if not tip_matches:
+                blockers.append(
+                    "The proposal commit is no longer its branch tip, so it must be "
+                    "re-proposed and reviewed again."
+                )
+            if not base_matches:
+                blockers.append("The target repository has moved since the proposal was reviewed.")
         return tuple(blockers)
 
     def run_supervised_loop(
@@ -467,6 +512,9 @@ class WorkflowService:
         status = self._proposal_status(review.proposal_id)
         if status != "APPROVED":
             raise AgentIntegrationError("Only a proposal with a recorded approval can be applied.")
+        identity = self._identity_blocker(review)
+        if identity is not None:
+            raise AgentIntegrationError(identity)
         repository = GitRepository(Path(review.repo_path))
         repository.ensure_clean()
         if repository.current_branch() != review.base_branch:

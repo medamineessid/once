@@ -11,7 +11,6 @@ thread and is persisted as a POST_MERGE record.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
@@ -27,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from controller.service import WorkflowService
+from controller.verifier_config import VerifierConfig
 from engine.agent_change import ChangeReview
 from engine.verifier import EvidenceBundle
 from storage.history import AgentProposalRecord
@@ -39,8 +39,6 @@ from ui.workers import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-VerifierConfig = tuple[Path, tuple[str, ...], float, Path]
-
 
 class ProposalReviewPanel(QWidget):
     """One proposal at a time: diff, evidence, decision — always explicit."""
@@ -52,10 +50,12 @@ class ProposalReviewPanel(QWidget):
         self,
         service: WorkflowService,
         verifier_config: VerifierConfig | None = None,
+        verifier_note: str | None = None,
     ) -> None:
         super().__init__()
         self._service = service
         self._verifier_config = verifier_config
+        self._verifier_note = verifier_note
         self._records: tuple[AgentProposalRecord, ...] = ()
         self._thread: QThread | None = None
         self._pending_action: Callable[[], None] | None = None
@@ -115,6 +115,8 @@ class ProposalReviewPanel(QWidget):
         actions.addWidget(self._reject_button)
         layout.addLayout(actions)
         self.setLayout(layout)
+        if verifier_note:
+            self._message_label.setText(verifier_note)
         self.refresh_proposals()
 
     # ---------------------------------------------------------------- helpers
@@ -283,7 +285,10 @@ class ProposalReviewPanel(QWidget):
             self._warn("Select a proposal before verifying it.")
             return
         if self._verifier_config is None:
-            self._warn("No acceptance checker is configured for this session.")
+            if self._verifier_note:
+                self._warn(self._verifier_note)
+            else:
+                self._warn("No acceptance checker is configured for this session.")
             return
         cases_path, argv, timeout_seconds, worktree_root = self._verifier_config
         self._start_worker(

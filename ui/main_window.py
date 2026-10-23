@@ -31,11 +31,12 @@ from ai.models import AnalysisRequest, ProviderDraft
 from ai.provider import deterministic_demo_provider
 from controller.recording import RecordingService
 from controller.service import WorkflowService
+from controller.verifier_config import VerifierConfig
 from engine.errors import AIProviderError, WorkflowValidationError
 from engine.replay import ReplayPreview
 from engine.workflow import StepKind, Workflow, WorkflowRun, WorkflowStep
 from recorder.drafts import build_raw_draft
-from ui.review_view import ProposalReviewPanel, VerifierConfig
+from ui.review_view import ProposalReviewPanel
 from ui.workers import WorkflowWorker
 
 WINDOW_TITLE = "Once"
@@ -50,6 +51,7 @@ class MainWindow(QMainWindow):
         service: WorkflowService | None = None,
         recording_service: RecordingService | None = None,
         verifier_config: VerifierConfig | None = None,
+        verifier_note: str | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
@@ -189,7 +191,9 @@ class MainWindow(QMainWindow):
         layout.addWidget(self._result_list)
         central = QWidget(self)
         central.setLayout(layout)
-        self._review_panel = ProposalReviewPanel(self._service, verifier_config=verifier_config)
+        self._review_panel = ProposalReviewPanel(
+            self._service, verifier_config=verifier_config, verifier_note=verifier_note
+        )
         tabs = QTabWidget(self)
         tabs.addTab(central, "Workflows")
         tabs.addTab(self._review_panel, "Agent proposals")

@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QApplication
 
 from controller.recording import RecordingService
 from controller.service import WorkflowService
+from controller.verifier_config import VerifierConfig, load_verifier_config
 from ui.main_window import MainWindow
 
 SMOKE_TEST_FLAG = "--smoke-test"
@@ -37,7 +38,10 @@ def main(argv: list[str] | None = None) -> int:
     app_data_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Once"
     service = WorkflowService.for_app_data(app_data_dir)
     recording_service = RecordingService(app_data_dir / "recordings")
-    window = MainWindow(service, recording_service)
+    verifier_config, verifier_note = _load_verifier_setup(app_data_dir)
+    window = MainWindow(
+        service, recording_service, verifier_config=verifier_config, verifier_note=verifier_note
+    )
     window.show()
 
     if smoke_test:
@@ -50,7 +54,21 @@ def main(argv: list[str] | None = None) -> int:
         service.close()
         return 0
 
-    return app.exec()
+    exit_code = app.exec()
+    service.close()
+    return exit_code
+
+
+def _load_verifier_setup(app_data_dir: Path) -> tuple[VerifierConfig | None, str | None]:
+    """Load the configured checker; return a note for a visibly invalid setup."""
+    try:
+        return load_verifier_config(app_data_dir), None
+    except Exception as error:  # one untrusted config file: show the problem, never crash
+        return (
+            None,
+            f"The acceptance checker configuration could not be used: {error} "
+            "Fix the file and restart Once; no acceptance checks are configured this session.",
+        )
 
 
 if __name__ == "__main__":

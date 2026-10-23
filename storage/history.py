@@ -325,6 +325,22 @@ class ExecutionHistory:
                 "This proposal has already been approved or rejected."
             ) from error
 
+    def proposal_record(self, proposal_id: str) -> AgentProposalRecord | None:
+        """Return the exact recorded proposal and its decision, if any."""
+        with self._lock:
+            row = self._connection.execute(
+                """
+                    SELECT proposal_id, created_at, repo_path, base_branch, agent_branch,
+                           base_commit, agent_tip, diff, changed_files, untracked_files, truncated
+                    FROM agent_proposals
+                    WHERE proposal_id = ?
+                    """,
+                (proposal_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return self._proposal_record_from_row(row)
+
     def proposal_status(self, proposal_id: str) -> str | None:
         """Return PENDING, APPROVED, or REJECTED for one proposal."""
         with self._lock:
@@ -361,34 +377,39 @@ class ExecutionHistory:
             for row in rows:
                 decision_row = self._connection.execute(
                     """
-                    SELECT decision, decided_at FROM agent_decisions WHERE proposal_id = ?
-                    ORDER BY decided_at
-                    """,
+                        SELECT decision, decided_at FROM agent_decisions WHERE proposal_id = ?
+                        ORDER BY decided_at
+                        """,
                     (row["proposal_id"],),
                 ).fetchone()
-                if decision_row is None:
-                    status, decided_at = "PENDING", None
-                else:
-                    status, decided_at = decision_row["decision"], decision_row["decided_at"]
-                records.append(
-                    AgentProposalRecord(
-                        review=ChangeReview(
-                            proposal_id=row["proposal_id"],
-                            repo_path=row["repo_path"],
-                            base_branch=row["base_branch"],
-                            agent_branch=row["agent_branch"],
-                            base_commit=row["base_commit"],
-                            agent_tip=row["agent_tip"],
-                            diff=row["diff"],
-                            changed_files=tuple(json.loads(row["changed_files"])),
-                            untracked_files=tuple(json.loads(row["untracked_files"])),
-                            truncated=bool(row["truncated"]),
-                        ),
-                        status=status,
-                        decided_at=decided_at,
-                    )
-                )
+                records.append(self._proposal_record_from_row(row, decision_row))
         return tuple(records)
+
+    @staticmethod
+    def _proposal_record_from_row(
+        row: sqlite3.Row, decision_row: sqlite3.Row | None = None
+    ) -> AgentProposalRecord:
+        """Rebuild one immutable proposal record from its persisted rows."""
+        if decision_row is None:
+            status, decided_at = "PENDING", None
+        else:
+            status, decided_at = decision_row["decision"], decision_row["decided_at"]
+        return AgentProposalRecord(
+            review=ChangeReview(
+                proposal_id=row["proposal_id"],
+                repo_path=row["repo_path"],
+                base_branch=row["base_branch"],
+                agent_branch=row["agent_branch"],
+                base_commit=row["base_commit"],
+                agent_tip=row["agent_tip"],
+                diff=row["diff"],
+                changed_files=tuple(json.loads(row["changed_files"])),
+                untracked_files=tuple(json.loads(row["untracked_files"])),
+                truncated=bool(row["truncated"]),
+            ),
+            status=status,
+            decided_at=decided_at,
+        )
 
     def record_proposal_verification(self, record: ProposalVerificationRecord) -> None:
         """Persist one pre-merge or post-merge verification of a proposal."""
