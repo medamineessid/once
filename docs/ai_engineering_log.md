@@ -521,7 +521,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-10-23 — Coding-agent proposal integration   (commit: pending A5)
+## 2026-10-23 — Coding-agent proposal integration   (commit: effb71c)
 - Task: Implement branches + diff review + the approval gate per D14/O6: an
   allowlisted agent command runs on a separate branch, its diff becomes a
   bounded review, and only an explicitly approved change can be locally

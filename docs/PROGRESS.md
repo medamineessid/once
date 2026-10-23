@@ -2,7 +2,7 @@
 
 - Last completed step: Coding-agent proposal integration (branches, diff
   review, approval gate, local ff-only merge)
-- Last commit: pending A5
+- Last commit: effb71c
 - Next action: GUI surfacing of agent proposals (diff review screen) and
   pre-approval sandboxed reruns via git worktree are the known follow-ups
 - Currently failing tests or known breakage: none
