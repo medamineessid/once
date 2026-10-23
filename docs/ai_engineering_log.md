@@ -614,3 +614,42 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   (test_worktree_verification.py: 14 tests).
 - Outcome: PASSED
 - Human review:
+## 2026-10-24 — Loop hardening: recorded-proposal identity, user checker config, MainWindow journey   (commit: 13e327d)
+- Task: close the last Stage 11 reliability gaps: the presented review was
+  trusted without comparing it to the persisted proposal record, a real
+  session had no way to configure the acceptance checker (app.py passed no
+  VerifierConfig, so the "Agent proposals" tab could not run in real use),
+  and several lifecycle paths (partial cancellation, failed post-merge
+  persistence, restart survival, persisted-evidence redaction, missing
+  evidence display, MainWindow tab wiring) had no tests.
+- AI contribution: added `ExecutionHistory.proposal_record`, controller-side
+  `_identity_blocker` enforced in `approve_agent_change` (via
+  `approval_blockers`), `apply_agent_change`, and `verify_proposal_pre_merge`;
+  made `approval_blockers` fail as blockers instead of raising when a branch
+  no longer exists; new `controller/verifier_config.py`
+  (`verifier.json` loader validating cases_path/argv/timeout/worktree_root
+  through the same `AllowlistedCommand` allowlist; missing file = no config;
+  broken file = visible note in the review panel); MainWindow/panel
+  `verifier_note` plumbing; service.close() on normal app exit; six new
+  tests in test_worktree_verification.py, one in test_review_ui.py, plus a
+  new test_verifier_config.py with 11 tests; MainWindow-level end-to-end
+  journey test (real Qt window, real Git repos, fake agent).
+- Defect found: the first version of the partially-cancelled test used a
+  stdin-reading checker that would block, and a leftover bogus assertion
+  (`assert wrong_expectation is not None`) survived into the draft — both
+  rewritten before any suite run; the first MainWindow no-config test hung
+  because `_warn` opens a modal QMessageBox on the offscreen event loop —
+  fixed by stubbing `QMessageBox.warning` in the test (real app behaviour
+  unchanged).
+- Verification (real Windows Python 3.14.3 venv, real Git, real PySide6):
+  focused runs -> test_worktree_verification.py `20 passed`,
+  test_verifier_config.py + test_review_ui.py + test_coding_agent.py `32
+  passed`, test_review_ui.py `7 passed`; full suite -> `166 passed, 2
+  skipped in 88.84s`; `ruff check .` -> `All checks passed!`; `ruff format
+  --check .` -> `73 files already formatted`; `git diff --check` clean;
+  real entry-point runs (`app.py --smoke-test`): default app data exit 0,
+  overridden app data with a broken verifier.json exit 0 (visible note path,
+  verified the note logic separately in tests), valid verifier.json
+  confirmed to load via `load_verifier_config` under the real interpreter.
+- Outcome: PASSED
+- Human review:

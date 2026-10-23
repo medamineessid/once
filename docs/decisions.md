@@ -247,3 +247,28 @@ was added to the development requirements and installed successfully.
   GUI starts without a configured checker unless the session provides one
   (main window currently passes no verifier_config, so real first-run usage
   of the tab still needs an operator-provided checker configuration).
+## 2026-10-24 — Recorded-proposal identity and the session checker configuration (A7)
+- Question: how can approval/apply/verification be bound to the exact recorded
+  proposal, and how does a real session configure the required acceptance
+  checks without weakening the allowlist?
+- Choice: (a) Any review, approval, or apply use now compares the presented
+  ChangeReview with the persisted `agent_proposals` row of the same id;
+  any difference (diff, branch names, commits, changed-file lists, truncation)
+  blocks approval, refuses application, and refuses pre-merge verification
+  with plain-language recovery instructions. (b) A session configures the
+  checker through `%LOCALAPPDATA%/Once/verifier.json` (cases_path, argv,
+  timeout_seconds, worktree_root). The argv is validated by the same
+  `AllowlistedCommand` rules as every verifier command (exactly one {input},
+  at most one {checkout}, no shell, timeout bounded). A missing file simply
+  means no checks configured; an existing invalid file produces a visible
+  error note in the Agent proposals tab instead of silently running without
+  verification. (c) Branch ref checks inside `approval_blockers` no longer
+  raise on missing branches; they become explicit blockers.
+- Reason: proposals are untrusted data; the reviewed text, the approved
+  decision, and the applied commit must be the same content, and the
+  configuration file must never become a bypass of the verification allowlist.
+- Known gap: no GUI editor exists for verifier.json; a user edits the file as
+  plain JSON. No real interactive (non-automated) GUI session with the full
+  approve-apply cycle has been demonstrated; this was exercised through
+  pytest-qt (real Qt widgets, real Git repositories, deterministic fake
+  agent) plus real `app.py --smoke-test` runs.

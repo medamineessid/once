@@ -1,12 +1,14 @@
 # Once progress
 
-- Last completed step: Worktree-based pre-merge verification and GUI agent
-  proposal review (isolated `{checkout}` verification worktree, persisted
-  PRE_MERGE/POST_MERGE evidence blockers, approve/reject/apply lifecycle)
-- Last commit: beed7e3
-- Next action: let a real session supply an operator-configured acceptance
-  checker to the new "Agent proposals" tab (the window currently accepts a
-  VerifierConfig but app.py passes none), then remaining integrations list
+- Last completed step: Supervised loop hardening — recorded-proposal identity
+  enforcement (verify/approve/apply compare presented review against the
+  persisted record), session checker configuration via
+  `%LOCALAPPDATA%/Once/verifier.json`, resized failure paths (missing
+  branches become blockers instead of raised errors), and full MainWindow
+  journey + restart/redaction/partial-cancellation/failed-post-merge tests
+- Last commit: 13e327d (this work)
+- Next action: optional GUI editor for verifier.json; live coding-agent
+  integration and packaging remain future milestones
 - Currently failing tests or known breakage: none
 - Open items: live Gemini use is opt-in and unverified; screenshots are
   supported as references but are not automatically captured for every event;
@@ -16,7 +18,8 @@
   headless verifier is implemented and verification runs, loop decisions,
   agent proposals, approval decisions, proposal verifications, and worktree
   lifecycle records are persisted in the SQLite history; pre-approval
-  verification now runs in a disposable git worktree and gates approval; the
-  agent command is user-configured and allowlisted, and no live coding-agent
-  service has been exercised
+  verification runs in a disposable git worktree and gates approval; a
+  mismatched presented-vs-recorded review can no longer be approved/applied;
+  the checker is user-configured through allowlist-validated verifier.json;
+  no live coding-agent service has been exercised
 - Environment: Windows 11 x64; Python 3.14.3; virtual environment `.venv`
