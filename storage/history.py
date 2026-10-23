@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from threading import RLock
 
+from engine.loop import DecisionCode, LoopDecision, LoopRun, LoopStatus
 from engine.verifier import CaseResult, EvidenceBundle, FieldResult
 from engine.workflow import StepResult, StepStatus, WorkflowRun, WorkflowStatus
 
@@ -174,6 +175,76 @@ class ExecutionHistory:
                     )
                 )
         return tuple(bundles)
+
+    def record_loop(self, run: LoopRun) -> None:
+        """Atomically insert one loop run and its decisions."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO loop_runs (loop_id, status, started_at, finished_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (run.loop_id, run.status.value, run.started_at, run.finished_at),
+            )
+            self._connection.executemany(
+                """
+                INSERT INTO loop_decisions
+                    (loop_id, position, attempt, code, reason, evidence_run_id)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        run.loop_id,
+                        position,
+                        decision.attempt,
+                        decision.code.value,
+                        decision.reason,
+                        decision.evidence_run_id,
+                    )
+                    for position, decision in enumerate(run.decisions)
+                ],
+            )
+
+    def list_loops(self) -> tuple[LoopRun, ...]:
+        """Return persisted loop runs newest first."""
+        with self._lock:
+            rows = self._connection.execute(
+                """
+                SELECT loop_id, status, started_at, finished_at
+                FROM loop_runs
+                ORDER BY started_at DESC, loop_id DESC
+                """
+            ).fetchall()
+        runs: list[LoopRun] = []
+        with self._lock:
+            for row in rows:
+                decision_rows = self._connection.execute(
+                    """
+                    SELECT attempt, code, reason, evidence_run_id
+                    FROM loop_decisions
+                    WHERE loop_id = ?
+                    ORDER BY position
+                    """,
+                    (row["loop_id"],),
+                ).fetchall()
+                runs.append(
+                    LoopRun(
+                        loop_id=row["loop_id"],
+                        status=LoopStatus(row["status"]),
+                        started_at=row["started_at"],
+                        finished_at=row["finished_at"],
+                        decisions=tuple(
+                            LoopDecision(
+                                attempt=decision_row["attempt"],
+                                code=DecisionCode(decision_row["code"]),
+                                reason=decision_row["reason"],
+                                evidence_run_id=decision_row["evidence_run_id"],
+                            )
+                            for decision_row in decision_rows
+                        ),
+                    )
+                )
+        return tuple(runs)
 
     def list_runs(self) -> tuple[HistoryRecord, ...]:
         """Return persisted runs newest first with their step results."""

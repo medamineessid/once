@@ -8,6 +8,7 @@ from pathlib import Path
 from ai.approval import ApprovedProposal
 from engine.acceptance import load_acceptance_cases
 from engine.errors import WorkflowValidationError
+from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
 from engine.replay import ReplayExecutor, ReplayPreview
 from engine.verifier import AcceptanceVerifier, AllowlistedCommand, EvidenceBundle
 from engine.workflow import (
@@ -182,6 +183,35 @@ class WorkflowService:
         if self._history is None:
             return ()
         return self._history.list_verification_runs()
+
+    def run_supervised_loop(
+        self,
+        cases_path: Path,
+        argv: tuple[str, ...],
+        timeout_seconds: float,
+        policy: LoopPolicy,
+        proposer: FixProposer | None = None,
+    ) -> LoopRun:
+        """Run the bounded verify-fix-rerun loop with allowlisted verification."""
+        verifier = AcceptanceVerifier(AllowlistedCommand(argv, timeout_seconds))
+        cases = load_acceptance_cases(cases_path)
+
+        def verify_and_record() -> EvidenceBundle:
+            bundle = verifier.verify(cases)
+            if self._history is not None:
+                self._history.record_verification(bundle)
+            return bundle
+
+        run = LoopController(verify_and_record, proposer=proposer).run(policy)
+        if self._history is not None:
+            self._history.record_loop(run)
+        return run
+
+    def loop_history(self) -> tuple[LoopRun, ...]:
+        """Return persisted loop runs, newest first."""
+        if self._history is None:
+            return ()
+        return self._history.list_loops()
 
     def list_saved(self) -> tuple[Path, ...]:
         """Return saved workflow files in deterministic order."""

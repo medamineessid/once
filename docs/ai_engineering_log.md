@@ -501,3 +501,22 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `git diff --check` -> clean.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-23 — Bounded test-and-fix loop controller   (commit: pending A4)
+- Task: Implement the bounded diagnose-fix-test loop (O4): verification,
+  optional fix proposer, mandatory attempt/wall-time/no-progress stops, and
+  persisted loop decisions (O7), exposed through the controller service.
+- AI contribution: added engine/loop.py (LoopPolicy, LoopController, LoopRun,
+  LoopDecision, injectable FixProposer protocol), loop_runs/loop_decisions
+  tables, record_loop/list_loops on ExecutionHistory, and
+  run_supervised_loop/loop_history on WorkflowService; tests/test_loop.py.
+- Defect found: the loop's verify callable initially bypassed O7 verification
+  persistence (caught by test_loop.py, fixed by recording each bundle inside
+  the service-closure); an earlier edit also merged a docstring with the next
+  statement, producing a syntax error caught by ruff and pytest collection.
+- Verification: `.venv/Scripts/python.exe -m pytest -q tests/test_loop.py
+  tests/test_verifier_history.py` -> `13 passed`; full suite -> `112 passed,
+  2 skipped in 8.84s`; ruff format/check -> `All checks passed!`;
+  `python app.py --smoke-test` -> exit 0; `git diff --check` -> clean.
+- Outcome: PASSED
+- Human review:
