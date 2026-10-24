@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from controller.verifier_config import config_path, load_verifier_config
+from controller.verifier_config import config_path, load_verifier_config, save_verifier_config
 from engine.errors import WorkflowValidationError
 
 
@@ -115,3 +115,31 @@ def test_missing_cases_file_is_rejected_visibly(tmp_path: Path) -> None:
     write_config(tmp_path, setup)
     with pytest.raises(WorkflowValidationError, match="could not be found"):
         load_verifier_config(tmp_path)
+
+
+def test_save_writes_a_valid_configuration(tmp_path: Path) -> None:
+    (tmp_path / "cases.json").write_text("[]", encoding="utf-8")
+    config = save_verifier_config(
+        tmp_path,
+        str(tmp_path / "cases.json"),
+        ["python", "{checkout}/extractor.py", "{input}"],
+        45.0,
+        str(tmp_path / "worktrees"),
+    )
+    assert config.timeout_seconds == 45.0
+    reloaded = load_verifier_config(tmp_path)
+    assert reloaded == config  # restart reads exactly what the editor saved
+
+
+def test_failed_save_never_touches_the_existing_file(tmp_path: Path) -> None:
+    write_config(tmp_path, defaults(tmp_path))
+    original = (tmp_path / "verifier.json").read_text(encoding="utf-8")
+    with pytest.raises(WorkflowValidationError):
+        save_verifier_config(
+            tmp_path,
+            str(tmp_path / "cases.json"),
+            ["no-placeholder"],
+            30.0,
+            str(tmp_path / "worktrees"),
+        )
+    assert (tmp_path / "verifier.json").read_text(encoding="utf-8") == original

@@ -52,6 +52,7 @@ class MainWindow(QMainWindow):
         recording_service: RecordingService | None = None,
         verifier_config: VerifierConfig | None = None,
         verifier_note: str | None = None,
+        app_data_dir: Path | None = None,
     ) -> None:
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
@@ -192,7 +193,10 @@ class MainWindow(QMainWindow):
         central = QWidget(self)
         central.setLayout(layout)
         self._review_panel = ProposalReviewPanel(
-            self._service, verifier_config=verifier_config, verifier_note=verifier_note
+            self._service,
+            verifier_config=verifier_config,
+            verifier_note=verifier_note,
+            app_data_dir=app_data_dir,
         )
         tabs = QTabWidget(self)
         tabs.addTab(central, "Workflows")

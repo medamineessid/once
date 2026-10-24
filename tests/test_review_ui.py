@@ -13,7 +13,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from PySide6.QtWidgets import QMessageBox
+
 from controller.service import WorkflowService
+from controller.verifier_config import load_verifier_config, save_verifier_config
 from storage.database import connect
 from storage.history import ExecutionHistory
 from ui.main_window import MainWindow
@@ -320,4 +323,118 @@ def test_main_window_requires_configured_checker_for_verification(
     panel._verify_selected()
     assert any("No acceptance checker" in message for message in warnings)
     assert not panel._approve_button.isEnabled()
+    service.close()
+
+
+def test_panel_can_apply_a_recorded_approval_after_a_restart(qtbot: QtBot, tmp_path: Path) -> None:
+    """Approval persisted, the app died: the tab must offer applying it."""
+    repo = make_repo(tmp_path)
+    first = WorkflowService(history=ExecutionHistory(connect(tmp_path / "history.db")))
+    first.request_agent_fix(repo, agent_command(tmp_path), 10.0, evidence(tmp_path, "good"))
+    _cases_path, argv = acceptance_setup(tmp_path)
+    first.verify_proposal_pre_merge(
+        first.agent_proposals()[0].review,
+        _cases_path,
+        argv,
+        10.0,
+        tmp_path / "worktrees",
+    )
+    first.approve_agent_change(first.agent_proposals()[0].review)
+    first.close()
+
+    panel, service = make_panel(qtbot, tmp_path, repo)
+    panel._proposal_list.setCurrentRow(0)
+    qtbot.waitUntil(lambda: panel._diff_view.toPlainText() != "", timeout=10)
+    assert panel._apply_button.isEnabled()
+    assert "Approved; you can apply it now." in panel._blockers_label.text()
+
+    panel._apply_recorded_approval()
+    qtbot.waitSignal(panel._apply_worker_done, timeout=60_000)
+    qtbot.waitUntil(lambda: "105.0" in (repo / "extractor.py").read_text(encoding="utf-8"))
+    qtbot.waitUntil(lambda: not panel._apply_button.isEnabled(), timeout=60_000)
+    qtbot.waitUntil(
+        lambda: "already in the repository" in panel._blockers_label.text(), timeout=60_000
+    )
+    qtbot.waitUntil(
+        lambda: (
+            "POST_MERGE"
+            in " ".join(
+                panel._verification_list.item(index).text()
+                for index in range(panel._verification_list.count())
+            )
+        ),
+        timeout=60_000,
+    )
+    service.close()
+
+
+def test_verifier_dialog_saves_a_valid_configuration(qtbot: QtBot, tmp_path: Path) -> None:
+    """The editor writes a configuration a restart can load unchanged."""
+    from ui.verifier_dialog import VerifierConfigDialog
+
+    cases_path, argv = acceptance_setup(tmp_path)
+    dialog = VerifierConfigDialog(tmp_path / "appdata")
+    qtbot.addWidget(dialog)
+    dialog._cases_path.setText(str(cases_path))
+    dialog._arguments.setPlainText("\n".join(argv))
+    dialog._timeout.setValue(12.0)
+    dialog._worktree_root.setText(str(tmp_path / "worktrees"))
+
+    saved = dialog.apply_config()
+    assert saved is not None
+    assert saved.timeout_seconds == 12.0
+    assert saved.argv == argv
+    # round-trip through a fresh load like a restart would do
+    reloaded = load_verifier_config(tmp_path / "appdata")
+    assert reloaded == saved
+
+
+def test_verifier_dialog_refuses_invalid_configuration(qtbot: QtBot, tmp_path: Path) -> None:
+    from ui.verifier_dialog import VerifierConfigDialog
+
+    warnings: list[str] = []
+    monkeypatch_warn = QMessageBox.warning
+    QMessageBox.warning = lambda *args, **kwargs: (
+        warnings.append(str(args)) or QMessageBox.StandardButton.Ok
+    )
+    try:
+        dialog = VerifierConfigDialog(tmp_path / "appdata")
+        qtbot.addWidget(dialog)
+        dialog._cases_path.setText(str(tmp_path / "missing-cases.json"))
+        dialog._arguments.setPlainText("python {input}")
+        dialog._timeout.setValue(10.0)
+        dialog._worktree_root.setText(str(tmp_path / "worktrees"))
+        assert dialog.apply_config() is None
+    finally:
+        QMessageBox.warning = monkeypatch_warn
+    assert warnings, "the refusal must be explained to the user"
+    assert not (tmp_path / "appdata" / "verifier.json").exists()
+
+
+def test_panel_configures_and_reloads_the_verifier_config(qtbot: QtBot, tmp_path: Path) -> None:
+    service = WorkflowService(history=ExecutionHistory(connect(tmp_path / "history.db")))
+    cases_path, argv = acceptance_setup(tmp_path)
+    app_data = tmp_path / "appdata"
+    panel = ProposalReviewPanel(service, app_data_dir=app_data)
+    qtbot.addWidget(panel)
+
+    # freshly configured later: reload picks it up without a restart
+    save_verifier_config(
+        app_data,
+        str(cases_path),
+        list(argv),
+        10.0,
+        str(tmp_path / "worktrees"),
+    )
+    panel._reload_verifier_config()
+    assert panel._verifier_config is not None
+    assert panel._verifier_config.cases_path == cases_path.resolve()
+    assert "configuration loaded" in panel._message_label.text()
+
+    # an invalid configuration is a visible error, never a silent fallback
+    (app_data / "verifier.json").write_text('{"argv": 3}', encoding="utf-8")
+    panel._reload_verifier_config()
+    assert panel._verifier_config is None
+    # a specific plain-language reason, not a silent no-checks fallback
+    assert "must set cases_path" in panel._message_label.text()
     service.close()

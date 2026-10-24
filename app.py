@@ -40,7 +40,11 @@ def main(argv: list[str] | None = None) -> int:
     recording_service = RecordingService(app_data_dir / "recordings")
     verifier_config, verifier_note = _load_verifier_setup(app_data_dir)
     window = MainWindow(
-        service, recording_service, verifier_config=verifier_config, verifier_note=verifier_note
+        service,
+        recording_service,
+        verifier_config=verifier_config,
+        verifier_note=verifier_note,
+        app_data_dir=app_data_dir,
     )
     window.show()
 

@@ -128,6 +128,27 @@ class ApplyProposalWorker(QObject):
             self.ok.emit(head)
 
 
+class ApplyRecordedApprovalWorker(QObject):
+    """Apply a proposal whose approval was recorded earlier, off the GUI thread."""
+
+    ok = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, service: WorkflowService, review: ChangeReview) -> None:
+        super().__init__()
+        self._service = service
+        self._review = review
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            head = self._service.apply_recorded_approval(self._review)
+        except (OnceError, OSError, sqlite3.Error) as error:
+            self.failed.emit(str(error))
+        else:
+            self.ok.emit(head)
+
+
 class PostMergeVerifyWorker(QObject):
     """Rerun the required acceptance checks on the merged main checkout."""
 

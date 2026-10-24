@@ -537,6 +537,101 @@ class WorkflowService:
             )
         return repository.fast_forward(review.agent_branch)
 
+    def apply_recorded_approval(self, review: object) -> str:
+        """Apply a proposal whose recorded approval survived an interruption.
+
+        The human decision was already recorded; this rebuilds the gate object
+        and applies it under the same checks as a fresh apply. It refuses
+        pending, rejected, already-applied, stale, or mismatched proposals.
+        """
+        if not isinstance(review, ChangeReview):
+            raise WorkflowValidationError("Only a real review can be applied.")
+        status = self._proposal_status(review.proposal_id)
+        if status is None:
+            raise AgentIntegrationError("This proposal is not recorded in the history.")
+        if status == "PENDING":
+            raise AgentIntegrationError(
+                "This proposal has not been approved yet. Review the diff and "
+                "approve it explicitly first."
+            )
+        if status == "REJECTED":
+            raise AgentIntegrationError("This proposal was rejected. Nothing was merged.")
+        identity = self._identity_blocker(review)
+        if identity is not None:
+            raise AgentIntegrationError(identity)
+        repository = GitRepository(Path(review.repo_path))
+        if (
+            repository.current_branch() == review.base_branch
+            and repository.head() == review.agent_tip
+        ):
+            raise AgentIntegrationError(
+                "This proposal's change is already in the repository, so there "
+                "is nothing left to apply."
+            )
+        return self.apply_agent_change(approve_change(review))
+
+    def apply_blockers(self, review: object) -> tuple[str, ...]:
+        """Return plain-language reasons why applying must wait or be refused."""
+        if not isinstance(review, ChangeReview):
+            raise WorkflowValidationError("Only a real review can be applied.")
+        blockers: list[str] = []
+        status = self._proposal_status(review.proposal_id)
+        if status == "REJECTED":
+            blockers.append("This proposal was rejected. Nothing was or will be merged.")
+            return tuple(blockers)
+        if status == "PENDING":
+            blockers.append(
+                "This proposal has not been approved yet. Review the diff and "
+                "approve it explicitly first."
+            )
+        elif status is None:
+            blockers.append("This proposal is not recorded in the history database.")
+        else:
+            identity = self._identity_blocker(review)
+            if identity is not None:
+                blockers.append(identity)
+            repository = GitRepository(Path(review.repo_path))
+            try:
+                on_base = repository.current_branch() == review.base_branch
+                head = repository.head()
+                dirty = bool(repository.run_git("status", "--porcelain"))
+                tip = repository.run_git("rev-parse", review.agent_branch)
+            except AgentIntegrationError:
+                blockers.append(
+                    "The target repository could not be inspected, so nothing "
+                    "was applied. Check the repository state in Git first."
+                )
+            else:
+                if on_base and head == review.agent_tip:
+                    blockers.append(
+                        "This proposal's change is already in the repository, so "
+                        "there is nothing left to apply."
+                    )
+                else:
+                    if dirty:
+                        blockers.append(
+                            "The repository has uncommitted changes. Commit or "
+                            "stash them before applying."
+                        )
+                    if not on_base:
+                        blockers.append(
+                            "The repository is not on the proposal's original "
+                            "branch, so the change cannot be applied right now."
+                        )
+                    if head != review.base_commit:
+                        blockers.append(
+                            "The repository has moved since the proposal was "
+                            "reviewed, so this proposal must be reviewed again "
+                            "before it can be applied."
+                        )
+                    elif tip != review.agent_tip:
+                        blockers.append(
+                            "The agent branch changed after the review, so this "
+                            "proposal must be reviewed again before it can be "
+                            "applied."
+                        )
+        return tuple(blockers)
+
     def list_saved(self) -> tuple[Path, ...]:
         """Return saved workflow files in deterministic order."""
         if self._workflow_directory is None:

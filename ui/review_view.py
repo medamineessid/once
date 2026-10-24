@@ -11,6 +11,7 @@ thread and is persisted as a POST_MERGE record.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QThread, Signal
@@ -26,12 +27,15 @@ from PySide6.QtWidgets import (
 )
 
 from controller.service import WorkflowService
-from controller.verifier_config import VerifierConfig
+from controller.verifier_config import VerifierConfig, load_verifier_config
 from engine.agent_change import ChangeReview
+from engine.errors import WorkflowValidationError
 from engine.verifier import EvidenceBundle
 from storage.history import AgentProposalRecord
+from ui.verifier_dialog import VerifierConfigDialog
 from ui.workers import (
     ApplyProposalWorker,
+    ApplyRecordedApprovalWorker,
     PostMergeVerifyWorker,
     VerifyProposalWorker,
 )
@@ -51,17 +55,23 @@ class ProposalReviewPanel(QWidget):
         service: WorkflowService,
         verifier_config: VerifierConfig | None = None,
         verifier_note: str | None = None,
+        app_data_dir: Path | None = None,
     ) -> None:
         super().__init__()
         self._service = service
         self._verifier_config = verifier_config
         self._verifier_note = verifier_note
+        self._app_data_dir = app_data_dir
         self._records: tuple[AgentProposalRecord, ...] = ()
         self._thread: QThread | None = None
         self._pending_action: Callable[[], None] | None = None
-        self._worker: VerifyProposalWorker | ApplyProposalWorker | PostMergeVerifyWorker | None = (
-            None
-        )
+        self._worker: (
+            VerifyProposalWorker
+            | ApplyProposalWorker
+            | ApplyRecordedApprovalWorker
+            | PostMergeVerifyWorker
+            | None
+        ) = None
 
         self._proposal_list = QListWidget(self)
         self._status_label = QLabel("No proposal selected.", self)
@@ -86,13 +96,22 @@ class ProposalReviewPanel(QWidget):
         self._verify_button.setObjectName("verifyProposalButton")
         self._approve_button = QPushButton("Approve and apply proposal", self)
         self._approve_button.setObjectName("approveProposalButton")
+        self._apply_button = QPushButton("Apply previously approved proposal", self)
+        self._apply_button.setObjectName("applyApprovedProposalButton")
         self._reject_button = QPushButton("Reject proposal", self)
         self._reject_button.setObjectName("rejectProposalButton")
+        self._configure_button = QPushButton("Configure acceptance checks…", self)
+        self._configure_button.setObjectName("configureVerifierButton")
+        self._configure_button.setToolTip(
+            "Save the checker configuration used for pre-merge verification."
+        )
 
         self._proposal_list.currentRowChanged.connect(self._select_proposal)
         self._verify_button.clicked.connect(self._verify_selected)
         self._approve_button.clicked.connect(self._approve_and_apply)
+        self._apply_button.clicked.connect(self._apply_recorded_approval)
         self._reject_button.clicked.connect(self._reject_selected)
+        self._configure_button.clicked.connect(self._configure_checks)
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Agent proposals (review the diff before any approval)", self))
@@ -112,8 +131,10 @@ class ProposalReviewPanel(QWidget):
         actions = QHBoxLayout()
         actions.addWidget(self._verify_button)
         actions.addWidget(self._approve_button)
+        actions.addWidget(self._apply_button)
         actions.addWidget(self._reject_button)
         layout.addLayout(actions)
+        layout.addWidget(self._configure_button)
         self.setLayout(layout)
         if verifier_note:
             self._message_label.setText(verifier_note)
@@ -260,12 +281,26 @@ class ProposalReviewPanel(QWidget):
         self._verify_button.setEnabled(record is not None and not decided)
         self._reject_button.setEnabled(record is not None and not decided)
         self._approve_button.setEnabled(False)
+        self._apply_button.setEnabled(False)
         if record is None:
             self._blockers_label.setText("")
             return
         if decided:
+            if record.status == "REJECTED":
+                self._blockers_label.setText(
+                    "This proposal was rejected, so no further action is possible."
+                )
+                return
+            # The approval is recorded; applying may still be possible after a
+            # restart, under the same controller checks as a fresh apply.
+            try:
+                apply_blockers = self._service.apply_blockers(record.review)
+            except WorkflowValidationError as error:
+                self._blockers_label.setText(f"Apply check failed: {error}")
+                return
+            self._apply_button.setEnabled(not apply_blockers)
             self._blockers_label.setText(
-                "This proposal was already decided, so no further action is possible."
+                " ".join(apply_blockers) if apply_blockers else "Approved; you can apply it now."
             )
             return
         try:
@@ -278,6 +313,39 @@ class ProposalReviewPanel(QWidget):
         self._blockers_label.setText(" ".join(blockers))
 
     # ------------------------------------------------------------- actions
+
+    def _configure_checks(self) -> None:
+        """Open the checker editor and reload the configuration afterwards."""
+        if self._app_data_dir is None:
+            self._warn(
+                "This session has no application data directory, so the "
+                "checker configuration cannot be edited here."
+            )
+            return
+        dialog = VerifierConfigDialog(self._app_data_dir, self._verifier_config, self)
+        dialog.exec()
+        self._reload_verifier_config()
+
+    def _reload_verifier_config(self) -> None:
+        """Re-read the checker configuration and refresh the tab's state."""
+        try:
+            self._verifier_config = load_verifier_config(self._app_data_dir)
+        except WorkflowValidationError as error:
+            self._verifier_note = str(error)
+            self._message_label.setText(str(error))
+            self._verifier_config = None
+            return
+        self._verifier_note = None
+        if self._verifier_config is None:
+            self._message_label.setText(
+                "No acceptance checks are configured; pre-merge verification "
+                "cannot run. Configure the checks to enable approval."
+            )
+        else:
+            self._message_label.setText(
+                "Acceptance checker configuration loaded. Select a proposal and "
+                "run pre-merge verification."
+            )
 
     def _verify_selected(self) -> None:
         review = self._selected_review()
@@ -324,6 +392,25 @@ class ProposalReviewPanel(QWidget):
             ApplyProposalWorker(self._service, approved),
             on_ok=self._apply_finished,
             running="Applying the approved change with a local fast-forward merge…",
+        )
+
+    def _apply_recorded_approval(self) -> None:
+        review = self._selected_review()
+        if review is None:
+            self._warn("Select a proposal before applying its approval.")
+            return
+        try:
+            blockers = self._service.apply_blockers(review)
+        except Exception as error:  # show the real failure, keep the repo state
+            self._warn(str(error))
+            return
+        if blockers:
+            self._warn(" ".join(blockers))
+            return
+        self._start_worker(
+            ApplyRecordedApprovalWorker(self._service, review),
+            on_ok=self._apply_finished,
+            running="Applying the previously approved change with a local fast-forward merge…",
         )
 
     def _apply_finished(self, commit: str) -> None:
@@ -377,7 +464,12 @@ class ProposalReviewPanel(QWidget):
 
     def _start_worker(
         self,
-        worker: VerifyProposalWorker | ApplyProposalWorker | PostMergeVerifyWorker,
+        worker: (
+            VerifyProposalWorker
+            | ApplyProposalWorker
+            | ApplyRecordedApprovalWorker
+            | PostMergeVerifyWorker
+        ),
         *,
         on_ok: Callable[[object], None],
         running: str,
@@ -420,6 +512,7 @@ class ProposalReviewPanel(QWidget):
         if busy:
             self._verify_button.setEnabled(False)
             self._approve_button.setEnabled(False)
+            self._apply_button.setEnabled(False)
             self._reject_button.setEnabled(False)
         else:
             self._update_action_buttons(self._selected_record())

@@ -244,6 +244,24 @@ class WorktreeCheckout:
         return completed.returncode == 0
 
 
+def _restore_after_failed_run(repository: GitRepository, original: str) -> None:
+    """Return the repository to its original branch after a failed agent run.
+
+    A crashed or timed-out agent may have left half-written changes. Those are
+    never deleted: while still on the disposable agent branch they are parked
+    in one clearly labelled commit, and the original checkout is restored
+    clean and inspectable.
+    """
+    if repository.run_git("status", "--porcelain"):
+        repository.run_git("add", "-A")
+        repository.run_git(
+            "commit",
+            "-m",
+            "Once agent failure output - kept for inspection, not a proposal",
+        )
+    repository.restore(original)
+
+
 def _tail(value: str | None) -> str:
     if not value:
         return ""
@@ -287,12 +305,12 @@ def run_agent_for_proposal(
             shell=False,
         )
     except subprocess.TimeoutExpired as error:
-        repository.restore(original)
+        _restore_after_failed_run(repository, original)
         raise AgentIntegrationError(
             "The coding agent did not finish in time, so no proposal was recorded."
         ) from error
     if completed.returncode != 0:
-        repository.restore(original)
+        _restore_after_failed_run(repository, original)
         raise AgentIntegrationError(
             "The coding agent exited with an error, so no proposal was recorded."
         )
@@ -301,6 +319,14 @@ def run_agent_for_proposal(
         repository.restore(original)
         raise AgentIntegrationError(
             "The coding agent did not propose any changes, so no proposal was recorded."
+        )
+    if repository.current_branch() != branch:
+        _restore_after_failed_run(repository, original)
+        raise AgentIntegrationError(
+            "The coding agent switched Git branches during its run, so its output could "
+            "not be captured as a proposal. Nothing was recorded; the repository was "
+            "restored to the original branch and the agent's own branch still holds "
+            "whatever it wrote."
         )
     # The reviewed diff and the approved branch tip must be the same content:
     # snapshot the agent's result once on its own branch, then capture.

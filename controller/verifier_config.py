@@ -50,6 +50,11 @@ def load_verifier_config(app_data_dir: Path) -> VerifierConfig | None:
             "The acceptance checker configuration is not valid JSON. Fix the "
             "file shown in the log, then restart Once."
         ) from error
+    return document_to_config(document)
+
+
+def document_to_config(document: object) -> VerifierConfig:
+    """Validate one checker configuration document and return its typed form."""
     if not isinstance(document, dict):
         raise WorkflowValidationError(
             "The acceptance checker configuration must be an object with "
@@ -104,3 +109,31 @@ def load_verifier_config(app_data_dir: Path) -> VerifierConfig | None:
         )
     worktree_root = Path(worktree_value).expanduser().resolve()
     return VerifierConfig(cases_path, tuple(argv_value), float(timeout_value), worktree_root)
+
+
+def save_verifier_config(
+    app_data_dir: Path,
+    cases_path: str,
+    argv: list[str],
+    timeout_seconds: float,
+    worktree_root: str,
+) -> VerifierConfig:
+    """Validate and write the checker configuration atomically.
+
+    The file is written only when the document passes exactly the same
+    validation a restart would apply; a failed save never touches the
+    existing file.
+    """
+    document = {
+        "cases_path": cases_path,
+        "argv": list(argv),
+        "timeout_seconds": timeout_seconds,
+        "worktree_root": worktree_root,
+    }
+    validated = document_to_config(document)
+    path = config_path(app_data_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+    return validated

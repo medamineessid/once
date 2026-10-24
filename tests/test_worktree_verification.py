@@ -618,3 +618,173 @@ def test_persisted_evidence_is_redacted(tmp_path) -> None:
     assert "[REDACTED_SECRET]" in everything
     assert "[REDACTED_EMAIL]" in everything
     service.close()
+
+
+def system_interpreter() -> list[str]:
+    """Return a real, non-venv Windows interpreter when it is installed."""
+    for candidate in (Path(sys.base_prefix) / "python.exe", Path(sys.base_prefix) / "python"):
+        if candidate.is_file():
+            return [str(candidate)]
+    return []
+
+
+def test_real_checkout_verification_runs_on_a_system_interpreter(tmp_path) -> None:
+    """The {checkout} binding must work with a plain installed interpreter."""
+    base_python = system_interpreter()
+    if not base_python:
+        pytest.skip("no system interpreter outside the venv on this machine")
+    repo, cases_path = make_repo(tmp_path)
+    worktree_root = tmp_path / "system run"
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    bundle = service.verify_proposal_pre_merge(
+        review,
+        cases_path,
+        (*base_python, "{checkout}/extractor.py", "{input}"),
+        10.0,
+        worktree_root,
+    )
+    assert bundle.passed is True
+    assert all(not case.timed_out for case in bundle.cases)
+    # the main checkout must be untouched by the whole run
+    assert "totals.get" not in (repo / "extractor.py").read_text(encoding="utf-8")
+    service.close()
+
+
+def test_checkout_command_tolerates_paths_with_spaces(tmp_path) -> None:
+    """Arguments stay separated: a checkout path with spaces must not break."""
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    spaced_root = tmp_path / "work trees with spaces"
+    bundle = service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, spaced_root
+    )
+    assert bundle.passed is True
+    assert not (spaced_root / f"proposal-{review.proposal_id[:8]}").exists()  # cleaned up
+    service.close()
+
+
+def test_checkout_referencing_a_missing_file_fails_the_case(tmp_path) -> None:
+    """A {checkout} file that the proposal never committed must fail, not pass."""
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    missing_argv = (sys.executable, "{checkout}/should_not_exist.py", "{input}")
+    bundle = service.verify_proposal_pre_merge(
+        review, cases_path, missing_argv, 10.0, tmp_path / "wt"
+    )
+    assert bundle.passed is False
+    assert all(case.exit_code != 0 for case in bundle.cases)
+    persisted = service.verification_run(bundle.run_id)
+    assert persisted is not None and persisted.passed is False
+    service.close()
+
+
+def test_interruption_during_verification_leaves_a_recoverable_state(tmp_path, monkeypatch) -> None:
+    """A hard interruption mid-verification must not fake a verification record."""
+    from engine import verifier as verifier_module
+
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    original_run = verifier_module.subprocess.run
+
+    def interrupted_run(argv, **kwargs):
+        if "extract" in argv[1] or "extractor.py" in str(argv[1]):
+            # the checker subprocess itself was about to start when the user
+            # killed the application
+            raise KeyboardInterrupt
+        return original_run(argv, **kwargs)
+
+    monkeypatch.setattr(verifier_module.subprocess, "run", interrupted_run)
+    with pytest.raises(KeyboardInterrupt):
+        service.verify_proposal_pre_merge(
+            review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "wt"
+        )
+    monkeypatch.setattr(verifier_module.subprocess, "run", original_run)
+
+    # predictable state: worktree is gone, no verification record claims success
+    assert not (tmp_path / "wt" / f"proposal-{review.proposal_id[:8]}").exists()
+    assert service.proposal_verifications(review.proposal_id) == ()
+    assert service.approval_blockers(review)[0:1] != ()
+    assert any(
+        "no passed pre-merge verification" in blocker
+        for blocker in service.approval_blockers(review)
+    )
+    assert "totals.get" not in (repo / "extractor.py").read_text(encoding="utf-8")
+
+    # recovery: a fresh verification of the same proposal works
+    bundle = service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "wt"
+    )
+    assert bundle.passed is True
+    service.approve_agent_change(review)
+    service.close()
+
+
+def test_recorded_approval_survives_a_restart_and_can_be_applied(tmp_path) -> None:
+    """Approval persisted, then the app died: the decision must still work."""
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "wt"
+    )
+    service.approve_agent_change(review)  # approved, but the app exits before apply
+    service.close()
+
+    restarted = WorkflowService(history=ExecutionHistory(connect(tmp_path / "history.db")))
+    blockers = restarted.apply_blockers(review)
+    assert blockers == ()
+    head = restarted.apply_recorded_approval(review)
+    assert head
+    assert "totals.get" in (repo / "extractor.py").read_text(encoding="utf-8")
+
+    # a second apply attempt explains itself instead of merging again
+    applied_blockers = restarted.apply_blockers(review)
+    assert any("already in the repository" in blocker for blocker in applied_blockers)
+    with pytest.raises(AgentIntegrationError, match="already in the repository"):
+        restarted.apply_recorded_approval(review)
+    restarted.close()
+
+
+def test_apply_recorded_approval_refuses_wait_and_moved_states(tmp_path) -> None:
+    from dataclasses import replace
+
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    with pytest.raises(AgentIntegrationError, match="not been approved yet"):
+        service.apply_recorded_approval(review)
+    assert any("not been approved yet" in blocker for blocker in service.apply_blockers(review))
+
+    service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "wt"
+    )
+    approved = service.approve_agent_change(review)
+    service.apply_agent_change(approved)
+    service.verify_post_merge(repo, cases_path, PASSING_VERIFY_ARGV, 10.0, review)
+    service.close()
+
+    reopened = WorkflowService(history=ExecutionHistory(connect(tmp_path / "history.db")))
+    with pytest.raises(AgentIntegrationError, match="already in the repository"):
+        reopened.apply_recorded_approval(review)
+
+    # a moved repository after the merge still refuses a stale replay attempt
+    moved = replace(review, agent_branch="once/agent/never-existed")
+    with pytest.raises(AgentIntegrationError, match="does not match the recorded"):
+        reopened.apply_recorded_approval(moved)
+    reopened.close()
