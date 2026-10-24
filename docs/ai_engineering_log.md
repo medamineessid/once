@@ -739,3 +739,33 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   current source -> `Build complete!` (build.log line 197854).
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Acceptance journey test and packaged-exe validation (Priorities B/F)
+- Task: one end-to-end acceptance test of the real user journey; validate the
+  rebuilt packaged exe outside the development environment.
+- AI contribution: tests/test_acceptance_journey.py (configure checker via
+  save/load_verifier_config through the real app-data path, save+reopen a
+  workflow, run it and check history, fail verification against the buggy
+  extractor, capture an agent proposal and inspect the exact diff, pre-merge
+  worktree verification, approve/apply, post-merge rerun, service restart with
+  full persisted recovery; plus failed-agent-run, parked-output, and
+  amended-tip identity tests and an allowlist-shape test).
+- Defect found: my first allowlist test asserted imaginary rules (metacharacter
+  bans); the real guarantee is structural argv + no shell, so the test was
+  rewritten to prove empty-argument/missing-duplicate-placeholder/timeout-bound
+  rejections AND that metacharacters stay inert. Also fixed two draft leftovers
+  (unused import, wrong history() shape: it returns WorkflowRun, not a record
+  wrapper) before the first green run.
+- Verification: `pytest tests/test_acceptance_journey.py -q` -> 5 passed;
+  `ruff check --fix` -> 0 remaining; packaged exe runs: clean isolated
+  LOCALAPPDATA exit 0 with once.db/logs/recordings/workflows created; corrupt
+  verifier.json exit 0 (startable, once.log written); corrupt once.db showed
+  the REAL modal read via Windows UI Automation: title 'Once cannot start' and
+  the exact intended message text, once.db md5 unchanged, process terminated
+  only via test cleanup; exe launched from a foreign CWD (C:\Windows\temp)
+  exit 0 and all data confined to the isolated folder. NOT VERIFIED: clicking
+  the dialog's OK button in the packaged exe (SendKeys-driven dismissal hung
+  and was abandoned; exit-code-1-on-confirmation is covered by the
+  stubbed-message-box unit test over the same code path).
+- Outcome: PASSED
+- Human review:
