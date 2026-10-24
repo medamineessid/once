@@ -11,10 +11,17 @@
   roadmap integrations 6–9 are reconciled in `docs/decisions.md`
   (file-management rewrite deliberately deferred; coding-agent + recorder +
   workflow/history UI marked as implemented with automated tests).
-- Last commit: 024b17b plus this session's storage/app/docs hardening
-- Next action: packaged-exe isolated startup runs (clean, first-run, corrupt
-  verifier.json, corrupt once.db) after the rebuilt exe finishes; real modal
-  interaction of the startup-failure dialog remains manual-only.
+- Last commit: 6f75772 — end-to-end acceptance journey test
+- Verified this session: full suite `199 passed, 2 skipped` offscreen;
+  `ruff format .` no changes; `ruff check .` all passed; rebuilt packaged exe
+  (clean start exit 0, corrupt verifier.json exit 0, corrupt once.db showed
+  the real startup-failure modal read via Windows UI Automation with the data
+  file untouched, foreign-CWD run exit 0 with data confined to
+  %LOCALAPPDATA%\Once); roadmap integrations 6-9 reconciled in
+  docs/decisions.md; README install/first-run/upgrade/uninstall docs.
+- Next action: human click-through of the packaged startup-failure dialog and
+  one supervised interactive GUI session of the approve-apply cycle remain
+  manual; live paid coding-agent and live Gemini runs stay unauthorized.
 - Currently failing tests or known breakage: none
 - Open items: live Gemini analysis is opt-in and unverified against a real
   provider; live paid coding-agent runs are unauthorized in this environment;
