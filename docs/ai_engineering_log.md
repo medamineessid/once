@@ -819,3 +819,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `ruff check scripts/run_demo.py` -> All checks passed!
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Manual acceptance checklist (Priority 4)
+- Task: prepare a short manual checklist for a first-time user covering
+  startup, capability boundaries, verifier configuration, workflow runs,
+  proposal review/approval, failed-run recovery, and restart history.
+- AI contribution: docs/acceptance_checklist.md (8 numbered sections with
+  expected results and an explicit manual-only/limitations block). No UI
+  changes: the existing panel messages already surface plain-language
+  approval/verification blockers from the controller, and the pytest-qt
+  suites cover the same flows offscreen.
+- Verification: checklist written against the actual UI strings
+  (ui/review_view.py, ui/main_window.py) and controller messages; no
+  interactive click-through has been performed by this session (that is the
+  checklist's own purpose).
+- Outcome: PASSED
+- Human review:
