@@ -135,6 +135,25 @@ pytest-qt 4.5.0, Ruff 0.17.1, PyInstaller 6.22.3.
 
 Version and compatibility evidence is recorded in `docs/decisions.md`.
 
+## Reproducible demonstration
+
+`scripts/run_demo.py` walks the complete supervised journey end to end inside
+one throwaway directory: a miniature invoice-extractor repo with a seeded
+defect, synthetic inputs with recorded ground truth (INV-1 total 105.0), an
+allowlisted verifier that proves the defect, a deterministic rule-based fix
+generator standing in for a coding agent, the exact proposed diff, isolated
+worktree verification, an explicit type-to-approve gate, the apply, a passing
+post-merge rerun, and a restart that shows the persisted APPROVED decision,
+both verification phases, and every recorded verification run.
+
+```powershell
+echo approve | .\.venv\Scripts\python.exe scripts\run_demo.py   # approve path
+echo no      | .\.venv\Scripts\python.exe scripts\run_demo.py   # cancel path
+```
+
+No network, no cloud providers, no real invoices; the printed fix is applied
+only after you type `approve`.
+
 ## Further documentation
 
 - `AGENTS.md` — authoritative specification, safety invariants and decisions.

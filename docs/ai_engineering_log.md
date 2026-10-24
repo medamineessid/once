@@ -798,3 +798,24 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `ruff check --fix .` -> 0 remaining; `ruff format` no effective change.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Reproducible demonstration of the supervised journey (Priority 2)
+- Task: smallest realistic, repeatable demonstration using existing
+  capabilities only: seeded defect -> failing verifier -> deterministic fix
+  generator proposal -> exact diff -> isolated worktree verification ->
+  explicit approval -> apply -> passing rerun -> restart-persisted history.
+- AI contribution: scripts/run_demo.py (self-contained temporary workspace;
+  deterministic rule-based fix generator reads human-recorded ground truth;
+  the approval prompt is a real pause; nothing bypasses the controller or
+  safety gates); README "Reproducible demonstration" section.
+- Defect found: the fix generator initially used an f-string with unescaped
+  braces (SyntaxError) and nested \n literals were mangled once by shell
+  heredoc rewriting; both found by running the demo, fixed by restructuring
+  the generator to an escape-free lines-list with chr(10) joins.
+- Verification: approve path -> all 8 steps complete (diff shown, isolated
+  verification True, applied, post-merge True, restart shows APPROVED +
+  PRE_MERGE/POST_MERGE + one failed and two passed verification runs);
+  cancel path -> "CANCELLED: nothing was applied" with the proposal recorded;
+  `ruff check scripts/run_demo.py` -> All checks passed!
+- Outcome: PASSED
+- Human review:
