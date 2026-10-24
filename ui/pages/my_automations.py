@@ -95,7 +95,7 @@ class MyAutomationsPage(QWidget):
         item = self._workflow_list.currentItem()
         if item is None or self._service is None:
             return
-        workflow = self._service.load(item.data(Qt.UserRole))
+        self._service.load(item.data(Qt.UserRole))
         self.opened_workflow.emit(Path(item.text()))
 
     def _preview_selected(self) -> None:

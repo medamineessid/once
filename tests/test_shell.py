@@ -39,7 +39,6 @@ def test_home_page_shows_welcome_and_empty_activity(qtbot, window):
     subtitle = home._subtitle_label.text()
     assert "Once" in title
     assert "personal assistant" in subtitle
-    empty = home._activity_empty
     assert home._activity_empty.isVisible() is True
 
 

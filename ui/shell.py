@@ -67,10 +67,10 @@ class SidebarButton(QToolButton):
 
 
 class Sidebar(QToolBar):
-    homeClicked = Signal()
-    automationsClicked = Signal()
-    activityClicked = Signal()
-    settingsClicked = Signal()
+    homeClicked = Signal()  # noqa: N815
+    automationsClicked = Signal()  # noqa: N815
+    activityClicked = Signal()  # noqa: N815
+    settingsClicked = Signal()  # noqa: N815
 
     def __init__(self, parent=None):
         super().__init__(parent)
