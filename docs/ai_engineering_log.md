@@ -835,3 +835,11 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   checklist's own purpose).
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Release-candidate final audit (P3 packaged exe + P5 full suite)
+- Task: validate packaged build behavior (fresh/repeat data dir, corrupt verifier.json, foreign CWD) and close out release checks.
+- AI contribution: no new implementation; verification runs only.
+- Defect found: none new. Corrupt verifier.json correctly produces a visible review-tab note (validated raise path via controller.verifier_config.load_verifier_config and existing unit test tests/test_verifier_config.py:56); smoke exit 0 is the designed non-fatal path.
+- Verification: dist/Once/Once.exe --smoke-test fresh LOCALAPPDATA exit 0; repeat run exit 0 with 2x "Once started" in once.log; corrupt verifier.json exit 0 with note path exercised; foreign-CWD run exit 0 writing only %LOCALAPPDATA%/Once (log entry 11:22:45), no writes under dev checkout or dist; pytest -q 203 passed, 2 skipped (symlinks unavailable); ruff format 78 files unchanged; ruff check all passed; git tree clean at 161f670.
+- Outcome: PASSED
+- Human review:
