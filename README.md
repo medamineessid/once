@@ -50,6 +50,23 @@ $env:QT_QPA_PLATFORM = "offscreen"
 $LASTEXITCODE   # expect 0
 ```
 
+## Package a Windows build
+
+`once.spec` bundles the application into `dist\Once\Once.exe` (a one-folder
+build; user data stays in `%LOCALAPPDATA%\Once` and is never written next to
+the exe):
+
+```powershell
+.\.venv\Scripts\python.exe -m PyInstaller once.spec --noconfirm --clean
+.\dist\Once\Once.exe --smoke-test   # expect exit code 0
+```
+
+The spec lists `pynput`, `mss`, `pywinauto`, `win32api`, and `win32cred` as
+hidden imports because those modules are imported lazily. A packaged app logs
+to `%LOCALAPPDATA%\Once\logs\once.log`; a corrupted `verifier.json` keeps the
+app startable (the reviewer tab explains the problem), and an unusable data
+folder is reported with a plain-language dialog.
+
 ## Tests and linting
 
 ```powershell

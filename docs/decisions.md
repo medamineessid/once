@@ -272,3 +272,35 @@ was added to the development requirements and installed successfully.
   approve-apply cycle has been demonstrated; this was exercised through
   pytest-qt (real Qt widgets, real Git repositories, deterministic fake
   agent) plus real `app.py --smoke-test` runs.
+
+## 2026-10-24 — Restart-safe apply, config editor, packaging (A8/B/C/D/E)
+- Question: (a) what happens when the app dies after the approval is recorded
+  but before the change is applied? (b) how does a user edit verifier.json
+  without bypassing validation? (c) how is the Windows release built and
+  proven?
+- Choice: (a) approval is already durable; apply is offered again after a
+  restart through `apply_recorded_approval`, which re-checks identity, branch,
+  head cleanliness, and agent-tip match under the same gate as a fresh apply
+  (already-applied/pending/rejected/mismatched proposals are refused with
+  plain-language `apply_blockers`). (b) `ui/verifier_dialog.py` writes only
+  through `save_verifier_config`, which validates with exactly the restart
+  rules (`document_to_config`) and saves atomically (temp file + replace); a
+  failed save never touches the existing file. (c) `once.spec` (one-folder,
+  non-console exe, lazy-import hidden includes: pynput, mss, pywinauto,
+  win32api, win32cred; dev-only pytest excluded). app.py additionally installs
+  a rotating UTF-8 log at `%LOCALAPPDATA%/Once/logs/once.log` (1 MB x 3 files)
+  plus a plain-language OSError startup-failure dialog, exit code 1.
+- Reason: the human decision must survive process death but never bypass the
+  gate; configuration editing must not duplicate the allowlist rules in the
+  UI; the release artifact must be rebuildable from the repo and its
+  configured smoke test must actually launch the exe.
+- Evidence: `python -m PyInstaller once.spec --noconfirm --clean` ->
+  `Build complete!`; packaged smoke runs exit 0 from an isolated
+  LOCALAPPDATA, with once.db + logs present in the isolated folder; corrupt
+  verifier.json keeps the app startable (exit 0). NOT VERIFIED: clicking the
+  real startup-failure dialog in the packaged exe (automation blocked by the
+  modal; handler verified by unit test with a stubbed message box).
+- Known gap: a real Claude Code run is not authorized in this environment
+  (paid cloud access), so adapter verification remains deterministic-only;
+  the exact command surface was confirmed from `claude --help` (`-p/--print`,
+  `--allowedTools`).

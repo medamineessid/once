@@ -653,3 +653,43 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   confirmed to load via `load_verifier_config` under the real interpreter.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Step 9: restart-safe proposal apply, verifier config editor, packaged Windows build (commit: 5df32b4 + follow-up)
+- Task: (B) prove real {checkout} verification with a system interpreter; (C)
+  recovery audit for interruptions across the proposal lifecycle; (A) validate
+  the real local coding-agent integration; (D) smallest config editor; (E)
+  repeatable Windows build with an executed smoke test.
+- AI contribution: new tests in test_worktree_verification.py (system
+  interpreter check, spaced paths, missing {checkout} file, interruption
+  mid-verification, recorded-approval restart apply, refuses wait/moved
+  states); `_restore_after_failed_run` + `apply_recorded_approval` +
+  `apply_blockers` in integrations/coding_agent.py and controller/service.py;
+  branch-hijack refusal; "apply previously approved proposal" panel button +
+  ApplyRecordedApprovalWorker; controller/verifier_config.py rewrite
+  (document_to_config + atomic save_verifier_config); ui/verifier_dialog.py;
+  panel Configure acceptance checks button + reload; app.py logging setup +
+  plain-language startup-failure handler; once.spec + README packaging.
+- Defect found: `_restore_after_failed_run` first tried to restore BEFORE
+  parking the agent's dirty output, but git carries modifications across
+  `checkout`, so the parked "failure" commit landed on the user's branch (proven
+  with a manual /tmp/opencode git reproduction before rewriting the helper:
+  park first, then restore). Also found in self-review of the dialog draft: a
+  stray typographic typo token, a leftover stub method, and a missing
+  QLineEdit import; the first save test failed because validation requires the
+  cases file to exist, so the test now creates it.
+- Verification (real Windows Python 3.14.3 venv): three real {checkout} runs
+  with the system interpreter including a spaced worktree root; full suite
+  `182 passed, 2 skipped` then `185 passed, 2 skipped in 153.22s` after the
+  app-entry tests; `ruff check .` -> `All checks passed!`; PyInstaller
+  6.22.3 build of the committed `once.spec` succeeded (`Build complete!`).
+  Packaged-exe runs (isolated LOCALAPPDATA via cmd `set`): clean smoke exit 0;
+  corrupt verifier.json exit 0 with app data + logs written to the isolated
+  folder (log line verified in once.log); unusable data folder -> process
+  stays alive at a visible dialog under the pre-fix build (raw traceback),
+  and the post-fix handler is unit-tested to explain itself and return 1
+  (QMessageBox.critical was monkeypatched; no automated click of the real
+  dialog). Real-agent integration: `claude --help` verified locally; a real
+  run is NOT authorized (paid cloud) so it was not executed and adapter tests
+  use the deterministic fake.
+- Outcome: PASSED
+- Human review:

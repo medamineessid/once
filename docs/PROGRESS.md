@@ -1,14 +1,20 @@
 # Once progress
 
-- Last completed step: Supervised loop hardening — recorded-proposal identity
-  enforcement (verify/approve/apply compare presented review against the
-  persisted record), session checker configuration via
-  `%LOCALAPPDATA%/Once/verifier.json`, resized failure paths (missing
-  branches become blockers instead of raised errors), and full MainWindow
-  journey + restart/redaction/partial-cancellation/failed-post-merge tests
-- Last commit: 13e327d (this work)
-- Next action: optional GUI editor for verifier.json; live coding-agent
-  integration and packaging remain future milestones
+- Last completed step: Release-readiness pass — approved-proposal apply after
+  a restart (`apply_recorded_approval` + panel "Apply previously approved
+  proposal" button), verifier.json config editor (`ui/verifier_dialog.py`,
+  atomic save reusing the exact restart validation), real `{checkout}`
+  verification tests against the system interpreter (spaced paths, missing
+  file, mid-verification interruption recovery), agent-crash parking of
+  partial output on the agent branch before restore, branch-hijack refusal,
+  app logging (rotating UTF-8 log) + plain-language startup-failure handler,
+  and a repeatable PyInstaller Windows build (`once.spec`) whose exe passed
+  isolated-app-data smoke runs (clean start, corrupt-config start, visible
+  startup-failure dialog behavior)
+- Last commit: 5df32b4 + packaging/docs follow-up (this work)
+- Next action: real coding-agent run is authorized-only (paid cloud);
+  remaining future work: broader integration milestones (roadmap 6-9),
+  installer/shortcut polish, undo/recovery integration for file management
 - Currently failing tests or known breakage: none
 - Open items: live Gemini use is opt-in and unverified; screenshots are
   supported as references but are not automatically captured for every event;
@@ -20,6 +26,9 @@
   lifecycle records are persisted in the SQLite history; pre-approval
   verification runs in a disposable git worktree and gates approval; a
   mismatched presented-vs-recorded review can no longer be approved/applied;
-  the checker is user-configured through allowlist-validated verifier.json;
-  no live coding-agent service has been exercised
+  the checker is user-configured through allowlist-validated verifier.json
+  (with a GUI editor writing through the same validation); a recorded
+  approval can be re-applied after a restart under the same gate checks;
+  no live coding-agent service has been exercised (Claude Code is installed
+  but a real run requires authorized paid cloud access)
 - Environment: Windows 11 x64; Python 3.14.3; virtual environment `.venv`

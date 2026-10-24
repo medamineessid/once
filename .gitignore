@@ -42,3 +42,7 @@ logs/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# PyInstaller build output
+build/
+dist/

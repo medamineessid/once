@@ -6,11 +6,13 @@ to the engine package; this module only wires the UI together.
 
 from __future__ import annotations
 
+import logging
+import logging.handlers
 import os
 import sys
 from pathlib import Path
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from controller.recording import RecordingService
 from controller.service import WorkflowService
@@ -18,6 +20,31 @@ from controller.verifier_config import VerifierConfig, load_verifier_config
 from ui.main_window import MainWindow
 
 SMOKE_TEST_FLAG = "--smoke-test"
+
+
+def setup_logging(app_data_dir: Path) -> Path:
+    """Install a rotating UTF-8 log file and exception hook for the session.
+
+    File contents are never logged; only event messages are. The directory is
+    created on demand so a first run works before any database exists.
+    """
+    logs_dir = Path(app_data_dir) / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    log_path = logs_dir / "once.log"
+    handler = logging.handlers.RotatingFileHandler(
+        log_path, maxBytes=1_000_000, backupCount=2, encoding="utf-8"
+    )
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    root = logging.getLogger()
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+    def _log_unraised(kind, value, trace) -> None:
+        root.error("Unhandled %s: %s", kind.__name__, value)
+        sys.__excepthook__(kind, value, trace)
+
+    sys.excepthook = _log_unraised
+    return log_path
 
 
 def build_application(argv: list[str] | None = None) -> QApplication:
@@ -36,16 +63,29 @@ def main(argv: list[str] | None = None) -> int:
 
     app = build_application(qt_args)
     app_data_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Once"
-    service = WorkflowService.for_app_data(app_data_dir)
-    recording_service = RecordingService(app_data_dir / "recordings")
-    verifier_config, verifier_note = _load_verifier_setup(app_data_dir)
-    window = MainWindow(
-        service,
-        recording_service,
-        verifier_config=verifier_config,
-        verifier_note=verifier_note,
-        app_data_dir=app_data_dir,
-    )
+    try:
+        setup_logging(app_data_dir)
+        logging.getLogger(__name__).info("Once started (smoke_test=%s)", smoke_test)
+        service = WorkflowService.for_app_data(app_data_dir)
+        recording_service = RecordingService(app_data_dir / "recordings")
+        verifier_config, verifier_note = _load_verifier_setup(app_data_dir)
+        window = MainWindow(
+            service,
+            recording_service,
+            verifier_config=verifier_config,
+            verifier_note=verifier_note,
+            app_data_dir=app_data_dir,
+        )
+    except OSError as error:
+        # The app data directory cannot be used (missing, a file instead of a
+        # folder, denied). Nothing else can work, so explain it plainly.
+        QMessageBox.critical(
+            None,
+            "Once cannot start",
+            f"Once could not create its data folder at {app_data_dir}. "
+            f"Reason: {error}. Choose a writable location and start Once again.",
+        )
+        return 1
     window.show()
 
     if smoke_test:
