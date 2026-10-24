@@ -788,3 +788,42 @@ def test_apply_recorded_approval_refuses_wait_and_moved_states(tmp_path) -> None
     with pytest.raises(AgentIntegrationError, match="does not match the recorded"):
         reopened.apply_recorded_approval(moved)
     reopened.close()
+
+
+def test_manually_deleted_worktree_directory_does_not_block_reruns(tmp_path) -> None:
+    """A stale worktree registry entry must not brick verification forever."""
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    bundle = service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "wt"
+    )
+    assert bundle.passed is True
+
+    # reproduce the user hand-deleting the folder mid-run: directory gone,
+    # but Git's worktree metadata may still hold a registration for it
+    worktree_dir = tmp_path / "wt" / f"proposal-{review.proposal_id[:8]}"
+    assert worktree_dir.exists() is False  # normal close removes it
+
+    # a rerun of verification on the same proposal must work, not fail closed forever
+    second = service.verify_proposal_pre_merge(
+        review, cases_path, PASSING_VERIFY_ARGV, 10.0, tmp_path / "wt"
+    )
+    assert second.passed is True
+    service.close()
+
+
+def test_worktree_path_inside_the_repository_is_refused(tmp_path) -> None:
+    """Verification must never create a worktree inside the user's checkout."""
+    repo, cases_path = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    review = service.request_agent_fix(
+        repo, agent_command(tmp_path), 10.0, evidence_file(tmp_path, "good")
+    )
+    with pytest.raises(AgentIntegrationError, match="outside the repository"):
+        service.verify_proposal_pre_merge(review, cases_path, PASSING_VERIFY_ARGV, 10.0, repo)
+    # the main checkout stays untouched and on the original branch
+    assert "totals.get" not in (repo / "extractor.py").read_text(encoding="utf-8")
+    service.close()

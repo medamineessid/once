@@ -235,7 +235,15 @@ class WorkflowService:
                 "reviewed again."
             )
         repository = GitRepository(Path(review.repo_path))
-        if repository.run_git("rev-parse", f"refs/heads/{review.agent_branch}") != review.agent_tip:
+        try:
+            branch_tip = repository.run_git("rev-parse", f"refs/heads/{review.agent_branch}")
+        except AgentIntegrationError as error:
+            raise AgentIntegrationError(
+                "The proposal's agent branch no longer exists in this "
+                "repository, so verification cannot run against it. The "
+                "proposal must be proposed and reviewed again."
+            ) from error
+        if branch_tip != review.agent_tip:
             raise AgentIntegrationError(
                 "The proposal commit is no longer the tip of its branch, so it "
                 "must be proposed and reviewed again before verification."

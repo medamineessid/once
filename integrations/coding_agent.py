@@ -21,6 +21,7 @@ MAX_TIMEOUT_SECONDS = 600.0
 MAX_AGENT_OUTPUT_CHARS = 2_000
 EVIDENCE_PLACEHOLDER = "{evidence}"
 BRANCH_PREFIX = "once/agent"
+PARK_MESSAGE = "Once agent failure output - kept for inspection, not a proposal"
 
 
 def git_executable() -> str:
@@ -244,22 +245,39 @@ class WorktreeCheckout:
         return completed.returncode == 0
 
 
-def _restore_after_failed_run(repository: GitRepository, original: str) -> None:
-    """Return the repository to its original branch after a failed agent run.
+def _park_and_restore(repository: GitRepository, original: str, agent_branch: str) -> str:
+    """Park any agent output and restore the original branch; explain otherwise.
 
-    A crashed or timed-out agent may have left half-written changes. Those are
-    never deleted: while still on the disposable agent branch they are parked
-    in one clearly labelled commit, and the original checkout is restored
-    clean and inspectable.
+    Returns "" when the repository is back on its original branch with a clean
+    tree. A crashed or timed-out agent's half-written files are never deleted:
+    they are parked in one clearly labelled commit on the disposable branch
+    (with hook checks bypassed, because parking must not depend on project
+    hooks). If even parking fails, the function leaves the repository untouched
+    and returns a plain-language description of the state left behind, so the
+    caller can hand the user exact recovery instructions.
     """
-    if repository.run_git("status", "--porcelain"):
-        repository.run_git("add", "-A")
-        repository.run_git(
-            "commit",
-            "-m",
-            "Once agent failure output - kept for inspection, not a proposal",
+    try:
+        if repository.run_git("status", "--porcelain"):
+            try:
+                repository.run_git("add", "-A")
+                repository.run_git("commit", "-m", PARK_MESSAGE)
+            except AgentIntegrationError:
+                repository.run_git("commit", "--no-verify", "-m", PARK_MESSAGE)
+        repository.restore(original)
+        return ""
+    except AgentIntegrationError as error:
+        try:
+            left_on = repository.current_branch()
+        except AgentIntegrationError:
+            left_on = agent_branch
+        return (
+            f" Once could not restore the repository automatically: it is "
+            f"still on branch {left_on}, with the changes kept in place. The "
+            f"original branch {original} holds the pre-run content and was "
+            f"not modified by Once. Recover in Git (for example, inspect and "
+            f"commit or move the changes, then check out {original}) before "
+            f"using Once on this repository again. Git said: {error}"
         )
-    repository.restore(original)
 
 
 def _tail(value: str | None) -> str:
@@ -305,14 +323,14 @@ def run_agent_for_proposal(
             shell=False,
         )
     except subprocess.TimeoutExpired as error:
-        _restore_after_failed_run(repository, original)
+        leftover = _park_and_restore(repository, original, branch)
         raise AgentIntegrationError(
-            "The coding agent did not finish in time, so no proposal was recorded."
+            "The coding agent did not finish in time, so no proposal was recorded." + leftover
         ) from error
     if completed.returncode != 0:
-        _restore_after_failed_run(repository, original)
+        leftover = _park_and_restore(repository, original, branch)
         raise AgentIntegrationError(
-            "The coding agent exited with an error, so no proposal was recorded."
+            "The coding agent exited with an error, so no proposal was recorded." + leftover
         )
     status = repository.run_git("status", "--porcelain")
     if not status:
@@ -321,24 +339,42 @@ def run_agent_for_proposal(
             "The coding agent did not propose any changes, so no proposal was recorded."
         )
     if repository.current_branch() != branch:
-        _restore_after_failed_run(repository, original)
+        leftover = _park_and_restore(repository, original, branch)
         raise AgentIntegrationError(
             "The coding agent switched Git branches during its run, so its output could "
             "not be captured as a proposal. Nothing was recorded; the repository was "
             "restored to the original branch and the agent's own branch still holds "
-            "whatever it wrote."
+            "whatever it wrote." + leftover
         )
     # The reviewed diff and the approved branch tip must be the same content:
     # snapshot the agent's result once on its own branch, then capture.
-    repository.run_git("add", "-A")
-    repository.run_git(
-        "commit",
-        "-m",
-        "Once agent proposal snapshot - review before approval",
-    )
-    diff, changed, untracked, truncated = repository.capture(base_commit)
-    agent_tip = repository.head()
-    repository.restore(original)
+    try:
+        repository.run_git("add", "-A")
+        repository.run_git(
+            "commit",
+            "-m",
+            "Once agent proposal snapshot - review before approval",
+        )
+        diff, changed, untracked, truncated = repository.capture(base_commit)
+        agent_tip = repository.head()
+    except AgentIntegrationError as error:
+        leftover = _park_and_restore(repository, original, branch)
+        raise AgentIntegrationError(
+            "The agent's changes could not be captured as a proposal, so no "
+            "proposal was recorded. The changes are kept on the agent branch "
+            f"{branch} for inspection; the repository is on the original "
+            f"branch {original}." + leftover
+        ) from error
+    try:
+        repository.restore(original)
+    except AgentIntegrationError as error:
+        raise AgentIntegrationError(
+            "The agent's proposal was captured on branch "
+            f"{branch} (tip {agent_tip[:12]}), but Once could not switch the "
+            f"repository back to branch {original}; it is still on the agent "
+            "branch. Nothing was merged. Check out the original branch in Git "
+            f"to continue working, then re-propose. Git said: {error}"
+        ) from error
     return AgentProposalResult(
         ChangeReview(
             proposal_id or uuid4().hex,

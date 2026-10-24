@@ -469,3 +469,98 @@ def test_agent_output_is_never_persisted_with_the_proposal(tmp_path) -> None:
     assert "wolf-secret-99" not in payload
     assert "t@example.org" not in payload
     service.close()
+
+
+@pytest.mark.parametrize("dirty_kind", ["unstaged", "staged", "untracked"])
+def test_user_dirty_states_are_refused_before_any_git_plumbing(tmp_path, dirty_kind) -> None:
+    """Uncommitted user data must never be swept into an agent run."""
+    repo = make_repo(tmp_path)
+    (repo / "own_change.txt").write_text("user work\n", encoding="utf-8")
+    if dirty_kind == "staged":
+        run_git(repo, "add", "own_change.txt")
+    elif dirty_kind == "unstaged":
+        (repo / "fixme.txt").write_text("edited in place\n", encoding="utf-8")
+    before_branches = local_branches(repo)
+    before_head = run_git(repo, "rev-parse", "HEAD")
+    service = make_service(tmp_path)
+
+    with pytest.raises(AgentIntegrationError):
+        service.request_agent_fix(repo, agent_command(tmp_path), 10.0, evidence(tmp_path, "fail"))
+
+    # nothing happened: no branches, no head change, files kept as the user left them
+    assert local_branches(repo) == before_branches
+    assert run_git(repo, "rev-parse", "HEAD") == before_head
+    assert (repo / "own_change.txt").read_text(encoding="utf-8") == "user work\n"
+    assert service.agent_proposals() == ()
+    service.close()
+
+
+def test_failing_project_hooks_cannot_trap_the_repository(tmp_path) -> None:
+    """A vetoing pre-commit hook must not leave Once's recovery stuck."""
+    repo = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    base_branch = current_branch(repo)
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.parent.mkdir(exist_ok=True)
+    hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    try:
+        run_git(repo, "config", "core.hooksPath", ".git/hooks")
+
+        with pytest.raises(AgentIntegrationError, match="could not be captured"):
+            service.request_agent_fix(repo, agent_command(tmp_path), 10.0, evidence(tmp_path))
+    finally:
+        run_git(repo, "config", "--unset", "core.hooksPath")
+
+    # the user's branch is unchanged, and the proposal content is parked on the
+    # disposable agent branch, bypassing the hook, for inspection only
+    assert current_branch(repo) == base_branch
+    assert (repo / "fixme.txt").read_text(encoding="utf-8") == "original\n"
+    assert service.agent_proposals() == ()
+    agent_branches = run_git(repo, "branch", "--list", "once/agent/*").split()
+    assert agent_branches, "the proposal content was not lost"
+    parked = run_git(repo, "log", "--format=%s", "-1", agent_branches[0])
+    assert "failure output" in parked
+    service.close()
+
+
+def test_unparkable_failure_leaves_an_explained_recoverable_state(tmp_path, monkeypatch) -> None:
+    """When even parking fails, the message must say exactly where things are."""
+    from integrations.coding_agent import GitRepository
+
+    repo = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    base_branch = current_branch(repo)
+    script = tmp_path / "writer_then_failer.py"
+    script.write_text(
+        "import pathlib, sys\n"
+        "pathlib.Path('fixme.txt').write_text('rewritten then crashed\\n', encoding='utf-8')\n"
+        "raise SystemExit(7)\n",
+        encoding="utf-8",
+    )
+    original_run_git = GitRepository.run_git
+
+    def refusing_commit(self, *arguments: str) -> str:
+        if "commit" in arguments:
+            raise AgentIntegrationError("simulated hook veto of every commit")
+        return original_run_git(self, *arguments)
+
+    monkeypatch.setattr(GitRepository, "run_git", refusing_commit)
+    with pytest.raises(
+        AgentIntegrationError, match="could not restore the repository automatically"
+    ):
+        service.request_agent_fix(
+            repo, (sys.executable, str(script), "{evidence}"), 10.0, evidence(tmp_path)
+        )
+    monkeypatch.setattr(GitRepository, "run_git", original_run_git)
+
+    # the original branch content was never modified by Once
+    original_content = run_git(repo, "show", f"{base_branch}:fixme.txt")
+    assert original_content.splitlines() == ["original"]
+    assert service.agent_proposals() == ()
+    # state is left exactly where the message claims: still on the agent branch,
+    # with the agent's changes in the tree, recoverable by a normal check-out
+    assert current_branch(repo).startswith("once/agent/")
+    # the documented recovery path works: park-rescue the changes, then check out
+    run_git(repo, "stash", "push", "-m", "rescuing the stranded agent output")
+    run_git(repo, "checkout", base_branch)
+    assert (repo / "fixme.txt").read_text(encoding="utf-8").splitlines() == ["original"]

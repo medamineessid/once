@@ -693,3 +693,27 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   use the deterministic fake.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Recovery hardening: failed-agent park/restore and refused paths
+- Task: make every failed-agent run leave an explained, recoverable Git state
+  (branch-switch failures, vetoing project hooks, uncommitted user files,
+  missing agent branch, worktree path inside the repository).
+- AI contribution: `_park_and_restore` in integrations/coding_agent.py (park
+  first with `--no-verify` hook-bypass fallback, then restore; on parking
+  failure leave the tree untouched with a plain-language recovery message
+  appended to the error); capture-stage and restore-stage failure handlers;
+  controller/service.py missing-branch-ref (`refs/heads/...` rev-parse) clear
+  refusal + 403 guard; new and adjusted tests in test_coding_agent.py and
+  test_worktree_verification.py.
+- Defect found: a fixture-side failure in the first unparkable-state test was
+  actually a trailing-newline comparison artifact (not a product defect); fixed
+  the test to compare `.splitlines()`. None of the new implementation paths
+  failed on first run.
+- Verification (real Windows Python venv, pytest on tmp_path repos):
+  `.venv/Scripts/python.exe -m pytest tests/test_worktree_verification.py tests/test_coding_agent.py -q`
+  -> `51 passed in 116.23s`; after `ruff format .` the focused subset
+  (`dirty_states or hooks_cannot_trap or unparkable` +
+  `test_worktree_path_inside_the_repository_is_refused`) -> `5 passed`;
+  `ruff check .` -> `All checks passed!`.
+- Outcome: PASSED
+- Human review:
