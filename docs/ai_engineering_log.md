@@ -717,3 +717,25 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `ruff check .` -> `All checks passed!`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Persistence hardening, first-run docs, roadmap reconciliation
+- Task: corrupt-database startup must fail clearly without touching user data;
+  an older-cycle database must open after an upgrade; document packaged-app
+  install/first-run/upgrade/uninstall; reconcile roadmap integrations 6-9.
+- AI contribution: app.py sqlite3.DatabaseError handler ("history database...
+  left unchanged", exit 1, never deletes/replaces the file);
+  tests/test_history.py pre-migration-database regression test; README
+  "Install, first run, upgrade, and uninstall" section + refreshed status
+  line; docs/decisions.md integration-reconciliation entry; PROGRESS refresh.
+- Defect found: app.py startup only caught OSError, so a corrupt once.db
+  escaped as a raw sqlite3.DatabaseError traceback (proven with a synthetic
+  corrupt file: `DatabaseError: file is not a database`). Also my first two
+  README str-replacements were malformed; I re-inspected the file, confirmed
+  no damage, and used a single correct replacement.
+- Verification: `pytest tests/test_app_entry.py tests/test_history.py -q` ->
+  4 + 4 passed; full suite `194 passed, 2 skipped in 151.72s`;
+  `ruff format .` -> 75 files unchanged; `ruff check .` -> All checks passed!
+  (after fixing two E501s in my own new test); PyInstaller rebuild from
+  current source -> `Build complete!` (build.log line 197854).
+- Outcome: PASSED
+- Human review:

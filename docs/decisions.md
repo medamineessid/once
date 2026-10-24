@@ -304,3 +304,42 @@ was added to the development requirements and installed successfully.
   (paid cloud access), so adapter verification remains deterministic-only;
   the exact command surface was confirmed from `claude --help` (`-p/--print`,
   `--allowedTools`).
+
+## 2026-10-24 — Roadmap integrations 6–9 reconciled against the actual build (Priority E)
+- Question: which of the remaining planned integrations are implemented,
+  which are needed for the first usable release, and which are deliberately
+  deferred?
+- Choice:
+  - (6) File-management integration (AGENTS.md "retained contract":
+    scanner/planner/validator/executor/recovery): deliberately deferred. The
+    supervised test-and-fix loop (describe -> run -> verify -> propose ->
+    review -> apply) is complete without it, and it would reintroduce the
+    riskiest write paths before the review/apply gate is hardened in the field.
+    The surviving read-only primitives (`engine/scanner.py`, `engine/fs.py`,
+    `engine/filters.py`, deterministic S1 snapshot tests) remain the foundation
+    for that rebuild; the AGENTS.md file-management safety contract stays the
+    spec for any future planner/executor re-implementation.
+  - (7) Additional integrations: the coding-agent integration exists and is
+    heavily tested with deterministic fake agents in real temporary Git repos
+    (`tests/test_coding_agent.py`, `tests/test_worktree_verification.py`);
+    the Windows UI Automation inspection is read-only and tested
+    (`tests/test_integrations_recorder.py`, `tests/test_replay.py`). No new
+    speculative integrations were added. A live paid coding-agent run remains
+    unauthorized in this environment and is therefore NOT VERIFIED.
+  - (8) User workflow editor and history UI: substantially implemented in
+    `ui/main_window.py` (workflow create/open/save/run/cancel, history details,
+    recording management, AI draft review loop) with pytest-qt coverage
+    (`tests/test_review_ui.py`) and controller-level tests; exercised only
+    offscreen/automated, never by hand as an interactive GUI session.
+  - (9) AI-assisted recorder: local recording service, redaction, offline
+    deterministic analysis, bounded interview, validated draft preview and
+    explicit approval are implemented and tested (`tests/test_recording_flow.py`,
+    `tests/test_ai_interview.py`, `tests/test_ai_provider.py` fake provider).
+    Live cloud (Gemini) analysis stays opt-in with a user-supplied credential
+    and remains unverified against a real provider by policy.
+- Reason: mark only capabilities that have real implementations and automated
+  verification; deferrals are documented with reasons instead of being stubbed
+  to reach roadmap completion.
+- Evidence: test-module survey run 2026-10-24 (counts of tests per module from
+  the committed suite); grep of `ui/main_window.py` panel/step wiring;
+  `grep -rn INSPECT_PATH engine` for the read-only path-inspection step.

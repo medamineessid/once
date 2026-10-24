@@ -54,6 +54,30 @@ def test_startup_failure_over_an_unusable_data_directory_is_explained(
     assert blocker.is_file()
 
 
+def test_corrupt_database_explains_itself_and_is_never_silently_replaced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A corrupted once.db fails clearly; the user's data file is left untouched."""
+    from PySide6.QtWidgets import QMessageBox
+
+    isolation = tmp_path / "appdata-root"
+    (isolation / "Once").mkdir(parents=True)
+    database = isolation / "Once" / "once.db"
+    database.write_bytes(b"this file was created by an angry deity\x00" * 16)
+    original_bytes = database.read_bytes()
+    monkeypatch.setenv("LOCALAPPDATA", str(isolation))
+    messages: list[str] = []
+    monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: messages.append(str(a)))
+
+    exit_code = main(["--smoke-test"])
+
+    assert exit_code == 1
+    assert messages, "the user must be told why the app cannot start"
+    assert "history database" in messages[0]
+    assert "left" in messages[0]  # the data was NOT silently replaced
+    assert database.read_bytes() == original_bytes
+
+
 def test_smoke_test_against_a_missing_database_directory_writes_no_recording(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

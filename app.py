@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import logging.handlers
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -84,6 +85,18 @@ def main(argv: list[str] | None = None) -> int:
             "Once cannot start",
             f"Once could not create its data folder at {app_data_dir}. "
             f"Reason: {error}. Choose a writable location and start Once again.",
+        )
+        return 1
+    except sqlite3.DatabaseError as error:
+        # The history database exists but cannot be opened (corrupt or written
+        # by incompatible tooling). The user's data is never deleted or
+        # replaced; explain and leave the file exactly as it is.
+        QMessageBox.critical(
+            None,
+            "Once cannot start",
+            f"Once could not open its history database at {app_data_dir / 'once.db'}. "
+            f"Reason: {error}. No data was removed: the file was left unchanged. "
+            "Back it up, then repair or move it aside, and start Once again.",
         )
         return 1
     window.show()

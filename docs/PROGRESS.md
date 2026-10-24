@@ -1,34 +1,26 @@
 # Once progress
 
-- Last completed step: Release-readiness pass — approved-proposal apply after
-  a restart (`apply_recorded_approval` + panel "Apply previously approved
-  proposal" button), verifier.json config editor (`ui/verifier_dialog.py`,
-  atomic save reusing the exact restart validation), real `{checkout}`
-  verification tests against the system interpreter (spaced paths, missing
-  file, mid-verification interruption recovery), agent-crash parking of
-  partial output on the agent branch before restore, branch-hijack refusal,
-  app logging (rotating UTF-8 log) + plain-language startup-failure handler,
-  and a repeatable PyInstaller Windows build (`once.spec`) whose exe passed
-  isolated-app-data smoke runs (clean start, corrupt-config start, visible
-  startup-failure dialog behavior)
-- Last commit: 5df32b4 + packaging/docs follow-up (this work)
-- Next action: real coding-agent run is authorized-only (paid cloud);
-  remaining future work: broader integration milestones (roadmap 6-9),
-  installer/shortcut polish, undo/recovery integration for file management
+- Last completed step: Release-hardening session — repository-recovery audit
+  for failed agent runs (park-then-restore with a `--no-verify` fallback when
+  project hooks veto parking, plain-language "left behind" explanations instead
+  of silent claims, refusal of a deleted agent branch and of worktree paths
+  inside the user's repository), corrupt-`once.db` startup now fails clearly
+  with the data file left untouched (previously a raw traceback), a
+  pre-migration database opens after an update and keeps its rows, README
+  documents install/first-run/upgrade/uninstall for a packaged build, and the
+  roadmap integrations 6–9 are reconciled in `docs/decisions.md`
+  (file-management rewrite deliberately deferred; coding-agent + recorder +
+  workflow/history UI marked as implemented with automated tests).
+- Last commit: 024b17b plus this session's storage/app/docs hardening
+- Next action: packaged-exe isolated startup runs (clean, first-run, corrupt
+  verifier.json, corrupt once.db) after the rebuilt exe finishes; real modal
+  interaction of the startup-failure dialog remains manual-only.
 - Currently failing tests or known breakage: none
-- Open items: live Gemini use is opt-in and unverified; screenshots are
-  supported as references but are not automatically captured for every event;
-  external desktop/browser/agent integrations are not implemented; replay
-  supports read-only path checks, exact-identity window inspection, and
-  exact-identity UI element inspection; no mutating UI action is implemented;
-  headless verifier is implemented and verification runs, loop decisions,
-  agent proposals, approval decisions, proposal verifications, and worktree
-  lifecycle records are persisted in the SQLite history; pre-approval
-  verification runs in a disposable git worktree and gates approval; a
-  mismatched presented-vs-recorded review can no longer be approved/applied;
-  the checker is user-configured through allowlist-validated verifier.json
-  (with a GUI editor writing through the same validation); a recorded
-  approval can be re-applied after a restart under the same gate checks;
-  no live coding-agent service has been exercised (Claude Code is installed
-  but a real run requires authorized paid cloud access)
+- Open items: live Gemini analysis is opt-in and unverified against a real
+  provider; live paid coding-agent runs are unauthorized in this environment;
+  mutating desktop actions, browser automation, and the file-management
+  planner/executor rebuild are deliberately deferred (see `docs/decisions.md`
+  2026-10-24); the startup-failure modal is unit-tested with a stubbed message
+  box and not clicked by automation; no real interactive GUI session with the
+  full approve-apply cycle has been demonstrated by a human.
 - Environment: Windows 11 x64; Python 3.14.3; virtual environment `.venv`

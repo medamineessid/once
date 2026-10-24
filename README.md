@@ -7,8 +7,9 @@ explicit integrations. The deterministic engine controls execution; no
 unrestricted scripts or opaque AI actions are used.
 
 **Current status: supervised orchestration foundation, persistence, history,
-local recording, offline proposal review, explicit approval, and read-only
-Windows inspection. The headless verifier slice is next.**
+headless verifier with redacted evidence, pre-merge verification in disposable
+Git worktrees, local recording with AI-assisted draft review, offline proposal
+review, explicit approval, and read-only Windows inspection.**
 The application can validate and save/reopen versioned declarative workflows,
 run bounded local steps with success, failure, skipped-step, cancellation, and
 authorized path-verification states, and record real controller-triggered runs
@@ -66,6 +67,34 @@ hidden imports because those modules are imported lazily. A packaged app logs
 to `%LOCALAPPDATA%\Once\logs\once.log`; a corrupted `verifier.json` keeps the
 app startable (the reviewer tab explains the problem), and an unusable data
 folder is reported with a plain-language dialog.
+
+## Install, first run, upgrade, and uninstall (packaged app)
+
+A user without this repository only needs the built folder: copy the whole
+`dist\Once` folder (the exe plus its runtime files) to any writable location,
+for example `C:\Tools\Once`, and double-click `Once.exe`. No Python is needed.
+All user data lives under `%LOCALAPPDATA%\Once` (database, workflows, configs,
+recordings, logs) and is never written next to the exe.
+
+First run: the Workflows tab starts with a demo workflow, and the Agent
+proposals panel has a "Configure acceptance checks" button to create
+`verifier.json`. Acceptance checks run entirely offline with programs the user
+explicitly allowlists. Two capabilities need named authorization by design:
+cloud analysis of a recording (Gemini, opt-in, requires a credential the user
+enters) and a coding-agent run (the agent itself is an external tool Once
+launches only on the user's explicit request). Everything else, including
+verification, evidence redaction, and proposal review, works offline.
+
+Upgrade: quit Once, replace the old `Once` folder with a newly built one, and
+start it again. Old databases open with additive column defaults; existing
+workflows, history, recordings, and configuration are preserved. If the
+replace is done while Once runs, changed runtime files may be in use — quit
+the app first.
+
+Uninstall: delete the `Once` application folder. Once never deletes
+`%LOCALAPPDATA%\Once` by itself: workflows, history, recordings, and
+configuration survive an uninstall unless the user deliberately deletes that
+data folder as a separate step (consider backing it up first).
 
 ## Tests and linting
 
