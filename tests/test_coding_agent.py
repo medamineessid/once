@@ -14,6 +14,7 @@ from engine.agent_change import ApprovedChange, approve_change
 from engine.errors import AgentIntegrationError, WorkflowValidationError
 from engine.loop import LoopController, LoopPolicy, LoopStatus
 from engine.verifier import CaseResult, EvidenceBundle, FieldResult
+from integrations.coding_agent import PARK_MESSAGE
 from storage.database import connect
 from storage.history import ExecutionHistory
 
@@ -564,3 +565,134 @@ def test_unparkable_failure_leaves_an_explained_recoverable_state(tmp_path, monk
     run_git(repo, "stash", "push", "-m", "rescuing the stranded agent output")
     run_git(repo, "checkout", base_branch)
     assert (repo / "fixme.txt").read_text(encoding="utf-8").splitlines() == ["original"]
+
+
+def test_deleting_agent_parks_deletions_and_the_user_branch_stays_intact(tmp_path) -> None:
+    """An agent that deletes tracked files then crashes loses nothing."""
+    repo = make_repo(tmp_path)
+    (repo / "second.txt").write_text("second\n", encoding="utf-8")
+    run_git(repo, "add", "-A")
+    run_git(repo, "commit", "-q", "-m", "add second")
+    service = make_service(tmp_path)
+    script = tmp_path / "deleting_agent.py"
+    script.write_text(
+        "import pathlib, sys\n"
+        "pathlib.Path('fixme.txt').unlink()\n"
+        "pathlib.Path('witness.txt').write_text('witness\\n', encoding='utf-8')\n"
+        "raise SystemExit(5)\n",
+        encoding="utf-8",
+    )
+    base_branch = current_branch(repo)
+    with pytest.raises(AgentIntegrationError, match="exited with an error"):
+        service.request_agent_fix(
+            repo, (sys.executable, str(script), "{evidence}"), 10.0, evidence(tmp_path)
+        )
+
+    # direct final-state checks: what the agent deleted is fully restored
+    assert current_branch(repo) == base_branch
+    assert (repo / "fixme.txt").read_text(encoding="utf-8").splitlines() == ["original"]
+    assert (repo / "second.txt").read_text(encoding="utf-8").splitlines() == ["second"]
+    assert not (repo / "witness.txt").exists()
+    agent_branch = run_git(repo, "branch", "--list", "once/agent/*").split()[0]
+    # the deletion is only recorded on the parked branch; the file is intact here
+    with pytest.raises(subprocess.CalledProcessError):
+        run_git(repo, "show", f"{agent_branch}:fixme.txt")
+    assert run_git(repo, "log", "--format=%s", "-n", "1", agent_branch) == PARK_MESSAGE
+    assert service.agent_proposals() == ()
+    service.close()
+
+
+def test_timed_out_agent_with_mixed_changes_parks_every_change(tmp_path) -> None:
+    """Modify + delete + new file at timeout land in one parked commit."""
+    repo = make_repo(tmp_path)
+    (repo / "second.txt").write_text("second\n", encoding="utf-8")
+    run_git(repo, "add", "-A")
+    run_git(repo, "commit", "-q", "-m", "add second")
+    service = make_service(tmp_path)
+    script = tmp_path / "mixed_agent.py"
+    script.write_text(
+        "import pathlib, time\n"
+        "pathlib.Path('fixme.txt').write_text('changed then hung\\n', encoding='utf-8')\n"
+        "pathlib.Path('second.txt').unlink()\n"
+        "pathlib.Path('third.txt').write_text('new\\n', encoding='utf-8')\n"
+        "time.sleep(30)\n",
+        encoding="utf-8",
+    )
+    base_branch = current_branch(repo)
+    with pytest.raises(AgentIntegrationError, match="did not finish in time"):
+        service.request_agent_fix(
+            repo, (sys.executable, str(script), "{evidence}"), 0.5, evidence(tmp_path)
+        )
+
+    assert current_branch(repo) == base_branch
+    assert (repo / "fixme.txt").read_text(encoding="utf-8").splitlines() == ["original"]
+    assert (repo / "second.txt").read_text(encoding="utf-8").splitlines() == ["second"]
+    assert not (repo / "third.txt").exists()
+    agent_branch = run_git(repo, "branch", "--list", "once/agent/*").split()[0]
+    parked_files = run_git(repo, "show", "--name-only", "--format=", agent_branch)
+    assert {"fixme.txt", "second.txt", "third.txt"} <= set(parked_files.split())
+    service.close()
+
+
+def test_hijack_to_an_existing_user_branch_parks_on_a_new_once_branch(tmp_path) -> None:
+    """Parking must never commit failed output onto the user's own branch."""
+    repo = make_repo(tmp_path)
+    service = make_service(tmp_path)
+    base_branch = current_branch(repo)
+    run_git(repo, "branch", "release")  # a real user branch exists and is clean
+    script = tmp_path / "branch_grabbing_agent.py"
+    script.write_text(
+        "import pathlib, subprocess\n"
+        "subprocess.run(['git', 'checkout', 'release'], check=True)\n"
+        "pathlib.Path('fixme.txt').write_text('on release\\n', encoding='utf-8')\n"
+        "raise SystemExit(3)\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(AgentIntegrationError):
+        service.request_agent_fix(
+            repo, (sys.executable, str(script), "{evidence}"), 10.0, evidence(tmp_path)
+        )
+
+    # direct final-state checks
+    assert current_branch(repo) == base_branch
+    assert (repo / "fixme.txt").read_text(encoding="utf-8").splitlines() == ["original"]
+    release_tip = run_git(repo, "rev-parse", "release")
+    assert release_tip == run_git(repo, "merge-base", base_branch, "release")
+    # the user branch history is untouched: no parking commit landed on it
+    parked = run_git(repo, "branch", "--list", "once/agent/*").split()
+    assert any(name.startswith("once/agent/parked-") for name in parked), (
+        "the failed output should live on a new Once-prefixed parked branch"
+    )
+    parked_branch = next(name for name in parked if name.startswith("once/agent/parked-"))
+    assert "on release" in run_git(repo, "show", f"{parked_branch}:fixme.txt")
+    assert service.agent_proposals() == ()
+    service.close()
+
+
+def test_ignored_output_of_a_failed_agent_is_left_behind_not_deleted(tmp_path) -> None:
+    """Once never deletes anything, so ignored agent leftovers survive recovery."""
+    repo = make_repo(tmp_path)
+    (repo / ".gitignore").write_text("cache/\n", encoding="utf-8")
+    run_git(repo, "add", "-A")
+    run_git(repo, "commit", "-q", "-m", "add ignore rules")
+    service = make_service(tmp_path)
+    base_branch = current_branch(repo)
+    script = tmp_path / "ignoring_agent.py"
+    script.write_text(
+        "import pathlib, sys\n"
+        "pathlib.Path('cache').mkdir()\n"
+        "pathlib.Path('cache/leftover.txt').write_text('ignored\\n', encoding='utf-8')\n"
+        "raise SystemExit(4)\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(AgentIntegrationError):
+        service.request_agent_fix(
+            repo, (sys.executable, str(script), "{evidence}"), 10.0, evidence(tmp_path)
+        )
+
+    assert current_branch(repo) == base_branch
+    assert (repo / "fixme.txt").read_text(encoding="utf-8").splitlines() == ["original"]
+    # the ignored leftover is NOT removed: nothing of the user's is ever deleted
+    assert (repo / "cache" / "leftover.txt").read_text(encoding="utf-8").splitlines() == ["ignored"]
+    assert service.agent_proposals() == ()
+    service.close()

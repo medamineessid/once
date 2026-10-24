@@ -769,3 +769,32 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   stubbed-message-box unit test over the same code path).
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-24 — Recovery audit: hijack-to-user-branch parking defect (Priority 1)
+- Task: audit `_park_and_restore`, controller failure paths, and recovery tests
+  against real temporary repositories; add uncovered regression tests.
+- AI contribution: four new tests (tracking-file deletion parked with the user
+  branch intact; timed-out mixed modify/delete/new parked atomically; hijack
+  to an EXISTING user branch; ignored-file leftovers documented as never
+  deleted). Implementation fix: `_park_and_restore` now refuses to commit
+  failed output onto any branch Once did not create — when the agent moved the
+  tree onto an existing branch, a fresh `once/agent/parked-<id>` branch is
+  created and the parked note names the exact branch; `--no-verify` hook-bypass
+  factored into `_commit_parked`; two error messages no longer claim
+  "the agent's own branch still holds whatever it wrote" (they name the
+  parked branch instead).
+- Defect found: a REAL defect in committed recovery code — a hijacking agent
+  moving the tree onto a clean user branch (e.g. `release`) and exiting failed
+  made parking commit the failed output ONTO that user branch (proven by
+  direct `git rev-parse release` showing one extra commit; captured in the
+  first red run). Also found in my own work: the first heredoc-written batch
+  of tests contained CRLF-mangled agent scripts, so all four agents crashed
+  with SyntaxError and the scenarios tested nothing; replaced with tool-edited
+  content, and my first refactor dropped `repository.restore(original)` (7
+  red tests caught it). One partial-output test fixture lacked `second.txt`.
+- Verification: `pytest tests/test_coding_agent.py -q` -> 27 passed (all with
+  real subprocess agents in real temp repos); focused run after edits
+  `4 passed, 23 deselected`; worktree suite `28 passed in 95.13s`;
+  `ruff check --fix .` -> 0 remaining; `ruff format` no effective change.
+- Outcome: PASSED
+- Human review:

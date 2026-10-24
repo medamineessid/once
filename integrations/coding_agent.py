@@ -245,24 +245,46 @@ class WorktreeCheckout:
         return completed.returncode == 0
 
 
+def _commit_parked(repository: GitRepository) -> None:
+    """Stage and commit all parked output, bypassing project hooks when needed."""
+    repository.run_git("add", "-A")
+    try:
+        repository.run_git("commit", "-m", PARK_MESSAGE)
+    except AgentIntegrationError:
+        repository.run_git("commit", "--no-verify", "-m", PARK_MESSAGE)
+
+
 def _park_and_restore(repository: GitRepository, original: str, agent_branch: str) -> str:
     """Park any agent output and restore the original branch; explain otherwise.
 
-    Returns "" when the repository is back on its original branch with a clean
-    tree. A crashed or timed-out agent's half-written files are never deleted:
-    they are parked in one clearly labelled commit on the disposable branch
-    (with hook checks bypassed, because parking must not depend on project
-    hooks). If even parking fails, the function leaves the repository untouched
-    and returns a plain-language description of the state left behind, so the
-    caller can hand the user exact recovery instructions.
+    Returns a short plain-language note naming where incomplete output went
+    ("" when there was nothing to park). A crashed or timed-out agent's
+    half-written files are never deleted: they are parked in one clearly
+    labelled commit with hook checks bypassed, because parking must not depend
+    on project hooks. Parking never commits onto a branch Once did not create:
+    if an agent moved the tree onto an existing branch, a fresh Once-prefix
+    parked branch is created so user branch history stays untouched. If even
+    parking fails, the function leaves the repository untouched and returns a
+    plain-language description of the state left behind, so the caller can
+    hand the user exact recovery instructions.
     """
     try:
         if repository.run_git("status", "--porcelain"):
-            try:
-                repository.run_git("add", "-A")
-                repository.run_git("commit", "-m", PARK_MESSAGE)
-            except AgentIntegrationError:
-                repository.run_git("commit", "--no-verify", "-m", PARK_MESSAGE)
+            current = repository.current_branch()
+            if current != agent_branch:
+                parked = f"{BRANCH_PREFIX}/parked-{uuid4().hex[:8]}"
+                repository.run_git("checkout", "-b", parked)
+                _commit_parked(repository)
+                repository.restore(original)
+                return (
+                    f" The agent's incomplete output was parked on branch {parked} for inspection."
+                )
+            _commit_parked(repository)
+            repository.restore(original)
+            return (
+                " The agent's incomplete output was parked on branch "
+                f"{agent_branch} for inspection."
+            )
         repository.restore(original)
         return ""
     except AgentIntegrationError as error:
@@ -341,10 +363,8 @@ def run_agent_for_proposal(
     if repository.current_branch() != branch:
         leftover = _park_and_restore(repository, original, branch)
         raise AgentIntegrationError(
-            "The coding agent switched Git branches during its run, so its output could "
-            "not be captured as a proposal. Nothing was recorded; the repository was "
-            "restored to the original branch and the agent's own branch still holds "
-            "whatever it wrote." + leftover
+            "The coding agent switched Git branches during its run, so its output "
+            "could not be captured as a proposal. Nothing was recorded." + leftover
         )
     # The reviewed diff and the approved branch tip must be the same content:
     # snapshot the agent's result once on its own branch, then capture.
@@ -361,9 +381,7 @@ def run_agent_for_proposal(
         leftover = _park_and_restore(repository, original, branch)
         raise AgentIntegrationError(
             "The agent's changes could not be captured as a proposal, so no "
-            "proposal was recorded. The changes are kept on the agent branch "
-            f"{branch} for inspection; the repository is on the original "
-            f"branch {original}." + leftover
+            "proposal was recorded." + leftover
         ) from error
     try:
         repository.restore(original)
