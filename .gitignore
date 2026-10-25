@@ -46,3 +46,7 @@ desktop.ini
 # PyInstaller build output
 build/
 dist/
+
+# PyInstaller generated specs
+app.spec
+once-app.spec
