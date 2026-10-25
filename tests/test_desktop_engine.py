@@ -342,15 +342,24 @@ def test_approval_gate_refuses_invalid_desktop_workflows() -> None:
         approve_desktop_workflow(Workflow("x", "x", (bad,)))
 
 
-def test_mutating_kinds_constant_covers_the_four_mutations() -> None:
+def test_mutating_kinds_constant_covers_all_mutations() -> None:
     assert frozenset(
         {
             StepKind.LAUNCH_APPLICATION,
             StepKind.CLICK_UI_ELEMENT,
             StepKind.TYPE_TEXT,
             StepKind.PRESS_SHORTCUT,
+            StepKind.LAUNCH_BROWSER,
+            StepKind.NAVIGATE_BROWSER,
+            StepKind.INTERACT_PAGE_ELEMENT,
         }
     ) == MUTATING_DESKTOP_KINDS
+    # every browser read step stays outside the approval gate
+    from engine.replay import BROWSER_READ_KINDS
+
+    assert StepKind.INSPECT_PAGE in BROWSER_READ_KINDS
+    assert StepKind.FIND_PAGE_ELEMENT in BROWSER_READ_KINDS
+    assert StepKind.WAIT_PAGE in BROWSER_READ_KINDS
     # read-only kinds are never part of the approval gate
     assert StepKind.WAIT_WINDOW not in MUTATING_DESKTOP_KINDS
     assert StepKind.VERIFY_FILE_TEXT not in MUTATING_DESKTOP_KINDS

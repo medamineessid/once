@@ -23,6 +23,7 @@ from engine.verifier import (
     EvidenceBundle,
 )
 from engine.workflow import (
+    BrowserActions,
     DesktopActions,
     StepKind,
     StepResult,
@@ -55,6 +56,7 @@ class WorkflowService:
         window_inspector: WindowInspector | None = None,
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
+        browser_actions: BrowserActions | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
@@ -77,6 +79,12 @@ class WorkflowService:
             self._desktop_actions: DesktopActions | None = PywinautoDesktopActions()
         else:
             self._desktop_actions = desktop_actions
+        if browser_actions is None:
+            from integrations.chrome_devtools import ChromeDevtoolsActions
+
+            self._browser_actions: BrowserActions | None = ChromeDevtoolsActions()
+        else:
+            self._browser_actions = browser_actions
         self._history = history
         self._workflow_directory = workflow_directory
         if workflow_directory is not None:
@@ -199,6 +207,7 @@ class WorkflowService:
             window_inspector=self._window_inspector,
             ui_element_inspector=self._ui_element_inspector,
             desktop_actions=self._desktop_actions,
+            browser_actions=self._browser_actions,
         )
         if self._history is not None:
             self._history.record(run)

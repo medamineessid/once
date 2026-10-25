@@ -31,6 +31,12 @@ class StepKind(StrEnum):
     TYPE_TEXT = "TYPE_TEXT"
     PRESS_SHORTCUT = "PRESS_SHORTCUT"
     VERIFY_FILE_TEXT = "VERIFY_FILE_TEXT"
+    LAUNCH_BROWSER = "LAUNCH_BROWSER"
+    NAVIGATE_BROWSER = "NAVIGATE_BROWSER"
+    INSPECT_PAGE = "INSPECT_PAGE"
+    FIND_PAGE_ELEMENT = "FIND_PAGE_ELEMENT"
+    INTERACT_PAGE_ELEMENT = "INTERACT_PAGE_ELEMENT"
+    WAIT_PAGE = "WAIT_PAGE"
 
 
 class PostconditionKind(StrEnum):
@@ -134,6 +140,34 @@ ALLOWED_SHORTCUTS: tuple[str, ...] = (
 )
 
 ALLOWED_INTERACTIONS: frozenset[str] = frozenset({"invoke", "toggle", "select"})
+#: URL schemes the NAVIGATE_BROWSER step may use. Anything else (file:, ftp:,
+#: chrome:, javascript:, data:, custom app schemes) is refused at validation.
+ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https"})
+
+MAX_URL_LENGTH = 2_048
+MAX_PAGE_TEXT_CHARS = 20_000
+MAX_PAGE_ELEMENT_TEXT_CHARS = 2_000
+MAX_SELECTOR_LENGTH = 256
+MAX_BROWSER_TEXT_VALUE_LENGTH = 500
+
+VALID_CDP_PORT_MIN = 1024
+VALID_CDP_PORT_MAX = 65_535
+
+PAGE_CONDITION_FIELDS = frozenset({"title", "url", "selector", "text"})
+
+PAGE_INTERACTIONS = frozenset({"click", "type"})
+
+#: Browser step kinds that require the isolated DevTools provider.
+BROWSER_PROVIDER_KINDS = frozenset(
+    {
+        StepKind.LAUNCH_BROWSER,
+        StepKind.NAVIGATE_BROWSER,
+        StepKind.INSPECT_PAGE,
+        StepKind.FIND_PAGE_ELEMENT,
+        StepKind.INTERACT_PAGE_ELEMENT,
+        StepKind.WAIT_PAGE,
+    }
+)
 
 #: Step kinds that require a desktop interaction provider (OS/adapter layer).
 DESKTOP_PROVIDER_KINDS = frozenset(
@@ -146,9 +180,12 @@ DESKTOP_PROVIDER_KINDS = frozenset(
     }
 )
 
-#: Application names the launch action may use without an explicit path.
-#: The registry expands these to full executables; no other name is accepted.
+#:
+#: The browser launch registry is KNOWN_BROWSERS below.
 KNOWN_APPLICATIONS: frozenset[str] = frozenset({"notepad"})
+
+#: Browser names the isolated-browser launch action may use via the registry.
+KNOWN_BROWSERS: frozenset[str] = frozenset({"chrome"})
 
 
 class DesktopActions:
@@ -172,6 +209,33 @@ class DesktopActions:
         raise NotImplementedError
 
     def press_shortcut(self, target_json: str) -> StepResult:
+        raise NotImplementedError
+
+
+class BrowserActions:
+    """Adapter contract for the isolated-browser (DevTools) provider.
+
+    The browser target inside every JSON is `{"cdp_port": <int>}` and refers
+    only to a browser instance this engine launched with an isolated profile,
+    never to the user's ordinary browser session.
+    """
+
+    def launch_browser(self, target_json: str) -> StepResult:
+        raise NotImplementedError
+
+    def navigate(self, target_json: str) -> StepResult:
+        raise NotImplementedError
+
+    def inspect_page(self, target_json: str) -> StepResult:
+        raise NotImplementedError
+
+    def find_page_element(self, target_json: str) -> StepResult:
+        raise NotImplementedError
+
+    def interact_page_element(self, target_json: str) -> StepResult:
+        raise NotImplementedError
+
+    def wait_page(self, target_json: str, timeout_seconds: float) -> StepResult:
         raise NotImplementedError
 
 
@@ -299,6 +363,7 @@ def _validate_launch_target(step: WorkflowStep) -> None:
             )
         if len(application) > 64 or application.lower() not in {
             name.lower() for name in KNOWN_APPLICATIONS
+
         }:
             raise WorkflowValidationError(
                 f"Step {step.step_id} names an application the registry does not allow: "
@@ -338,6 +403,211 @@ def _validate_launch_target(step: WorkflowStep) -> None:
             raise WorkflowValidationError(
                 f"Step {step.step_id} arguments must be at most {MAX_ARGUMENT_LENGTH} characters."
             )
+
+
+def _validate_browser_target(target: object, step: WorkflowStep) -> dict:
+    """Parse and validate the isolated-browser identity used by browser steps."""
+    if not isinstance(target, dict):
+        raise WorkflowValidationError(f"Step {step.step_id} browser target must be a JSON object.")
+    unknown = set(target) - {"cdp_port"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown browser fields: {', '.join(sorted(unknown))}."
+        )
+    port = target.get("cdp_port")
+    if not isinstance(port, int) or isinstance(port, bool) or not (
+        VALID_CDP_PORT_MIN <= port <= VALID_CDP_PORT_MAX
+    ):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs a DevTools port between {VALID_CDP_PORT_MIN} "
+            f"and {VALID_CDP_PORT_MAX}. Only browsers launched by this workflow carry one."
+        )
+    return target
+
+
+def _validate_launch_browser_target(step: WorkflowStep) -> None:
+    target = _load_target(step, step.target)
+    unknown = set(target) - {"application", "executable", "headed"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown browser launch fields: "
+            f"{', '.join(sorted(unknown))}."
+        )
+    if "headed" in target and not isinstance(target["headed"], bool):
+        raise WorkflowValidationError(f"Step {step.step_id} headed must be true or false.")
+    application, executable = target.get("application"), target.get("executable")
+    if (application is None) == (executable is None):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs exactly one of application or executable."
+        )
+    if application is not None:
+        if not isinstance(application, str) or not application.strip():
+            raise WorkflowValidationError(
+                f"Step {step.step_id} browser application name must be a non-empty string."
+            )
+        if application.lower() not in {name.lower() for name in KNOWN_BROWSERS}:
+            raise WorkflowValidationError(
+                f"Step {step.step_id} names a browser the registry does not allow: "
+                f"{application}."
+            )
+    else:
+        if not isinstance(executable, str) or not executable.strip():
+            raise WorkflowValidationError(
+                f"Step {step.step_id} browser executable must be a non-empty string."
+            )
+        if len(executable) > 260:
+            raise WorkflowValidationError(
+                f"Step {step.step_id} browser executable path is too long."
+            )
+        executable_path = Path(executable)
+        if not executable_path.is_absolute() or executable_path.suffix.lower() != ".exe":
+            raise WorkflowValidationError(
+                f"Step {step.step_id} browser executable must be an absolute .exe path."
+            )
+        if any(part == ".." for part in executable_path.parts):
+            raise WorkflowValidationError(
+                f"Step {step.step_id} browser executable must not traverse parent folders."
+            )
+        if not _executable_name_is_chrome(executable):
+            raise WorkflowValidationError(
+                f"Step {step.step_id} launches a browser other than the registered "
+                "Chrome; only Chrome is supported."
+            )
+
+
+def _executable_name_is_chrome(executable: str) -> bool:
+    return Path(executable).name.lower() == "chrome.exe"
+
+
+def _validate_page_url(value: object, step: WorkflowStep) -> str:
+    """Validate one page URL: allowed scheme, host required, bounded size."""
+    from urllib.parse import urlsplit
+
+    if not isinstance(value, str) or not value.strip():
+        raise WorkflowValidationError(f"Step {step.step_id} needs a URL to navigate to.")
+    if len(value) > MAX_URL_LENGTH:
+        raise WorkflowValidationError(f"Step {step.step_id} URL is too long.")
+    if any(character in value for character in "\r\n\t ") or any(
+        ord(character) < 32 for character in value
+    ):
+        raise WorkflowValidationError(f"Step {step.step_id} URL contains whitespace or control characters.")
+    try:
+        parts = urlsplit(value)
+    except ValueError as error:
+        raise WorkflowValidationError(f"Step {step.step_id} URL is malformed.") from error
+    scheme = parts.scheme.lower()
+    if scheme not in ALLOWED_URL_SCHEMES:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} URL scheme must be one of: "
+            f"{', '.join(sorted(ALLOWED_URL_SCHEMES))}."
+        )
+    if not parts.hostname:
+        raise WorkflowValidationError(f"Step {step.step_id} URL needs a host name.")
+    if parts.username is not None or parts.password is not None:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} URL must not embed user names or passwords."
+        )
+    return value
+
+
+def _validate_navigate_target(step: WorkflowStep) -> None:
+    target = _load_target(step, step.target)
+    unknown = set(target) - {"browser", "url"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown navigation fields: {', '.join(sorted(unknown))}."
+        )
+    _validate_browser_target(target.get("browser"), step)
+    target["url"] = _validate_page_url(target.get("url"), step)
+
+
+def _validate_inspect_page_target(step: WorkflowStep) -> None:
+    target = _load_target(step, step.target)
+    unknown = set(target) - {"browser", "include_text"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown inspection fields: {', '.join(sorted(unknown))}."
+        )
+    _validate_browser_target(target.get("browser"), step)
+    if "include_text" in target and not isinstance(target["include_text"], bool):
+        raise WorkflowValidationError(f"Step {step.step_id} include_text must be true or false.")
+
+
+def _validate_selector(selector: object, step: WorkflowStep) -> str:
+    if not isinstance(selector, str) or not selector.strip():
+        raise WorkflowValidationError(f"Step {step.step_id} needs a CSS selector.")
+    if len(selector) > MAX_SELECTOR_LENGTH:
+        raise WorkflowValidationError(f"Step {step.step_id} selector is too long.")
+    lowered = selector.lower()
+    for scheme in ("javascript:", "data:", "file:", "vbscript:"):
+        if scheme in lowered:
+            raise WorkflowValidationError(f"Step {step.step_id} selector contains a forbidden scheme.")
+    return selector
+
+
+def _validate_find_element_target(step: WorkflowStep) -> None:
+    target = _load_target(step, step.target)
+    unknown = set(target) - {"browser", "selector"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown element fields: {', '.join(sorted(unknown))}."
+        )
+    _validate_browser_target(target.get("browser"), step)
+    _validate_selector(target.get("selector"), step)
+
+
+def _validate_interact_element_target(step: WorkflowStep) -> None:
+    target = _load_target(step, step.target)
+    unknown = set(target) - {"browser", "selector", "interaction", "text"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown interaction fields: {', '.join(sorted(unknown))}."
+        )
+    _validate_browser_target(target.get("browser"), step)
+    _validate_selector(target.get("selector"), step)
+    interaction = target.get("interaction", "click")
+    if interaction not in PAGE_INTERACTIONS:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} page interaction must be one of: "
+            f"{', '.join(sorted(PAGE_INTERACTIONS))}."
+        )
+    if interaction == "type":
+        text = target.get("text")
+        if not isinstance(text, str) or not text:
+            raise WorkflowValidationError(f"Step {step.step_id} needs text to enter.")
+        if len(text) > MAX_BROWSER_TEXT_VALUE_LENGTH:
+            raise WorkflowValidationError(f"Step {step.step_id} text is too long.")
+
+
+def _validate_wait_page_target(step: WorkflowStep) -> None:
+    target = _load_target(step, step.target)
+    unknown = set(target) - {"browser", "conditions", "timeout_seconds"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown wait fields: {', '.join(sorted(unknown))}."
+        )
+    _validate_browser_target(target.get("browser"), step)
+    conditions = target.get("conditions")
+    if not isinstance(conditions, dict) or not conditions or set(conditions) - PAGE_CONDITION_FIELDS:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs conditions among: "
+            f"{', '.join(sorted(PAGE_CONDITION_FIELDS))}."
+        )
+    expected = conditions.get("title")
+    url = conditions.get("url")
+    text = conditions.get("text")
+    selector = conditions.get("selector")
+    for value, label in ((expected, "title"), (text, "text")):
+        if value is not None and (not isinstance(value, str) or not value):
+            raise WorkflowValidationError(f"Step {step.step_id} condition {label} must be text.")
+    if url is not None:
+        parts = urlsplit(url if isinstance(url, str) else "")
+        if not isinstance(url, str) or (parts.scheme not in ALLOWED_URL_SCHEMES and url != "about:blank"):
+            raise WorkflowValidationError(
+                f"Step {step.step_id} condition url must be an http(s) URL or about:blank."
+            )
+    if selector is not None:
+        _validate_selector(selector, step)
 
 
 def _validate_click_target(step: WorkflowStep) -> None:
@@ -452,6 +722,12 @@ class WorkflowRunner:
                 StepKind.TYPE_TEXT,
                 StepKind.PRESS_SHORTCUT,
                 StepKind.VERIFY_FILE_TEXT,
+                StepKind.LAUNCH_BROWSER,
+                StepKind.NAVIGATE_BROWSER,
+                StepKind.INSPECT_PAGE,
+                StepKind.FIND_PAGE_ELEMENT,
+                StepKind.INTERACT_PAGE_ELEMENT,
+                StepKind.WAIT_PAGE,
             ):
                 raise WorkflowValidationError(
                     f"Step {step.step_id} cannot carry a postcondition; its target "
@@ -477,6 +753,18 @@ class WorkflowRunner:
                 _validate_ui_element_target(step)
             if step.kind is StepKind.LAUNCH_APPLICATION:
                 _validate_launch_target(step)
+            if step.kind is StepKind.LAUNCH_BROWSER:
+                _validate_launch_browser_target(step)
+            if step.kind is StepKind.NAVIGATE_BROWSER:
+                _validate_navigate_target(step)
+            if step.kind is StepKind.INSPECT_PAGE:
+                _validate_inspect_page_target(step)
+            if step.kind is StepKind.FIND_PAGE_ELEMENT:
+                _validate_find_element_target(step)
+            if step.kind is StepKind.INTERACT_PAGE_ELEMENT:
+                _validate_interact_element_target(step)
+            if step.kind is StepKind.WAIT_PAGE:
+                _validate_wait_page_target(step)
             if step.kind is StepKind.WAIT_WINDOW:
                 _validate_window_target(step)
             if step.kind is StepKind.CLICK_UI_ELEMENT:
@@ -501,6 +789,7 @@ class WorkflowRunner:
         window_inspector: WindowInspector | None = None,
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
+        browser_actions: BrowserActions | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
         self.validate(workflow)
@@ -537,6 +826,7 @@ class WorkflowRunner:
                 window_inspector,
                 ui_element_inspector,
                 desktop_actions,
+                browser_actions,
             )
             results.append(result)
             if progress_callback is not None:
@@ -566,6 +856,7 @@ class WorkflowRunner:
         window_inspector: WindowInspector | None,
         ui_element_inspector: UIElementInspector | None,
         desktop_actions: DesktopActions | None = None,
+        browser_actions: BrowserActions | None = None,
     ) -> StepResult:
         attempts: list[str] = []
         for attempt in range(1, step.max_attempts + 1):
@@ -580,11 +871,17 @@ class WorkflowRunner:
                 window_inspector is None
                 and ui_element_inspector is None
                 and desktop_actions is None
+                and browser_actions is None
             ):
                 result = self._run_once(step, allowed_root)
             else:
                 result = self._run_once(
-                    step, allowed_root, window_inspector, ui_element_inspector, desktop_actions
+                    step,
+                    allowed_root,
+                    window_inspector,
+                    ui_element_inspector,
+                    desktop_actions,
+                    browser_actions,
                 )
             if result.status in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
                 if step.postcondition is None:
@@ -623,6 +920,7 @@ class WorkflowRunner:
         window_inspector: WindowInspector | None = None,
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
+        browser_actions: BrowserActions | None = None,
     ) -> StepResult:
         if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
             return self._run_path_step(step, allowed_root)
@@ -672,6 +970,18 @@ class WorkflowRunner:
                 return self._run_desktop_step(step, desktop_actions)
             except (ExecutionError, OSError, RuntimeError, ValueError) as error:
                 return StepResult(step.step_id, StepStatus.FAILED, str(error))
+        if step.kind in BROWSER_PROVIDER_KINDS:
+            if browser_actions is None:
+                return StepResult(
+                    step.step_id,
+                    StepStatus.INCONCLUSIVE,
+                    "No browser interaction provider was configured, so this step "
+                    "could not run. Nothing was changed in any browser.",
+                )
+            try:
+                return self._run_browser_step(step, browser_actions)
+            except (ExecutionError, OSError, RuntimeError, ValueError) as error:
+                return StepResult(step.step_id, StepStatus.FAILED, str(error))
         if step.kind is StepKind.FAIL:
             return StepResult(step.step_id, StepStatus.FAILED, step.message)
         return StepResult(step.step_id, StepStatus.SUCCEEDED, step.message)
@@ -691,6 +1001,23 @@ class WorkflowRunner:
             result = actions.type_text(step.target or "")
         else:
             result = actions.press_shortcut(step.target or "")
+        return replace(result, step_id=step.step_id)
+
+    @staticmethod
+    def _run_browser_step(step: WorkflowStep, actions: BrowserActions) -> StepResult:
+        """Dispatch one isolated-browser interaction to the DevTools provider."""
+        if step.kind is StepKind.LAUNCH_BROWSER:
+            result = actions.launch_browser(step.target or "")
+        elif step.kind is StepKind.NAVIGATE_BROWSER:
+            result = actions.navigate(step.target or "")
+        elif step.kind is StepKind.INSPECT_PAGE:
+            result = actions.inspect_page(step.target or "")
+        elif step.kind is StepKind.FIND_PAGE_ELEMENT:
+            result = actions.find_page_element(step.target or "")
+        elif step.kind is StepKind.INTERACT_PAGE_ELEMENT:
+            result = actions.interact_page_element(step.target or "")
+        else:
+            result = actions.wait_page(step.target or "", step.timeout_seconds)
         return replace(result, step_id=step.step_id)
 
     def _run_file_text_step(self, step: WorkflowStep, allowed_root: Path | None) -> StepResult:

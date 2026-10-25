@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .errors import ExecutionError
 from .workflow import (
+    BrowserActions,
     CancelCheck,
     DesktopActions,
     ProgressCallback,
@@ -50,10 +51,19 @@ MUTATING_DESKTOP_KINDS: frozenset[StepKind] = frozenset(
         StepKind.CLICK_UI_ELEMENT,
         StepKind.TYPE_TEXT,
         StepKind.PRESS_SHORTCUT,
+        StepKind.LAUNCH_BROWSER,
+        StepKind.NAVIGATE_BROWSER,
+        StepKind.INTERACT_PAGE_ELEMENT,
     }
 )
 
-#: The desktop automation policy: read-only steps plus approved mutations.
+#: Read-only page steps that need the browser provider but never mutate it.
+BROWSER_READ_KINDS: frozenset[StepKind] = frozenset(
+    {StepKind.INSPECT_PAGE, StepKind.FIND_PAGE_ELEMENT, StepKind.WAIT_PAGE}
+)
+
+#: Cross-application policy: read-only steps plus approved desktop/browser
+#: mutations. The same approval gate covers both surfaces.
 DESKTOP_INTERACTION_POLICY = ReplayPolicy(
     allowed_kinds=frozenset(
         {
@@ -65,6 +75,7 @@ DESKTOP_INTERACTION_POLICY = ReplayPolicy(
             StepKind.WAIT_WINDOW,
         }
         | MUTATING_DESKTOP_KINDS
+        | BROWSER_READ_KINDS
     )
 )
 
@@ -127,6 +138,7 @@ class ReplayExecutor:
         window_inspector: WindowInspector | None = None,
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
+        browser_actions: BrowserActions | None = None,
     ) -> WorkflowRun:
         """Preview or execute the allowlisted read-only actions."""
         self.validate(workflow)
@@ -159,4 +171,5 @@ class ReplayExecutor:
             window_inspector=window_inspector,
             ui_element_inspector=ui_element_inspector,
             desktop_actions=desktop_actions,
+            browser_actions=browser_actions,
         )
