@@ -344,6 +344,7 @@ was added to the development requirements and installed successfully.
   the committed suite); grep of `ui/main_window.py` panel/step wiring;
   `grep -rn INSPECT_PATH engine` for the read-only path-inspection step.
 
+
 ### 2026-10-25 — Desktop interactions are allowed only with an identified target, and window identity needs only one identifier
 - Question: modern (WinUI) Notepad exposes an editor with an empty
   AutomationId and titles that gain an unsaved-changes marker after typing;
@@ -394,3 +395,22 @@ was added to the development requirements and installed successfully.
   runner process or startup scan, can also clean stale temp profiles); (3)
   `--remote-allow-origins`-style watchdog — a shell parent watching Once;
   rejected because it adds an unmanaged wrapper process.
+
+## 2026-10-24 — Merge story for redesigned shell UI
+
+- Question: how should the redesigned `ui/shell.py` MainWindow merge onto `main`,
+  given that `main` still contains the old multi-tab `ui/main_window.py` runner and
+  `app.py` on `redesign-ui` still imports `ui.main_window`?
+- Choice: treat the current `redesign-ui` branch as the single source of truth for
+  the redesigned shell UI, finish it as a complete vertical slice there, then land it
+  on `main` by rebasing `redesign-ui` onto `main` and resolving the `MainWindow`
+  module rename/import mismatch as part of that rebase. Do not perform a naive
+  `git merge` between the two main-window implementations.
+- Reason: both branches now define a `MainWindow`, but they describe different
+  products. `main`'s `MainWindow` is the old recorder + workflow-runner + proposal
+  review shell. `redesign-ui`'s shell is the new sidebar/workspace shell with a
+  separate page set and smoke test. Merging them directly would keep both and
+  confuse the entry point and the smoke tests.
+- Note: this decision is about branch strategy, not a code change. The next
+  non-document action is a rebase with conflict resolution, not another shell edit.
+

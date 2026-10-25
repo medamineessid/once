@@ -96,36 +96,6 @@ Uninstall: delete the `Once` application folder. Once never deletes
 configuration survive an uninstall unless the user deliberately deletes that
 data folder as a separate step (consider backing it up first).
 
-## Tests and linting
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\ruff.exe check .
-.\.venv\Scripts\ruff.exe format --check .
-```
-
-Tests use only pytest's `tmp_path`; they never read or modify real user folders.
-The Qt tests run offscreen (`QT_QPA_PLATFORM=offscreen`).
-
-## Architecture
-
-```
-app.py                 entry point: builds QApplication and MainWindow
-ui/                    PySide6 widgets only; no file-system mutation
-controller/            Qt-free services connecting UI to engine
-engine/                Qt-free workflow orchestration and integrations
-storage/               local SQLite/JSON persistence (later milestone)
-tests/                 pytest tests, including architecture guards
-docs/                  decisions and AI engineering log
-```
-
-Dependency direction: `ui -> controller -> (engine, storage)`. The architecture
-tests enforce:
-
-- `engine/` never imports PySide6, `ui/`, `controller/` or `storage/`.
-- `ui/` never calls file-system mutation functions such as `os.rename`,
-  `shutil.move` or `Path.unlink`.
-
 ## Dependency pins
 
 Runtime (`requirements.txt`): PySide6 6.12.0, send2trash 2.1.0.
@@ -178,6 +148,12 @@ workflow can then be selected and run through the normal deterministic engine.
 
 The offline demo does not send recording data over the network. Gemini remains
 disabled unless a caller explicitly enables it and supplies a credential.
+
+Settings now shows placeholder messages when integrations are not configured:
+connect/disconnect Gemini, open proposals, and start review each explain what
+they require instead of silently doing nothing. The delete-selected-recording
+control now confirms the deletion with a normal information dialog instead of a
+warning, because recording deletion is not a crisis action.
 
 Replay currently supports read-only path checks and exact-identity Windows UI
 Automation window inspection. Window targets include a title and may include a
