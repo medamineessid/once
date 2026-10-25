@@ -70,10 +70,21 @@ def test_settings_page_opens_from_sidebar(qtbot, window):
 
 
 def test_settings_page_shows_placeholder_integration_messages(qtbot, window):
+    window._show_page(ShellPages.SETTINGS)
+    qtbot.wait(50)
     settings = window.settings_page
     settings._start_recording()
     settings._connect_gemini()
+    assert settings._status_label.isVisible() is True
+    assert settings._status_label.text().startswith("Connect Gemini")
+    settings._disconnect_gemini()
+    assert settings._status_label.text().startswith("Disconnect Gemini")
     settings._open_coding_agent_proposals()
+    assert settings._status_label.text().startswith("There are no recorded")
+    settings._open_coding_agent_review()
+    assert settings._status_label.text().startswith("No proposal is ready")
+    settings._delete_recording()
+    assert settings._status_label.text().startswith("No recording is selected")
 
 
 def test_settings_page_has_recording_controls(qtbot, window):

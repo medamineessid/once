@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -44,7 +41,6 @@ def _build_section(
 
 
 class SettingsPage(QWidget):
-
     verifier_configured = Signal()
     recording_started = Signal()
     recording_stopped = Signal()
@@ -54,16 +50,24 @@ class SettingsPage(QWidget):
         self._service: WorkflowService | None = None
         self._init_ui()
 
+    def _set_status(self, message: str) -> None:
+        """Show a plain-language status message without blocking the UI."""
+        self._status_label.setText(message)
+        self._status_label.show()
+
     def _init_ui(self) -> None:
+        self._status_label = QLabel("", self)
+        self._status_label.setObjectName("settingsStatus")
+        self._status_label.setWordWrap(True)
+        self._status_label.setStyleSheet(
+            "font-size: 13px; color: #2563EB; padding: 2px 24px 0 24px;"
+        )
+        self._status_label.hide()
         scroll_area = QScrollArea(self)
         scroll_area.setObjectName("settingsScroll")
         scroll_area.setWidgetResizable(True)
-        scroll_area.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOn
-        )
-        scroll_area.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_widget = QWidget(self)
         scroll_widget.setObjectName("settingsWidget")
         scroll_layout = QVBoxLayout(scroll_widget)
@@ -72,18 +76,14 @@ class SettingsPage(QWidget):
         scroll_layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self._title_label = QLabel("Settings", self)
         self._title_label.setObjectName("pageTitle")
-        self._title_label.setStyleSheet(
-            "font-size: 26px; font-weight: 600; color: #1d1d1d;"
-        )
+        self._title_label.setStyleSheet("font-size: 26px; font-weight: 600; color: #1d1d1d;")
         scroll_layout.addWidget(self._title_label)
         self._subtitle_label = QLabel(
             "Configure how Once works for you.",
             self,
         )
         self._subtitle_label.setObjectName("pageSubtitle")
-        self._subtitle_label.setStyleSheet(
-            "font-size: 15px; color: #525252; margin-top: 2px;"
-        )
+        self._subtitle_label.setStyleSheet("font-size: 15px; color: #525252; margin-top: 2px;")
         scroll_layout.addWidget(self._subtitle_label)
         scroll_layout.addSpacing(12)
         self._authorized_group = QGroupBox("Authorized folders", self)
@@ -91,22 +91,14 @@ class SettingsPage(QWidget):
         authorized_layout = QVBoxLayout(self._authorized_group)
         authorized_layout.setContentsMargins(12, 12, 12, 12)
         authorized_layout.setSpacing(8)
-        self._authorized_label = QLabel(
-            "No folder selected.", self._authorized_group
-        )
+        self._authorized_label = QLabel("No folder selected.", self._authorized_group)
         self._authorized_label.setWordWrap(True)
-        self._authorized_label.setStyleSheet(
-            "font-size: 13px; color: #525252;"
-        )
+        self._authorized_label.setStyleSheet("font-size: 13px; color: #525252;")
         authorized_layout.addWidget(self._authorized_label)
-        self._choose_authorized_button = QPushButton(
-            "Choose folder", self._authorized_group
-        )
+        self._choose_authorized_button = QPushButton("Choose folder", self._authorized_group)
         self._choose_authorized_button.setObjectName("secondaryActionButton")
         self._choose_authorized_button.setMinimumHeight(36)
-        self._choose_authorized_button.clicked.connect(
-            self._choose_authorized_folder
-        )
+        self._choose_authorized_button.clicked.connect(self._choose_authorized_folder)
         authorized_layout.addWidget(self._choose_authorized_button)
         scroll_layout.addWidget(self._authorized_group)
         self._recordings_group = QGroupBox("Recording", self)
@@ -116,9 +108,7 @@ class SettingsPage(QWidget):
         recordings_layout.setSpacing(8)
         recordings_actions_row = QHBoxLayout()
         recordings_actions_row.setSpacing(10)
-        self._start_recording_button = QPushButton(
-            "Start recording", self._recordings_group
-        )
+        self._start_recording_button = QPushButton("Start recording", self._recordings_group)
         self._start_recording_button.setObjectName("primaryActionButton")
         self._start_recording_button.setMinimumHeight(34)
         self._start_recording_button.clicked.connect(self._start_recording)
@@ -192,6 +182,7 @@ class SettingsPage(QWidget):
         page_layout = QVBoxLayout(self)
         page_layout.setContentsMargins(0, 0, 0, 0)
         page_layout.setSpacing(0)
+        page_layout.addWidget(self._status_label)
         page_layout.addWidget(scroll_area, stretch=1)
         page_layout.setStretchFactor(scroll_area, 1)
 
@@ -202,36 +193,27 @@ class SettingsPage(QWidget):
         self._authorized_label.setText(f"Authorized folder: {directory}")
 
     def _connect_gemini(self) -> None:
-        QMessageBox.information(
-            self,
-            "Gemini integration",
+        self._set_status(
             "Connect Gemini when you want invoice understanding on this"
             " machine. The connection is verified before any data leaves"
-            " the machine.",
+            " the machine."
         )
 
     def _disconnect_gemini(self) -> None:
-        QMessageBox.information(
-            self,
-            "Gemini integration",
-            "Disconnect Gemini when you no longer want invoice"
-            " understanding on this machine.",
+        self._set_status(
+            "Disconnect Gemini when you no longer want invoice understanding on this machine."
         )
 
     def _open_coding_agent_proposals(self) -> None:
-        QMessageBox.information(
-            self,
-            "Coding agent",
+        self._set_status(
             "There are no recorded proposals yet. Propose a fix from a run"
-            " or verification result when that capability is enabled.",
+            " or verification result when that capability is enabled."
         )
 
     def _open_coding_agent_review(self) -> None:
-        QMessageBox.information(
-            self,
-            "Coding agent",
+        self._set_status(
             "No proposal is ready for review. The review screen opens when a"
-            " proposal has been recorded.",
+            " proposal has been recorded."
         )
 
     def _start_recording(self) -> None:
@@ -241,13 +223,9 @@ class SettingsPage(QWidget):
         self.recording_stopped.emit()
 
     def _delete_recording(self) -> None:
-        item = self._recording_list.currentItem()
-        if item is None:
-            return
-        QMessageBox.information(
-            self,
-            "Delete recording",
-            f"Recording deleted: '{item.text()}'.",
+        # Recordings are listed on the recorder screen; this page has none yet.
+        self._set_status(
+            "No recording is selected here. Select a recording on the recorder screen to delete it."
         )
 
     def set_service(self, service: WorkflowService | None) -> None:
