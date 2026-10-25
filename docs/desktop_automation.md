@@ -124,11 +124,21 @@ Engineering constraints:
 - All DevTools communication is over `ws://127.0.0.1:<port>` and
   `http://127.0.0.1:<port>` only; the WebSocket client is a minimal stdlib
   RFC 6455 implementation (`integrations/devtools_ws.py`) with a 10 MiB
-  frame-size bound and refusal of server-masked or non-text frames.
+  frame-size bound and refusal of server-masked or non-text frames. It
+  answers server ping frames with a pong carrying the same payload
+  (RFC 6455 section 5.5.2).
 - Exactly one page at a time: more than one open page in the isolated browser
   refuses ("More than one page is open ... refused instead of choosing a
   tab"), so tab switching can never happen silently.
 - Postconditions are rejected on all browser kinds (and `VERIFY_FILE_TEXT`).
+- Lifetime: through `WorkflowService.run_desktop_approved`, every
+  engine-launched browser is closed and its temporary profile removed when the
+  run finishes, fails, or is cancelled (`keep_browsers_after_run=True` may
+  preserve a launch-only run's browser for the one later run that consumes
+  its DevTools port; that run closes it when it finishes). Normal app exit is
+  covered by an exit hook on the service's browser provider. A hard app crash
+  leaves the browser and its `once-chrome-profile-*` temp profile behind
+  until Windows cleans the temp area — intentionally not yet implemented.
 
 ## Field evolution
 
@@ -273,6 +283,10 @@ status element text `button was clicked`).
 - No downloads/uploads, no dialogs/alerts automation, no cookie/storage
   access, no JavaScript execution beyond the fixed engine expressions, no
   cross-origin iframes beyond the top frame.
+- DevTools browser sessions do not survive a finished/failed/cancelled
+  approved run through the controller; a workflow cannot drive a browser step
+  in one run against a browser launched by an earlier service run unless the
+  launch run explicitly kept it open.
 - Elevated/system windows and controls without UIA patterns fail closed with
   "does not support the ... pattern" rather than degrading to unsafe input.
 - Workflow persistence of desktop workflows uses schema v3; the redesigned UI

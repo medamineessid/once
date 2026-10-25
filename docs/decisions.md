@@ -363,3 +363,34 @@ was added to the development requirements and installed successfully.
   tests/test_desktop_engine.py::test_window_identity_allows_process_and_class_without_a_title,
   ::test_window_identity_requires_some_identifier, tests/test_replay.py updated
   selector-requirement test (refusal message now "automation_id or class_name").
+
+## 2026-10-25 — Browser session lifetime through the controller
+- Question: engine-launched Chrome previously lived until an explicit
+  provider `shutdown()` (only the demo script called it). When must the real
+  app close the browser and delete its temporary profile?
+- Choice: `WorkflowService.run_desktop_approved` closes every browser
+  session the provider holds at the end of each approved run — finished,
+  failed, or cancelled — via a `finally` block. `keep_browsers_after_run=True`
+  is the documented exception for a launch-only run whose DevTools port is
+  consumed by exactly one later run, which then closes the browser when it
+  finishes. Normal exit is covered by an `atexit` hook registered when the
+  service is constructed (`close_browser_sessions`, idempotent). Hard app
+  crashes are intentionally NOT handled yet.
+- Reason: the approval gate is per workflow, so no browser should outlive its
+  approved run by default; this is the safest interpretation (no leaked
+  Chrome on any normal path). The opt-out exists only because a browser's
+  DevTools port is dynamic (`--remote-debugging-port=0`), so the demonstrated
+  two-run pattern (launch, read the port from evidence, then approve and run
+  the consuming workflow) needs the browser alive between two executions.
+- Consequence/known gap: if the app is killed (crash, power loss, Task
+  Manager), the browser survives as an orphan with its `once-chrome-profile-*`
+  temp profile until Windows clears `%TEMP%`. Options for the future (not
+  implemented, ordered roughly by cost): (1) Windows Job Object via
+  `pywin32`'s `win32job` — create a kill-on-close job, assign the Chrome
+  process: the OS closes Chrome on any host-process death, cheap and robust
+  (~1-2 hundred lines + tests); (2) a lockfile owned by the app whose
+  existence Chrome's lifetime is reconciled against on the next startup,
+  reuse the pattern planned for run-journal reconciliation (~1 day, needs a
+  runner process or startup scan, can also clean stale temp profiles); (3)
+  `--remote-allow-origins`-style watchdog — a shell parent watching Once;
+  rejected because it adds an unmanaged wrapper process.

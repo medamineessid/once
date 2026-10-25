@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -89,6 +90,19 @@ class WorkflowService:
         self._workflow_directory = workflow_directory
         if workflow_directory is not None:
             workflow_directory.mkdir(parents=True, exist_ok=True)
+        # Normal app exit closes every engine-launched browser. Hard crashes
+        # are out of scope for this hook (documented in docs/decisions.md).
+        atexit.register(self.close_browser_sessions)
+
+    def close_browser_sessions(self) -> None:
+        """Close every engine-launched browser and remove its temporary profile.
+
+        Idempotent: providers that do not own browsers, repeated calls, and
+        services with a fake provider that has no ``shutdown`` are no-ops.
+        """
+        shutdown = getattr(self._browser_actions, "shutdown", None)
+        if callable(shutdown):
+            shutdown()
 
     @classmethod
     def for_app_data(cls, app_data_dir: Path) -> WorkflowService:
@@ -187,28 +201,39 @@ class WorkflowService:
         allowed_root: Path | None = None,
         cancel_check: Callable[[], bool] | None = None,
         progress_callback: Callable[[StepResult], None] | None = None,
+        keep_browsers_after_run: bool = False,
     ) -> WorkflowRun:
         """Execute only a desktop workflow that passed the explicit approval gate.
 
         Mutating desktop steps cannot reach this method without a
         `DesktopApproval` produced by `engine.desktop.approve_desktop_workflow`;
         the desktop policy re-validates the allowlist at execution time.
+
+        Browser sessions are closed when the run finishes, fails, or is
+        cancelled (the approval gate is per workflow, so no browser is allowed
+        to outlive its approved run). Set `keep_browsers_after_run=True` only
+        for a launch-only run whose DevTools port is deliberately handed to a
+        later run; that later run closes the browser when it finishes.
         """
         if not isinstance(approval, DesktopApproval):
             raise WorkflowValidationError(
                 "Only a workflow approved through the desktop approval gate can "
                 "run desktop actions."
             )
-        run = self._desktop_replay.execute(
-            approval.workflow,
-            allowed_root=allowed_root,
-            cancel_check=cancel_check,
-            progress_callback=progress_callback,
-            window_inspector=self._window_inspector,
-            ui_element_inspector=self._ui_element_inspector,
-            desktop_actions=self._desktop_actions,
-            browser_actions=self._browser_actions,
-        )
+        try:
+            run = self._desktop_replay.execute(
+                approval.workflow,
+                allowed_root=allowed_root,
+                cancel_check=cancel_check,
+                progress_callback=progress_callback,
+                window_inspector=self._window_inspector,
+                ui_element_inspector=self._ui_element_inspector,
+                desktop_actions=self._desktop_actions,
+                browser_actions=self._browser_actions,
+            )
+        finally:
+            if not keep_browsers_after_run:
+                self.close_browser_sessions()
         if self._history is not None:
             self._history.record(run)
         return run
