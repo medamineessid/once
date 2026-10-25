@@ -606,8 +606,7 @@ def _validate_wait_page_target(step: WorkflowStep) -> None:
         )
     if unexpected:
         raise WorkflowValidationError(
-            f"Step {step.step_id} has unknown wait conditions: "
-            f"{', '.join(sorted(unexpected))}."
+            f"Step {step.step_id} has unknown wait conditions: {', '.join(sorted(unexpected))}."
         )
     if not conditions:
         raise WorkflowValidationError(

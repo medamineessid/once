@@ -61,9 +61,7 @@ class FakeBrowserProvider:
         from engine.workflow import StepResult
 
         self.launch_calls += 1
-        return StepResult(
-            step_id="", status=StepStatus.SUCCEEDED, message="launched"
-        )
+        return StepResult(step_id="", status=StepStatus.SUCCEEDED, message="launched")
 
     def shutdown(self) -> None:
         self.shutdown_calls += 1
@@ -103,7 +101,6 @@ def test_browser_is_closed_when_the_approved_run_finishes(tmp_path) -> None:
 
 def test_browser_is_closed_even_when_the_run_fails(tmp_path) -> None:
     browser = FakeBrowserProvider()
-    service = make_browser_service(tmp_path, browser)
 
     class FailingBrowser(FakeBrowserProvider):
         def launch_browser(self, target_json: str):
@@ -125,7 +122,8 @@ def test_browser_is_closed_when_the_run_is_cancelled(tmp_path) -> None:
     service = make_browser_service(tmp_path, browser)
     approval = approve_desktop_workflow(launch_workflow())
     run = service.run_desktop_approved(
-        approval, cancel_check=lambda: True  # cancelled before the first step
+        approval,
+        cancel_check=lambda: True,  # cancelled before the first step
     )
     assert run.status.value == "CANCELLED"
     assert browser.launch_calls == 0
@@ -175,7 +173,6 @@ def test_close_browser_sessions_is_a_safe_public_cleanup(tmp_path) -> None:
         ui_element_inspector=lambda target_json: (),
     )
     bare.close_browser_sessions()  # no AttributeError
-
 
 
 def test_desktop_preview_allows_for_the_desktop_policy(tmp_path) -> None:

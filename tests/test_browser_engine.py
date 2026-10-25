@@ -186,9 +186,7 @@ def test_interact_element_validation() -> None:
 def test_wait_page_conditions_validation() -> None:
     ok = step("wait", StepKind.WAIT_PAGE, WAIT_TARGET)
     WorkflowRunner.validate(Workflow("w", "w", (ok,)))
-    text_ok = step(
-        "wait", StepKind.WAIT_PAGE, {"browser": BROWSER, "conditions": {"text": "done"}}
-    )
+    text_ok = step("wait", StepKind.WAIT_PAGE, {"browser": BROWSER, "conditions": {"text": "done"}})
     WorkflowRunner.validate(Workflow("wt", "wt", (text_ok,)))
     empty = step("wait", StepKind.WAIT_PAGE, {"browser": BROWSER, "conditions": {}})
     with pytest.raises(WorkflowValidationError, match="conditions among"):

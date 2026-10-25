@@ -85,10 +85,10 @@ class ScriptedServer:
                 elif name == "sleep":
                     time.sleep(value)
         finally:
-            try:
+            import contextlib
+
+            with contextlib.suppress(OSError):
                 connection.close()
-            except OSError:
-                pass
             self._listener.close()
 
     @staticmethod
@@ -111,7 +111,11 @@ class ScriptedServer:
                 break
         else:
             raise AssertionError("client sent no Sec-WebSocket-Key")
-        accept = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()
+        # The RFC 6455 opening-handshake accept value is SHA-1 by definition
+        # of the protocol; it carries no security property.
+        accept = base64.b64encode(
+            hashlib.sha1((key + GUID).encode()).digest()  # noqa: S324
+        ).decode()
         connection.sendall(
             (
                 "HTTP/1.1 101 Switching Protocols\r\n"
@@ -238,9 +242,7 @@ def test_declared_frame_over_the_size_limit_is_refused() -> None:
 
 
 def test_masked_server_frame_is_refused() -> None:
-    server = ScriptedServer(
-        [("send", encode_frame(TEXT, b'{"masked": true}', mask=True))]
-    )
+    server = ScriptedServer([("send", encode_frame(TEXT, b'{"masked": true}', mask=True))])
     client = connect_to(server)
     try:
         with pytest.raises(ValueError, match="must not be masked"):

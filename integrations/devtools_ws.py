@@ -160,16 +160,12 @@ class WebSocketClient:
                 raise WebSocketClosedError("The DevTools endpoint closed the connection.")
             if opcode == OP_TEXT:
                 if message_open:
-                    raise ValueError(
-                        "A new message started before the previous one was finished."
-                    )
+                    raise ValueError("A new message started before the previous one was finished.")
                 message_open = True
                 fragments += payload
             elif opcode == OP_CONT:
                 if not message_open:
-                    raise ValueError(
-                        "A continuation frame arrived without a message to continue."
-                    )
+                    raise ValueError("A continuation frame arrived without a message to continue.")
                 fragments += payload
             else:
                 raise ValueError(
