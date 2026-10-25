@@ -133,11 +133,18 @@ class WebSocketClient:
         self.sock.sendall(header + mask + masked)
 
     def receive_json(self) -> dict:
-        """Return the next complete JSON message, absorbing pings and fragments."""
+        """Return the next complete JSON message, absorbing pings and fragments.
+
+        A received ping is answered immediately with a pong carrying the same
+        payload (RFC 6455 section 5.5.2) before reading continues.
+        """
         fragments = bytearray()
         while True:
             opcode, fin, payload = self._read_one_frame()
-            if opcode in (OP_PING, OP_PONG):
+            if opcode == OP_PING:
+                self._send_pong(payload)
+                continue
+            if opcode == OP_PONG:
                 continue
             if opcode == OP_CLOSE:
                 self.close()
@@ -149,6 +156,23 @@ class WebSocketClient:
             fragments += payload
             if fin:
                 return json.loads(bytes(fragments).decode("utf-8"))
+
+    def _send_pong(self, payload: bytes) -> None:
+        """Send one masked pong frame repeating the ping's payload."""
+        data = payload
+        mask = os.urandom(4)
+        header = bytearray([0x80 | OP_PONG])
+        length = len(data)
+        if length < 126:
+            header.append(0x80 | length)
+        elif length < 65_536:
+            header.append(0x80 | 126)
+            header += struct.pack(">H", length)
+        else:
+            header.append(0x80 | 127)
+            header += struct.pack(">Q", length)
+        masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(data))
+        self.sock.sendall(bytes(header) + mask + masked)
 
     def close(self) -> None:
         import contextlib
