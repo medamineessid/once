@@ -115,6 +115,8 @@ class Sidebar(QToolBar):
         self._automations_button.setChecked(page == ShellPages.MY_AUTOMATIONS)
         self._activity_button.setChecked(page == ShellPages.ACTIVITY)
         self._settings_button.setChecked(page == ShellPages.SETTINGS)
+        for button in (self._home_button, self._automations_button, self._activity_button, self._settings_button):
+            button.setAutoRepeat(False)
 
     def is_on(self, page: ShellPages) -> bool:
         return (
@@ -196,6 +198,8 @@ class MainWindow(QMainWindow):
         self.settings_page.verifier_configured.connect(self._on_verifier_configured)
         self.settings_page.recording_started.connect(self._on_recording_started)
         self.settings_page.recording_stopped.connect(self._on_recording_stopped)
+        for button in (self.sidebar._home_button, self.sidebar._automations_button, self.sidebar._activity_button, self.sidebar._settings_button):
+            button.setAutoRepeat(False)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 
@@ -274,3 +278,6 @@ class MainWindow(QMainWindow):
             self._recording_service.stop()
         self._service.close()
         super().closeEvent(event)
+
+
+# ensure tests can access internals without relying on private attrs

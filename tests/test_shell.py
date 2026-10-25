@@ -49,3 +49,45 @@ def test_create_automation_page_has_description_input(qtbot, window):
     assert input_field.placeholderText().startswith("Example:")
     QTest.keyClicks(input_field, "Open invoices folder and read PDFs")
     assert page._description_input.toPlainText() == "Open invoices folder and read PDFs"
+
+
+def test_sidebar_active_state_after_sidebar_click(qtbot, window):
+    qtbot.mouseClick(window.sidebar._activity_button, Qt.MouseButton.LeftButton)
+    qtbot.wait(50)
+    assert window.sidebar.is_on(ShellPages.ACTIVITY)
+
+
+def test_settings_page_opens_from_sidebar(qtbot, window):
+    window._show_page(ShellPages.SETTINGS)
+    qtbot.wait(50)
+    settings = window.settings_page
+    assert window.workspace.currentIndex() == ShellPages.SETTINGS
+    assert settings._authorized_group.isVisible() is True
+    assert settings._recordings_group.isVisible() is True
+    assert settings._gemini_group.isVisible() is True
+    assert settings._coding_agent_group.isVisible() is True
+    assert settings._advanced_group.isVisible() is True
+
+
+def test_settings_page_shows_placeholder_integration_messages(qtbot, window):
+    settings = window.settings_page
+    settings._start_recording()
+    settings._connect_gemini()
+    settings._open_coding_agent_proposals()
+
+
+def test_settings_page_has_recording_controls(qtbot, window):
+    settings = window.settings_page
+    assert settings._start_recording_button.text() == "Start recording"
+    assert settings._stop_recording_button.text() == "Stop recording"
+    assert settings._delete_recording_button.text() == "Delete selected"
+    assert settings._start_recording_button.isEnabled() is True
+    assert settings._stop_recording_button.isEnabled() is True
+    assert settings._delete_recording_button.isEnabled() is True
+
+
+def test_sidebar_buttons_resist_stuck_repeats(qtbot, window):
+    assert window.sidebar._home_button.autoRepeat() is False
+    assert window.sidebar._automations_button.autoRepeat() is False
+    assert window.sidebar._activity_button.autoRepeat() is False
+    assert window.sidebar._settings_button.autoRepeat() is False
