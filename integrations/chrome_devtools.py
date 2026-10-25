@@ -676,7 +676,7 @@ class ChromeDevtoolsActions:
             try:
                 state = self._runtime_expression(client, EXPR_PAGE_STATE)
                 text: Any = None
-                if conditions.get("text") is not None or conditions.get("selector") is not None:
+                if conditions.get("text") is not None:
                     text = self._runtime_expression(client, EXPR_PAGE_TEXT)
             except (BrowserError, OSError, ValueError, WebSocketClosed) as error:
                 state, text = None, None
@@ -705,10 +705,7 @@ class ChromeDevtoolsActions:
                 f"The page did not match the waited-for conditions within "
                 f"{timeout_seconds} seconds ({last_reason})."
             ),
-            evidence=(
-                "conditions="
-                + json.dumps({k: v for k, v in conditions.items() if k != "selector"}),
-            ),
+            evidence=("conditions=" + json.dumps(conditions),),
         )
 
     @staticmethod
@@ -725,8 +722,6 @@ class ChromeDevtoolsActions:
         expected_text = conditions.get("text")
         if expected_text is not None and (not isinstance(text, str) or expected_text not in text):
             return "the expected text is not on the page yet"
-        if conditions.get("selector") is not None:
-            return "the selector check requires a wait_page element mode"
         return None
 
     # -------------------------------------------------------------- shutdown

@@ -153,7 +153,7 @@ MAX_BROWSER_TEXT_VALUE_LENGTH = 500
 VALID_CDP_PORT_MIN = 1024
 VALID_CDP_PORT_MAX = 65_535
 
-PAGE_CONDITION_FIELDS = frozenset({"title", "url", "selector", "text"})
+PAGE_CONDITION_FIELDS = frozenset({"title", "url", "text"})
 
 PAGE_INTERACTIONS = frozenset({"click", "type"})
 
@@ -593,11 +593,23 @@ def _validate_wait_page_target(step: WorkflowStep) -> None:
         )
     _validate_browser_target(target.get("browser"), step)
     conditions = target.get("conditions")
-    if (
-        not isinstance(conditions, dict)
-        or not conditions
-        or set(conditions) - PAGE_CONDITION_FIELDS
-    ):
+    if not isinstance(conditions, dict):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs conditions among: "
+            f"{', '.join(sorted(PAGE_CONDITION_FIELDS))}."
+        )
+    unexpected = set(conditions) - PAGE_CONDITION_FIELDS
+    if "selector" in unexpected:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} condition selector is not supported for "
+            "WAIT_PAGE; wait for text or use FIND_PAGE_ELEMENT instead."
+        )
+    if unexpected:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown wait conditions: "
+            f"{', '.join(sorted(unexpected))}."
+        )
+    if not conditions:
         raise WorkflowValidationError(
             f"Step {step.step_id} needs conditions among: "
             f"{', '.join(sorted(PAGE_CONDITION_FIELDS))}."

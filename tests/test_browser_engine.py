@@ -186,13 +186,17 @@ def test_interact_element_validation() -> None:
 def test_wait_page_conditions_validation() -> None:
     ok = step("wait", StepKind.WAIT_PAGE, WAIT_TARGET)
     WorkflowRunner.validate(Workflow("w", "w", (ok,)))
+    text_ok = step(
+        "wait", StepKind.WAIT_PAGE, {"browser": BROWSER, "conditions": {"text": "done"}}
+    )
+    WorkflowRunner.validate(Workflow("wt", "wt", (text_ok,)))
     empty = step("wait", StepKind.WAIT_PAGE, {"browser": BROWSER, "conditions": {}})
     with pytest.raises(WorkflowValidationError, match="conditions among"):
         WorkflowRunner.validate(Workflow("w2", "w2", (empty,)))
     bad_fields = step(
         "wait", StepKind.WAIT_PAGE, {"browser": BROWSER, "conditions": {"cookies": True}}
     )
-    with pytest.raises(WorkflowValidationError, match="conditions among"):
+    with pytest.raises(WorkflowValidationError, match="unknown wait conditions"):
         WorkflowRunner.validate(Workflow("w3", "w3", (bad_fields,)))
     bad_url = step(
         "wait",
@@ -201,6 +205,17 @@ def test_wait_page_conditions_validation() -> None:
     )
     with pytest.raises(WorkflowValidationError, match="condition url"):
         WorkflowRunner.validate(Workflow("w4", "w4", (bad_url,)))
+
+
+def test_wait_page_selector_condition_is_rejected_at_validation() -> None:
+    """The engine refuses a wait it cannot evaluate well before execution."""
+    selector_wait = step(
+        "wait",
+        StepKind.WAIT_PAGE,
+        {"browser": BROWSER, "conditions": {"selector": "#status"}},
+    )
+    with pytest.raises(WorkflowValidationError, match="condition selector is not supported"):
+        WorkflowRunner.validate(Workflow("ws", "ws", (selector_wait,)))
 
 
 # ------------------------------------------------------------------- execution

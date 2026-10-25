@@ -111,10 +111,10 @@ still subject to policy validation):
   `file:`/`vbscript:` scheme.
 - `WAIT_PAGE` — target `{"browser", "conditions"}` with at least one of
   `title` (exact), `url` (`http(s)` or `about:blank`), `text` (substring of
-  bounded page text). The step polls until all conditions hold or its
-  `timeout_seconds` elapses, and reports the first unmet condition as the
-  failure reason. (`selector` is accepted by the schema today but reported as
-  unsupported by the provider rather than silently ignored.)
+  bounded page text). A `selector` condition is rejected at validation: wait
+  for text or put a separate `FIND_PAGE_ELEMENT` step after the wait. The
+  step polls until all conditions hold or its `timeout_seconds` elapses, and
+  reports the first unmet condition as the failure reason.
 
 Engineering constraints:
 
