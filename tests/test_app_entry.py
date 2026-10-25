@@ -89,3 +89,13 @@ def test_smoke_test_against_a_missing_database_directory_writes_no_recording(
     assert exit_code == 0
     assert (isolation / "Once" / "once.db").is_file()
     assert (isolation / "Once" / "logs" / "once.log").is_file()
+
+
+def test_smoke_test_with_shell_flag_exits_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The --shell flag launches the redesigned shell window and smoke-test exits 0."""
+    isolation = tmp_path / "appdata-root-shell"
+    monkeypatch.setenv("LOCALAPPDATA", str(isolation))
+    exit_code = main(["--shell", "--smoke-test"])
+    assert exit_code == 0
+    assert (isolation / "Once" / "once.db").is_file()
+
