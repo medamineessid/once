@@ -16,13 +16,16 @@ approval gate described below. Inspection remains read-only.
 
 | Layer | File | Role |
 |---|---|---|
-| Contracts | `engine/workflow.py` | New `StepKind` values, target validation, timeout bounds, `DesktopActions` adapter contract, `VERIFY_FILE_TEXT` reading |
-| Policy | `engine/replay.py` | `READ_ONLY_POLICY`, `DESKTOP_INTERACTION_POLICY`, `MUTATING_DESKTOP_KINDS` |
-| Approval | `engine/desktop.py` | `DesktopApproval`, `approve_desktop_workflow` — the only producer of approvals |
-| Provider | `integrations/windows_desktop.py` | Real Windows actions via pywinauto UI Automation |
+| Contracts | `engine/workflow.py` | New `StepKind` values, target validation, timeout bounds, `DesktopActions`/`BrowserActions` adapter contracts, `VERIFY_FILE_TEXT` reading |
+| Policy | `engine/replay.py` | `READ_ONLY_POLICY`, `DESKTOP_INTERACTION_POLICY`, `MUTATING_DESKTOP_KINDS`, `BROWSER_READ_KINDS` |
+| Approval | `engine/desktop.py` | `DesktopApproval`, `approve_desktop_workflow` — the only producer of approvals (covers browser mutations too) |
+| Desktop provider | `integrations/windows_desktop.py` | Real Windows actions via pywinauto UI Automation |
 | Targeting | `integrations/uia_targeting.py` | Shared window/element matching (inspector and provider use the same code) |
-| Controller | `controller/service.py` | `preview_desktop_replay`, `run_desktop_approved` (history persisted) |
-| Live demo | `scripts/notepad_demo.py` | Real end-to-end Notepad scenario (manual run) |
+| Browser provider | `integrations/chrome_devtools.py` | Isolated-Chrome automation via the Chrome DevTools Protocol |
+| WebSocket client | `integrations/devtools_ws.py` | Minimal stdlib RFC 6455 client for `ws://127.0.0.1` DevTools connections |
+| Controller | `controller/service.py` | `preview_desktop_replay`, `run_desktop_approved` (history persisted; accepts `browser_actions`) |
+| Live demo (desktop) | `scripts/notepad_demo.py` | Real end-to-end Notepad scenario (manual run) |
+| Live demo (browser) | `scripts/chrome_demo.py` | Real end-to-end isolated-Chrome scenario (manual run) |
 
 ## Step kinds
 
@@ -59,6 +62,73 @@ approval gate described below. Inspection remains read-only.
   (`ctrl+s`, `ctrl+a`, `ctrl+c`, `ctrl+v`, `ctrl+x`, `ctrl+z`, `ctrl+y`,
   `enter`, `escape`, `tab`) to exactly one identified window. No free-form
   keyboard injection exists.
+- `LAUNCH_BROWSER`, `NAVIGATE_BROWSER`, `INTERACT_PAGE_ELEMENT` (see the next
+  section).
+
+### Browser (isolated Chrome via the DevTools Protocol)
+
+The browser surface automates only a Chrome instance that the engine itself
+launched with an isolated temporary profile. It never attaches to the user's
+ordinary session; targets are `{"browser": {"cdp_port": <int 1024–65535>}}`
+and any port not registered by a previous `LAUNCH_BROWSER` step in the same
+run is refused.
+
+Mutating kinds (require a `DesktopApproval`):
+
+- `LAUNCH_BROWSER` — target JSON with exactly one of `application`
+  (`chrome` from the registry) or `executable` (absolute `chrome.exe` path,
+  no `..`), plus optional `headed` (bool, default false = `--headless=new`).
+  Chrome is started with `--remote-debugging-port=0 --user-data-dir=<isolated
+  temp profile> --no-first-run --no-default-browser-check shell=False; the
+  engine reads the `DevTools listening on ws://127.0.0.1:PORT` line from
+  stderr, verifies `/json/version` reports `Chrome`, waits for the first
+  page, and removes the process + profile again if any of that fails.
+  Evidence records `cdp_port`, `process_id`, browser version — never pages,
+  cookies, or profile contents.
+- `NAVIGATE_BROWSER` — target `{"browser", "url"}`. The URL must be `http` or
+  `https`, ≤ 2048 chars, whitespace-/control-free, with a host and without
+  `user[:password]` userinfo. Navigation uses `Page.navigate`, waits bounded
+  for `readyState == "complete"`, and reports the final URL as evidence.
+- `INTERACT_PAGE_ELEMENT` — target `{"browser", "selector", "interaction"}` with
+  `interaction` `click` or `type` (+ `text` ≤ 500 chars for `type`). The
+  selector must match exactly one element (0 or >1 is a structured refusal).
+  `click` dispatches a single `.click()` on the element. `type` writes the
+  value through the element's native property setter, fires `input`/`change`,
+  and confirms by reading the value back (`readback_confirmed`). Password
+  fields and non-editable elements are refused; the typed text is never
+  written to evidence, only its character count.
+
+Read-only kinds (allowed under `BROWSER_READ_KINDS`, no mutation approval, but
+still subject to policy validation):
+
+- `INSPECT_PAGE` — target `{"browser", "include_text"?}`. Records the current
+  title and URL; with `include_text` it reads `document.body.innerText`
+  bounded at 20,000 chars and records length, truncation flag, and a 200-char
+  prefix as evidence.
+- `FIND_PAGE_ELEMENT` — target `{"browser", "selector"}`. Returns the unique
+  match's tag, disabled flag, and bounded text; ambiguity and absence fail.
+  Selectors are ≤ 256 chars and must not embed a `javascript:`/`data:`/
+  `file:`/`vbscript:` scheme.
+- `WAIT_PAGE` — target `{"browser", "conditions"}` with at least one of
+  `title` (exact), `url` (`http(s)` or `about:blank`), `text` (substring of
+  bounded page text). The step polls until all conditions hold or its
+  `timeout_seconds` elapses, and reports the first unmet condition as the
+  failure reason. (`selector` is accepted by the schema today but reported as
+  unsupported by the provider rather than silently ignored.)
+
+Engineering constraints:
+
+- No arbitrary JavaScript execution: every in-page command is a fixed,
+  engine-owned expression; workflow data enters only as JSON-string-literal
+  arguments to those expressions.
+- All DevTools communication is over `ws://127.0.0.1:<port>` and
+  `http://127.0.0.1:<port>` only; the WebSocket client is a minimal stdlib
+  RFC 6455 implementation (`integrations/devtools_ws.py`) with a 10 MiB
+  frame-size bound and refusal of server-masked or non-text frames.
+- Exactly one page at a time: more than one open page in the isolated browser
+  refuses ("More than one page is open ... refused instead of choosing a
+  tab"), so tab switching can never happen silently.
+- Postconditions are rejected on all browser kinds (and `VERIFY_FILE_TEXT`).
 
 ## Field evolution
 
@@ -134,6 +204,22 @@ anywhere the suite runs):
 
 Run: `C:\Users\DELL\once\.venv\Scripts\python.exe -m pytest tests\test_desktop_engine.py tests\test_windows_desktop.py tests\test_desktop_controller.py -q`
 
+Browser deterministic tests (fake DevTools surface; no Chrome involved):
+
+- `tests/test_browser_engine.py` — URL/port/selector/conditions validation,
+  provider dispatch, missing provider = INCONCLUSIVE, failure stops the run,
+  read-only vs mutating policy, approval gate covers browser mutations,
+  cancellation before a pending browser step, postcondition refusal, no
+  typed text in results.
+- `tests/test_chrome_devtools.py` — provider behavior against fake HTTP/WS:
+  navigate load state + errorText refusal + timeouts, bounded inspect text,
+  ambiguity/uniqueness for find/interact, password refusal, readback
+  confirmation, wait conditions + timeout reasons, unknown port, dead
+  browser, ambiguous/missing pages, non-Chrome endpoint refusal, launch
+  success/fail-closed, shutdown cleanup.
+
+Run: `C:\Users\DELL\once\.venv\Scripts\python.exe -m pytest tests\test_browser_engine.py tests\test_chrome_devtools.py -q`
+
 ## Live Notepad demonstration (real desktop, run manually)
 
 `scripts/notepad_demo.py` performs: launch Notepad on a fresh temp file
@@ -147,6 +233,26 @@ Last verified 2026-10-25 on the build machine: `RESULT: PASS - live desktop
 round trip verified.` (launch SUCCEEDED, type `readback_confirmed=true`,
 file content byte-exact, run SUCCEEDED).
 
+## Live isolated-Chrome demonstration (real Chrome, run manually)
+
+`scripts/chrome_demo.py` performs: serve a static demo page from a temp
+directory on 127.0.0.1 (random port) → `LAUNCH_BROWSER` (application=chrome)
+through `approve_desktop_workflow` → `NAVIGATE_BROWSER` to the local page →
+`WAIT_PAGE` for the title → `INSPECT_PAGE` (bounded text) →
+`FIND_PAGE_ELEMENT` for `#demo-button` → `INTERACT_PAGE_ELEMENT` click and
+type → `WAIT_PAGE` for the click effect text → `FIND_PAGE_ELEMENT` verify of
+the status element → the provider's `shutdown()` closes the browser and
+removes the temp profile.
+
+The user's Chrome profile is never used; the page is localhost-only. Run:
+
+    C:\Users\DELL\once\.venv\Scripts\python.exe scripts\chrome_demo.py
+
+Last verified 2026-10-25: `RESULT: PASS - live isolated-browser round trip
+verified.` (all eight steps SUCCEEDED; Chrome/155.0.8059.86, isolated
+profile; navigate reported `readyState=complete`, type `readback_confirmed=true`,
+status element text `button was clicked`).
+
 ## Windows-specific requirements
 
 - pywinauto 0.6.9 with the UIA backend (already a project dependency).
@@ -157,11 +263,16 @@ file content byte-exact, run SUCCEEDED).
 ## Known limitations / not implemented
 
 - No coordinate clicking at all; elements must be uniquely identifiable.
-- Chrome tab/content automation is NOT implemented. The target format can be
-  extended later (window identity + element identity already cover "Chrome
-  window via class + tab by AutomationId/name"), but no browser dependency was
-  added because Chrome's web content is often only partially exposed through
-  UIA. Any Chrome work must reuse this interface, not add raw injection.
+- Browser automation covers Chrome only, launched isolated by Once. The
+  user's ordinary Chrome profile/session, Edge, Firefox, and other browsers
+  are out of scope; attaching to an already-running browser is deliberately
+  impossible (targets must reference a `cdp_port` registered by
+  `LAUNCH_BROWSER` in the same run).
+- DevTools supports headless Chrome well; the `headed` option is validated
+  but untested against the visible UI — treat headless as the supported mode.
+- No downloads/uploads, no dialogs/alerts automation, no cookie/storage
+  access, no JavaScript execution beyond the fixed engine expressions, no
+  cross-origin iframes beyond the top frame.
 - Elevated/system windows and controls without UIA patterns fail closed with
   "does not support the ... pattern" rather than degrading to unsafe input.
 - Workflow persistence of desktop workflows uses schema v3; the redesigned UI
