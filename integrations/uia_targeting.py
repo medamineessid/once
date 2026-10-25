@@ -32,11 +32,7 @@ def element_matches(wrapper: Any, target: object) -> bool:
     if not isinstance(target, dict):
         return False
     info = wrapper.element_info
-    if getattr(info, "automation_id", None) != target.get("automation_id"):
-        return False
-    if getattr(info, "control_type", None) != target.get("control_type"):
-        return False
-    return (
-        "class_name" not in target
-        or getattr(info, "class_name", None) == target["class_name"]
-    )
+    for field in ("automation_id", "control_type", "class_name"):
+        if field in target and getattr(info, field, None) != target[field]:
+            return False
+    return True

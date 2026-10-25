@@ -221,14 +221,7 @@ def _validate_ui_element_target(step: WorkflowStep) -> None:
     if not isinstance(window, dict) or not isinstance(element, dict):
         raise WorkflowValidationError(f"Step {step.step_id} has invalid UI target fields.")
     _validate_window_identity(step, window)
-    if not set(element).issubset({"automation_id", "control_type", "class_name"}):
-        raise WorkflowValidationError(f"Step {step.step_id} has unknown element target fields.")
-    if not isinstance(element.get("automation_id"), str) or not element["automation_id"].strip():
-        raise WorkflowValidationError(f"Step {step.step_id} needs an AutomationId.")
-    if not isinstance(element.get("control_type"), str) or not element["control_type"].strip():
-        raise WorkflowValidationError(f"Step {step.step_id} needs a control type.")
-    if "class_name" in element and not isinstance(element["class_name"], str):
-        raise WorkflowValidationError(f"Step {step.step_id} has an invalid element class name.")
+    _validate_element_identity(step, element)
 
 
 def _load_target(step: WorkflowStep, target: str | None) -> dict:
@@ -249,11 +242,18 @@ def _validate_element_identity(step: WorkflowStep, element: object) -> None:
         {"automation_id", "control_type", "class_name"}
     ):
         raise WorkflowValidationError(f"Step {step.step_id} has unknown element target fields.")
-    for field in ("automation_id", "control_type"):
-        if not isinstance(element.get(field), str) or not element[field].strip():
-            raise WorkflowValidationError(f"Step {step.step_id} needs an element {field}.")
-    if "class_name" in element and not isinstance(element["class_name"], str):
-        raise WorkflowValidationError(f"Step {step.step_id} has an invalid element class name.")
+    automation_id = element.get("automation_id")
+    class_name = element.get("class_name")
+    for field in ("automation_id", "control_type", "class_name"):
+        if field in element and not isinstance(element[field], str):
+            raise WorkflowValidationError(f"Step {step.step_id} has an invalid element {field}.")
+    if not (isinstance(automation_id, str) and automation_id.strip()) and not (
+        isinstance(class_name, str) and class_name.strip()
+    ):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs an element automation_id or class_name; "
+            "otherwise the element cannot be identified reliably."
+        )
 
 
 def _validate_element_target(step: WorkflowStep, target: object, allowed: frozenset[str]) -> None:

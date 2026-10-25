@@ -250,8 +250,26 @@ def test_ui_element_target_requires_stable_selector() -> None:
         ),
     )
 
-    with pytest.raises(WorkflowValidationError, match="AutomationId"):
+    with pytest.raises(WorkflowValidationError, match="automation_id or class_name"):
         ReplayExecutor().validate(workflow)
+
+
+def test_ui_element_target_by_class_name_is_valid() -> None:
+    """Controls without an AutomationId remain targetable by a stable class name."""
+    workflow = Workflow(
+        "element",
+        "Element inspection",
+        (
+            WorkflowStep(
+                "inspect",
+                "Inspect",
+                StepKind.INSPECT_UI_ELEMENT,
+                "Element found.",
+                '{"window":{"title":"Once fixture"},"element":{"class_name":"RichEditD2DPT"}}',
+            ),
+        ),
+    )
+    ReplayExecutor().validate(workflow)
 
 
 @pytest.mark.windows_only
