@@ -1,4 +1,5 @@
 """Isolated Chrome automation through the Chrome DevTools Protocol.
+
 Architecture decision (documented in docs/desktop_automation.md):
 
 - The provider only ever automates a browser instance that it launched itself
@@ -19,7 +20,7 @@ from __future__ import annotations
 
 import http.client
 import json
-import subprocess  # noqa: S404 - launch uses an exact argv list, shell disabled
+import subprocess
 import tempfile
 import threading
 import time
@@ -29,10 +30,9 @@ from typing import Any
 
 from engine.workflow import StepResult, StepStatus
 from integrations.devtools_ws import (
-    WebSocketClosed,
     WebSocketClient,
+    WebSocketClosed,
 )
-
 
 POLL_INTERVAL_SECONDS = 0.25
 DEFAULT_COMMAND_TIMEOUT = 10.0
@@ -42,9 +42,13 @@ PAGE_SETTLE_SECONDS = 30.0
 # Fixed, engine-owned expressions. The placeholders (selectors, text) are
 # inserted as JSON string literals only; no workflow data can break out.
 EXPR_PAGE_STATE = "({href: location.href, title: document.title, readyState: document.readyState})"
-EXPR_PAGE_TEXT = (
-    "document.body ? document.body.innerText.slice(0, %d) : ''" % 20_001
-)
+PAGE_TEXT_LIMIT = 20_000
+ELEMENT_TEXT_LIMIT = 2_000
+
+# Fixed, engine-owned expressions. The placeholders (selectors, text) are
+# inserted as JSON string literals only; no workflow data can break out.
+EXPR_PAGE_STATE = "({href: location.href, title: document.title, readyState: document.readyState})"
+EXPR_PAGE_TEXT = f"document.body ? document.body.innerText.slice(0, {PAGE_TEXT_LIMIT + 1}) : ''"
 EXPR_ELEMENT_INFO = (
     "(function(sel){"
     "var els = document.querySelectorAll(sel);"
@@ -52,11 +56,11 @@ EXPR_ELEMENT_INFO = (
     "var el = els[0];"
     "return {count: 1, tag: el.tagName.toLowerCase(),"
     " name: el.getAttribute('name'),"
-    " text: (el.textContent || '').slice(0, %d),"
+    f" text: (el.textContent || '').slice(0, {ELEMENT_TEXT_LIMIT + 1}),"
     " editable: (el.tagName === 'TEXTAREA' || el.isContentEditable ||"
     " (el.tagName === 'INPUT' && !el.disabled && el.type !== 'password')),"
     " disabled: !!el.disabled || !!el.readOnly};"
-    "})" % 2_001
+    "})"
 )
 EXPR_CLICK = (
     "(function(sel){"
@@ -138,9 +142,7 @@ class ChromeApplicationRegistry:
         for candidate in self.CANDIDATES:
             if candidate.is_file():
                 return candidate
-        raise BrowserError(
-            "Google Chrome was not found at its registered installation paths."
-        )
+        raise BrowserError("Google Chrome was not found at its registered installation paths.")
 
 
 class BrowserSession:
@@ -155,10 +157,6 @@ class BrowserSession:
         self.process = process
         self.port = port
         self.profile_dir = profile_dir
-
-    def page_targets(self, http: DevtoolsHttp) -> list[dict]:
-        targets = [t for t in http.list_targets() if t.get("type") == "page"]
-        return targets
 
 
 class ChromeDevtoolsActions:
@@ -261,9 +259,7 @@ class ChromeDevtoolsActions:
             return StepResult(
                 step_id="",
                 status=StepStatus.FAILED,
-                message=(
-                    "The endpoint does not belong to Chrome, so it was refused."
-                ),
+                message=("The endpoint does not belong to Chrome, so it was refused."),
                 evidence=(f"port={port}", f"browser={browser_name}"),
             )
         if not self._wait_for_first_page(http):
@@ -319,7 +315,7 @@ class ChromeDevtoolsActions:
         while self._clock() < deadline:
             try:
                 pages = [t for t in http.list_targets() if t.get("type") == "page"]
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 pages = []
             if pages:
                 return True
@@ -348,7 +344,7 @@ class ChromeDevtoolsActions:
     def _single_page(self, session: BrowserSession, http: DevtoolsHttp) -> dict:
         from engine.errors import ExecutionError
 
-        pages = session.page_targets(http)
+        pages = self._page_targets(session, http)
         if not pages:
             raise ExecutionError("No page is open in the isolated browser.")
         if len(pages) > 1:
@@ -358,36 +354,46 @@ class ChromeDevtoolsActions:
             )
         return pages[0]
 
+    @staticmethod
+    def _page_targets(session: BrowserSession, http: DevtoolsHttp) -> list[dict]:
+        targets = [t for t in http.list_targets() if t.get("type") == "page"]
+        return [t for t in targets if bool(t.get("webSocketDebuggerUrl"))]
+
     def _command(self, page_ws_url: str, method: str, params: dict) -> dict:
+        """One DevTools command; the client's socket timeout bounds the wait."""
         client = self._ws_factory(page_ws_url)
         try:
             client.send_json({"id": 1, "method": method, "params": params})
-            deadline = self._clock() + self._command_timeout
             while True:
-                client.sock.settimeout(max(0.5, deadline - self._clock()))
                 message = client.receive_json()
                 if message.get("id") == 1:
                     return message
-                if self._clock() >= deadline:
-                    raise BrowserError("The DevTools command timed out.")
         finally:
             client.close()
 
     @staticmethod
     def _runtime_expression(client: WebSocketClient, expression: str) -> Any:
         client.send_json(
-            {"id": 1, "method": "Runtime.evaluate", "params": {"expression": expression, "returnByValue": True}}
+            {
+                "id": 1,
+                "method": "Runtime.evaluate",
+                "params": {"expression": expression, "returnByValue": True},
+            }
         )
         while True:
             message = client.receive_json()
             if message.get("id") == 1:
                 break
-        inner = message.get("result", {}).get("result", {})
-        if "exceptionDetails" in message.get("result", {}):
+        result_payload = message.get("result", {})
+        if "exceptionDetails" in result_payload:
             raise BrowserError("The page rejected the evaluation (exception).")
-        if inner.get("subtype") in ("error", "promise") and "value" not in inner:
-            raise BrowserError("The page did not return a usable value.")
-        return inner.get("value")
+        inner = result_payload.get("result", {})
+        if isinstance(inner, dict):
+            if inner.get("type") == "undefined" or inner.get("subtype") == "error":
+                return None
+            if "value" in inner:
+                return inner["value"]
+        return inner
 
     # ------------------------------------------------------------- navigate
 
@@ -414,7 +420,10 @@ class ChromeDevtoolsActions:
                 message=f"The navigation command failed: {error}",
                 evidence=(f"url={self._redact_url(url)}",),
             )
-        command_error = reply.get("error") or (reply.get("result") or {}).get("errorText")
+        result_payload = reply.get("result") or {}
+        command_error = reply.get("error") or result_payload.get("errorText")
+        if not command_error and isinstance(result_payload.get("result"), dict):
+            command_error = result_payload["result"].get("errorText")
         if command_error:
             return StepResult(
                 step_id="",
@@ -448,7 +457,7 @@ class ChromeDevtoolsActions:
             client = self._ws_factory(ws_url)
             try:
                 state = self._runtime_expression(client, EXPR_PAGE_STATE)
-            except (BrowserError, OSError, ValueError, WebSocketClosed):
+            except BrowserError, OSError, ValueError, WebSocketClosed:
                 state = None
             finally:
                 client.close()
@@ -465,7 +474,10 @@ class ChromeDevtoolsActions:
         session = self._session(target["browser"])
         http = self._http_factory(session.port)
         page = self._single_page(session, http)
-        evidence = [f"title={page.get('title', '')}", f"url={self._redact_url(page.get('url', ''))}"]
+        evidence = [
+            f"title={page.get('title', '')}",
+            f"url={self._redact_url(page.get('url', ''))}",
+        ]
         if target.get("include_text"):
             ws_url = page.get("webSocketDebuggerUrl")
             client = self._ws_factory(str(ws_url))
@@ -519,7 +531,11 @@ class ChromeDevtoolsActions:
         finally:
             client.close()
         if not isinstance(found, dict):
-            return StepResult(step_id="", status=StepStatus.FAILED, message="The lookup returned no result.")
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message="The lookup returned no result.",
+            )
         count = found.get("count", 0)
         if count == 0:
             return StepResult(
@@ -546,7 +562,7 @@ class ChromeDevtoolsActions:
                 f"selector={target['selector']}",
                 f"tag={found.get('tag', '')}",
                 f"disabled={str(bool(found.get('disabled'))).lower()}",
-                f"matches=1",
+                "matches=1",
                 f"element_text={str(found.get('text') or '')[:120]}",
             ),
         )
@@ -576,7 +592,11 @@ class ChromeDevtoolsActions:
         finally:
             client.close()
         if not isinstance(outcome, dict):
-            return StepResult(step_id="", status=StepStatus.FAILED, message="The interaction returned no result.")
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message="The interaction returned no result.",
+            )
         count = outcome.get("count", 0)
         if count == 0:
             return StepResult(
@@ -645,7 +665,7 @@ class ChromeDevtoolsActions:
         while True:
             try:
                 page = self._single_page(session, http)
-            except Exception as error:  # noqa: BLE001 - structured failure after the bound
+            except Exception as error:
                 last_reason = str(error)
                 if self._clock() >= deadline:
                     break
@@ -685,7 +705,10 @@ class ChromeDevtoolsActions:
                 f"The page did not match the waited-for conditions within "
                 f"{timeout_seconds} seconds ({last_reason})."
             ),
-            evidence=("conditions=" + json.dumps({k: v for k, v in conditions.items() if k != "selector"}),),
+            evidence=(
+                "conditions="
+                + json.dumps({k: v for k, v in conditions.items() if k != "selector"}),
+            ),
         )
 
     @staticmethod
@@ -700,9 +723,8 @@ class ChromeDevtoolsActions:
         if expected_url is not None and state.get("href") != expected_url:
             return "the URL has not changed yet"
         expected_text = conditions.get("text")
-        if expected_text is not None:
-            if not isinstance(text, str) or expected_text not in text:
-                return "the expected text is not on the page yet"
+        if expected_text is not None and (not isinstance(text, str) or expected_text not in text):
+            return "the expected text is not on the page yet"
         if conditions.get("selector") is not None:
             return "the selector check requires a wait_page element mode"
         return None
@@ -720,12 +742,11 @@ class ChromeDevtoolsActions:
     @staticmethod
     def _safe_rmtree(directory: Path) -> None:
         """Remove the provider's own temporary profile directory if possible."""
+        import contextlib
         import shutil
 
-        try:
+        with contextlib.suppress(OSError):
             shutil.rmtree(directory, ignore_errors=True)
-        except OSError:
-            pass
 
     # ----------------------------------------------------------------- utils
 

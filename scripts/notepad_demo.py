@@ -55,7 +55,7 @@ def close_leftover_demo_windows(desktop) -> int:
             try:
                 wrapper.close()
                 closed += 1
-            except (OSError, RuntimeError, AttributeError):  # hygiene is best effort
+            except OSError, RuntimeError, AttributeError:  # hygiene is best effort
                 pass
     return closed
 

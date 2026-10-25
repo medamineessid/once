@@ -343,17 +343,20 @@ def test_approval_gate_refuses_invalid_desktop_workflows() -> None:
 
 
 def test_mutating_kinds_constant_covers_all_mutations() -> None:
-    assert frozenset(
-        {
-            StepKind.LAUNCH_APPLICATION,
-            StepKind.CLICK_UI_ELEMENT,
-            StepKind.TYPE_TEXT,
-            StepKind.PRESS_SHORTCUT,
-            StepKind.LAUNCH_BROWSER,
-            StepKind.NAVIGATE_BROWSER,
-            StepKind.INTERACT_PAGE_ELEMENT,
-        }
-    ) == MUTATING_DESKTOP_KINDS
+    assert (
+        frozenset(
+            {
+                StepKind.LAUNCH_APPLICATION,
+                StepKind.CLICK_UI_ELEMENT,
+                StepKind.TYPE_TEXT,
+                StepKind.PRESS_SHORTCUT,
+                StepKind.LAUNCH_BROWSER,
+                StepKind.NAVIGATE_BROWSER,
+                StepKind.INTERACT_PAGE_ELEMENT,
+            }
+        )
+        == MUTATING_DESKTOP_KINDS
+    )
     # every browser read step stays outside the approval gate
     from engine.replay import BROWSER_READ_KINDS
 
@@ -392,9 +395,7 @@ def test_window_identity_requires_some_identifier() -> None:
         "Waited.",
         target=json.dumps({}),
     )
-    with pytest.raises(
-        WorkflowValidationError, match="title, process ID, or class name"
-    ):
+    with pytest.raises(WorkflowValidationError, match="title, process ID, or class name"):
         WorkflowRunner.validate(Workflow("w", "w", (step,)))
 
 

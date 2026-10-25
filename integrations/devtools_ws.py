@@ -26,8 +26,11 @@ RECV_CHUNK = 65_536
 MAX_FRAME_BYTES = 10_485_760
 
 
-class WebSocketClosed(Exception):
+class WebSocketClosedError(Exception):
     """The peer closed the socket or the connection was lost."""
+
+
+WebSocketClosed = WebSocketClosedError  # legacy alias used by provider code
 
 
 class WebSocketClient:
@@ -73,7 +76,13 @@ class WebSocketClient:
 
     @staticmethod
     def _accept_of(key: str) -> str:
-        return base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()
+        # The WebSocket opening-handshake accept value is SHA-1 by RFC 6455;
+        # it is not used for any security property.
+        return base64.b64encode(
+            hashlib.sha1(  # noqa: S324
+                (key + GUID).encode()
+            ).digest()
+        ).decode()
 
     def _read_handshake_response(self) -> str:
         data = b""
@@ -98,9 +107,7 @@ class WebSocketClient:
         fin = bool(first & 0x80)
         opcode = first & 0x0F
         if second & 0x80:
-            raise ValueError(
-                "DevTools frames must not be masked by the server."
-            )
+            raise ValueError("DevTools frames must not be masked by the server.")
         length = second & 0x7F
         if length == 126:
             (length,) = struct.unpack(">H", self._recv_exact(2))
@@ -144,7 +151,7 @@ class WebSocketClient:
                 return json.loads(bytes(fragments).decode("utf-8"))
 
     def close(self) -> None:
-        try:
+        import contextlib
+
+        with contextlib.suppress(OSError):
             self.sock.close()
-        except OSError:
-            pass

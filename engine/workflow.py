@@ -363,7 +363,6 @@ def _validate_launch_target(step: WorkflowStep) -> None:
             )
         if len(application) > 64 or application.lower() not in {
             name.lower() for name in KNOWN_APPLICATIONS
-
         }:
             raise WorkflowValidationError(
                 f"Step {step.step_id} names an application the registry does not allow: "
@@ -415,8 +414,10 @@ def _validate_browser_target(target: object, step: WorkflowStep) -> dict:
             f"Step {step.step_id} has unknown browser fields: {', '.join(sorted(unknown))}."
         )
     port = target.get("cdp_port")
-    if not isinstance(port, int) or isinstance(port, bool) or not (
-        VALID_CDP_PORT_MIN <= port <= VALID_CDP_PORT_MAX
+    if (
+        not isinstance(port, int)
+        or isinstance(port, bool)
+        or not (VALID_CDP_PORT_MIN <= port <= VALID_CDP_PORT_MAX)
     ):
         raise WorkflowValidationError(
             f"Step {step.step_id} needs a DevTools port between {VALID_CDP_PORT_MIN} "
@@ -430,8 +431,7 @@ def _validate_launch_browser_target(step: WorkflowStep) -> None:
     unknown = set(target) - {"application", "executable", "headed"}
     if unknown:
         raise WorkflowValidationError(
-            f"Step {step.step_id} has unknown browser launch fields: "
-            f"{', '.join(sorted(unknown))}."
+            f"Step {step.step_id} has unknown browser launch fields: {', '.join(sorted(unknown))}."
         )
     if "headed" in target and not isinstance(target["headed"], bool):
         raise WorkflowValidationError(f"Step {step.step_id} headed must be true or false.")
@@ -447,8 +447,7 @@ def _validate_launch_browser_target(step: WorkflowStep) -> None:
             )
         if application.lower() not in {name.lower() for name in KNOWN_BROWSERS}:
             raise WorkflowValidationError(
-                f"Step {step.step_id} names a browser the registry does not allow: "
-                f"{application}."
+                f"Step {step.step_id} names a browser the registry does not allow: {application}."
             )
     else:
         if not isinstance(executable, str) or not executable.strip():
@@ -490,7 +489,9 @@ def _validate_page_url(value: object, step: WorkflowStep) -> str:
     if any(character in value for character in "\r\n\t ") or any(
         ord(character) < 32 for character in value
     ):
-        raise WorkflowValidationError(f"Step {step.step_id} URL contains whitespace or control characters.")
+        raise WorkflowValidationError(
+            f"Step {step.step_id} URL contains whitespace or control characters."
+        )
     try:
         parts = urlsplit(value)
     except ValueError as error:
@@ -541,7 +542,9 @@ def _validate_selector(selector: object, step: WorkflowStep) -> str:
     lowered = selector.lower()
     for scheme in ("javascript:", "data:", "file:", "vbscript:"):
         if scheme in lowered:
-            raise WorkflowValidationError(f"Step {step.step_id} selector contains a forbidden scheme.")
+            raise WorkflowValidationError(
+                f"Step {step.step_id} selector contains a forbidden scheme."
+            )
     return selector
 
 
@@ -580,6 +583,8 @@ def _validate_interact_element_target(step: WorkflowStep) -> None:
 
 
 def _validate_wait_page_target(step: WorkflowStep) -> None:
+    from urllib.parse import urlsplit
+
     target = _load_target(step, step.target)
     unknown = set(target) - {"browser", "conditions", "timeout_seconds"}
     if unknown:
@@ -588,7 +593,11 @@ def _validate_wait_page_target(step: WorkflowStep) -> None:
         )
     _validate_browser_target(target.get("browser"), step)
     conditions = target.get("conditions")
-    if not isinstance(conditions, dict) or not conditions or set(conditions) - PAGE_CONDITION_FIELDS:
+    if (
+        not isinstance(conditions, dict)
+        or not conditions
+        or set(conditions) - PAGE_CONDITION_FIELDS
+    ):
         raise WorkflowValidationError(
             f"Step {step.step_id} needs conditions among: "
             f"{', '.join(sorted(PAGE_CONDITION_FIELDS))}."
@@ -602,7 +611,9 @@ def _validate_wait_page_target(step: WorkflowStep) -> None:
             raise WorkflowValidationError(f"Step {step.step_id} condition {label} must be text.")
     if url is not None:
         parts = urlsplit(url if isinstance(url, str) else "")
-        if not isinstance(url, str) or (parts.scheme not in ALLOWED_URL_SCHEMES and url != "about:blank"):
+        if not isinstance(url, str) or (
+            parts.scheme not in ALLOWED_URL_SCHEMES and url != "about:blank"
+        ):
             raise WorkflowValidationError(
                 f"Step {step.step_id} condition url must be an http(s) URL or about:blank."
             )

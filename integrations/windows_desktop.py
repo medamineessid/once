@@ -243,9 +243,7 @@ class PywinautoDesktopActions:
 
     # ---------------------------------------------------------------- click
 
-    _CLICKABLE_CONTROL_TYPES = frozenset(
-        {"Button", "MenuItem", "CheckBox", "RadioButton"}
-    )
+    _CLICKABLE_CONTROL_TYPES = frozenset({"Button", "MenuItem", "CheckBox", "RadioButton"})
 
     def click_element(self, target_json: str) -> StepResult:
         """Invoke/toggle/select one unique, enabled element by its UIA pattern."""
