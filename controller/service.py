@@ -9,15 +9,21 @@ from pathlib import Path
 from ai.approval import ApprovedProposal
 from engine.acceptance import load_acceptance_cases
 from engine.agent_change import ApprovedChange, ChangeReview, approve_change
+from engine.desktop import DesktopApproval
 from engine.errors import AgentIntegrationError, WorkflowValidationError
 from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
-from engine.replay import ReplayExecutor, ReplayPreview
+from engine.replay import (
+    DESKTOP_INTERACTION_POLICY,
+    ReplayExecutor,
+    ReplayPreview,
+)
 from engine.verifier import (
     AcceptanceVerifier,
     AllowlistedCommand,
     EvidenceBundle,
 )
 from engine.workflow import (
+    DesktopActions,
     StepKind,
     StepResult,
     UIElementInspector,
@@ -48,9 +54,11 @@ class WorkflowService:
         workflow_directory: Path | None = None,
         window_inspector: WindowInspector | None = None,
         ui_element_inspector: UIElementInspector | None = None,
+        desktop_actions: DesktopActions | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
+        self._desktop_replay = ReplayExecutor(DESKTOP_INTERACTION_POLICY)
         if window_inspector is None:
             from integrations.windows_automation import PywinautoWindowInspector
 
@@ -63,6 +71,12 @@ class WorkflowService:
             self._ui_element_inspector = PywinautoWindowInspector().inspect_element
         else:
             self._ui_element_inspector = ui_element_inspector
+        if desktop_actions is None:
+            from integrations.windows_desktop import PywinautoDesktopActions
+
+            self._desktop_actions: DesktopActions | None = PywinautoDesktopActions()
+        else:
+            self._desktop_actions = desktop_actions
         self._history = history
         self._workflow_directory = workflow_directory
         if workflow_directory is not None:
@@ -154,6 +168,41 @@ class WorkflowService:
     def preview_replay(self, workflow: Workflow) -> ReplayPreview:
         """Return a policy check and readable preview without executing."""
         return self._replay.preview(workflow)
+
+    def preview_desktop_replay(self, workflow: Workflow) -> ReplayPreview:
+        """Preview a desktop workflow under the desktop policy without running it."""
+        return self._desktop_replay.preview(workflow)
+
+    def run_desktop_approved(
+        self,
+        approval: object,
+        allowed_root: Path | None = None,
+        cancel_check: Callable[[], bool] | None = None,
+        progress_callback: Callable[[StepResult], None] | None = None,
+    ) -> WorkflowRun:
+        """Execute only a desktop workflow that passed the explicit approval gate.
+
+        Mutating desktop steps cannot reach this method without a
+        `DesktopApproval` produced by `engine.desktop.approve_desktop_workflow`;
+        the desktop policy re-validates the allowlist at execution time.
+        """
+        if not isinstance(approval, DesktopApproval):
+            raise WorkflowValidationError(
+                "Only a workflow approved through the desktop approval gate can "
+                "run desktop actions."
+            )
+        run = self._desktop_replay.execute(
+            approval.workflow,
+            allowed_root=allowed_root,
+            cancel_check=cancel_check,
+            progress_callback=progress_callback,
+            window_inspector=self._window_inspector,
+            ui_element_inspector=self._ui_element_inspector,
+            desktop_actions=self._desktop_actions,
+        )
+        if self._history is not None:
+            self._history.record(run)
+        return run
 
     def run_replay(
         self,
