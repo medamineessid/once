@@ -103,7 +103,6 @@ CancelCheck = Callable[[], bool]
 ProgressCallback = Callable[[StepResult], None]
 WindowInspector = Callable[[str], tuple[str, ...]]
 UIElementInspector = Callable[[str], tuple[str, ...]]
-UIElementInspector = Callable[[str], tuple[str, ...]]
 
 
 def _validate_window_target(step: WorkflowStep) -> None:
@@ -149,33 +148,6 @@ def _validate_ui_element_target(step: WorkflowStep) -> None:
         )
     window = target["window"]
     element = target["element"]
-    _validate_window_identity(step, window)
-    if not isinstance(element, dict) or not set(element).issubset(
-        {"automation_id", "control_type", "class_name"}
-    ):
-        raise WorkflowValidationError(f"Step {step.step_id} has unknown element target fields.")
-    for field in ("automation_id", "control_type"):
-        if not isinstance(element.get(field), str) or not element[field].strip():
-            raise WorkflowValidationError(f"Step {step.step_id} needs an element {field}.")
-    if "class_name" in element and not isinstance(element["class_name"], str):
-        raise WorkflowValidationError(f"Step {step.step_id} has an invalid element class name.")
-
-
-def _validate_ui_element_target(step: WorkflowStep) -> None:
-    if not step.target:
-        raise WorkflowValidationError(f"Step {step.step_id} needs a UI element target.")
-    try:
-        target = json.loads(step.target)
-    except json.JSONDecodeError as error:
-        raise WorkflowValidationError(
-            f"Step {step.step_id} has an invalid UI element target."
-        ) from error
-    if not isinstance(target, dict) or set(target) != {"window", "element"}:
-        raise WorkflowValidationError(
-            f"Step {step.step_id} needs window and element target fields."
-        )
-    window = target["window"]
-    element = target["element"]
     if not isinstance(window, dict) or not isinstance(element, dict):
         raise WorkflowValidationError(f"Step {step.step_id} has invalid UI target fields.")
     _validate_window_identity(step, window)
@@ -187,22 +159,6 @@ def _validate_ui_element_target(step: WorkflowStep) -> None:
         raise WorkflowValidationError(f"Step {step.step_id} needs a control type.")
     if "class_name" in element and not isinstance(element["class_name"], str):
         raise WorkflowValidationError(f"Step {step.step_id} has an invalid element class name.")
-
-
-def _validate_window_identity(step: WorkflowStep, target: object) -> None:
-    if not isinstance(target, dict) or not set(target).issubset(
-        {"title", "process_id", "class_name", "automation_id"}
-    ):
-        raise WorkflowValidationError(f"Step {step.step_id} has unknown window target fields.")
-    if not isinstance(target.get("title"), str) or not target["title"].strip():
-        raise WorkflowValidationError(f"Step {step.step_id} needs a window title.")
-    if "process_id" in target and (
-        not isinstance(target["process_id"], int) or target["process_id"] < 1
-    ):
-        raise WorkflowValidationError(f"Step {step.step_id} has an invalid process ID.")
-    for field in ("title", "class_name", "automation_id"):
-        if field in target and not isinstance(target[field], str):
-            raise WorkflowValidationError(f"Step {step.step_id} has an invalid {field}.")
 
 
 class WorkflowRunner:
