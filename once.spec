@@ -10,7 +10,9 @@ directory, so installing or upgrading never touches existing user data.
 
 Hidden imports are required because pynput, mss, pywinauto, win32api, and
 win32cred are imported lazily inside functions, which the module graph
-cannot see statically.
+cannot see statically. integrations.chrome_devtools deserves the same
+treatment (it is imported inside WorkflowService's constructor), and
+integrations.devtools_ws is imported by that module.
 """
 
 hiddenimports = [
@@ -19,6 +21,8 @@ hiddenimports = [
     "pywinauto",
     "win32api",
     "win32cred",
+    "integrations.chrome_devtools",
+    "integrations.devtools_ws",
 ]
 
 a = Analysis(
