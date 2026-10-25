@@ -10,7 +10,7 @@ windows, and never waits or retries without the step's timeout.
 from __future__ import annotations
 
 import json
-import subprocess  # noqa: S404 - launch uses an exact argv list, shell disabled
+import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -181,8 +181,7 @@ class PywinautoDesktopActions:
                     step_id="",
                     status=StepStatus.FAILED,
                     message=(
-                        f"The identified window did not appear within "
-                        f"{timeout_seconds} seconds."
+                        f"The identified window did not appear within {timeout_seconds} seconds."
                     ),
                     evidence=("matches=0",),
                 )
@@ -194,19 +193,13 @@ class PywinautoDesktopActions:
         """Return the unique element wrapper or raise a structured failure."""
         target = _load_parsed(target_json, what)
         windows = self._desktop_factory().windows()
-        window_matches_list = [
-            w for w in windows if window_matches(w, target.get("window"))
-        ]
+        window_matches_list = [w for w in windows if window_matches(w, target.get("window"))]
         if not window_matches_list:
             raise ExecutionError("The identified window was not found, so nothing was done.")
         if len(window_matches_list) > 1:
-            raise ExecutionError(
-                "The identified window is ambiguous, so nothing was done."
-            )
+            raise ExecutionError("The identified window is ambiguous, so nothing was done.")
         parent = window_matches_list[0]
-        candidates = [
-            w for w in parent.descendants() if element_matches(w, target.get("element"))
-        ]
+        candidates = [w for w in parent.descendants() if element_matches(w, target.get("element"))]
         if not candidates:
             raise ExecutionError(
                 f"The identified {what} element was not found, so nothing was done."
@@ -223,15 +216,15 @@ class PywinautoDesktopActions:
                 f"The {what} element state could not be inspected, so nothing was done."
             ) from error
         if not enabled:
-            raise ExecutionError(
-                f"The {what} element is disabled, so the action was refused."
-            )
+            raise ExecutionError(f"The {what} element is disabled, so the action was refused.")
         return element
 
     @staticmethod
     def _pattern(wrapper: Any, name: str) -> Any:
         """Return the UI Automation pattern interface or fail closed."""
-        from pywinauto.uia_defines import NoPatternInterfaceError  # local: keeps import Windows-safe
+        from pywinauto.uia_defines import (
+            NoPatternInterfaceError,
+        )  # local: keeps import Windows-safe
 
         attribute = f"iface_{name}"
         try:
@@ -251,7 +244,7 @@ class PywinautoDesktopActions:
     # ---------------------------------------------------------------- click
 
     _CLICKABLE_CONTROL_TYPES = frozenset(
-        {"Button", "MenuItem", "CheckBox", "RadioButton", "Button"}
+        {"Button", "MenuItem", "CheckBox", "RadioButton"}
     )
 
     def click_element(self, target_json: str) -> StepResult:
@@ -305,6 +298,13 @@ class PywinautoDesktopActions:
                     "The element does not support selection, so the action was refused."
                 )
 
+    @staticmethod
+    def _readback(pattern: Any) -> Any:
+        """Read a Value-pattern control back through either API attribute name."""
+        if hasattr(pattern, "CurrentValue"):
+            return pattern.CurrentValue
+        return pattern.Value
+
     # ------------------------------------------------------------ type text
 
     def type_text(self, target_json: str) -> StepResult:
@@ -321,13 +321,12 @@ class PywinautoDesktopActions:
         info = element.element_info
         if bool(getattr(info, "is_password", False)):
             raise ExecutionError(
-                "The target control is a password field, so entering text was "
-                "refused for secrecy."
+                "The target control is a password field, so entering text was refused for secrecy."
             )
         value_pattern = self._pattern(element, "value")
         try:
             value_pattern.SetValue(text)
-            read_back = value_pattern.Value
+            read_back = self._readback(value_pattern)
         except (AttributeError, OSError, RuntimeError, ValueError) as error:
             return StepResult(
                 step_id="",
@@ -360,9 +359,7 @@ class PywinautoDesktopActions:
         keys = str(target.get("keys", "")).strip().lower()
         code = SHORTCUT_CODES.get(keys)
         if code is None:
-            raise ExecutionError(
-                f"The requested shortcut {keys or '(empty)'} is not allow-listed."
-            )
+            raise ExecutionError(f"The requested shortcut {keys or '(empty)'} is not allow-listed.")
         windows = self._desktop_factory().windows()
         matches = [w for w in windows if window_matches(w, target.get("window"))]
         if not matches:

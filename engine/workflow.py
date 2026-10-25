@@ -192,7 +192,11 @@ def _validate_window_identity(step: WorkflowStep, target: object) -> None:
         {"title", "process_id", "class_name", "automation_id"}
     ):
         raise WorkflowValidationError(f"Step {step.step_id} has unknown window target fields.")
-    if not isinstance(target.get("title"), str) or not target["title"].strip():
+    if not any(field in target for field in ("title", "process_id", "class_name", "automation_id")):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs a window title, process ID, or class name."
+        )
+    if "title" in target and (not isinstance(target["title"], str) or not target["title"].strip()):
         raise WorkflowValidationError(f"Step {step.step_id} needs a window title.")
     if "process_id" in target and (
         not isinstance(target["process_id"], int) or target["process_id"] < 1
@@ -389,9 +393,7 @@ def _validate_verify_file_text_target(step: WorkflowStep) -> None:
     if not Path(path_value).is_absolute():
         raise WorkflowValidationError(f"Step {step.step_id} path must be absolute.")
     if any(part == ".." for part in Path(path_value).parts):
-        raise WorkflowValidationError(
-            f"Step {step.step_id} path must not traverse parent folders."
-        )
+        raise WorkflowValidationError(f"Step {step.step_id} path must not traverse parent folders.")
     _require_bounded_string(step, target, "contains")
 
 
@@ -451,6 +453,11 @@ class WorkflowRunner:
                 StepKind.PRESS_SHORTCUT,
                 StepKind.VERIFY_FILE_TEXT,
             ):
+                raise WorkflowValidationError(
+                    f"Step {step.step_id} cannot carry a postcondition; its target "
+                    "is not a plain path. VERIFY_FILE_TEXT already proves the file "
+                    "exists, and other kinds need a separate path step."
+                )
                 raise WorkflowValidationError(
                     f"Step {step.step_id} cannot carry a postcondition; its target "
                     "is not a plain path. Use a separate VERIFY_PATH_EXISTS or "

@@ -21,17 +21,17 @@ class FakePointers:
     def __init__(self, value: str | None = "before") -> None:
         self._value = value
 
-    def SetValue(self, text: str) -> None:  # noqa: N802 - pywinauto API name
+    def SetValue(self, text: str) -> None:
         self._value = text
 
     @property
-    def Value(self) -> str:  # noqa: N802 - pywinauto API name
+    def Value(self) -> str:
         return self._value
 
-    def Invoke(self) -> None:  # noqa: N802 - pywinauto API name
+    def Invoke(self) -> None:
         self.invoked = True
 
-    def Toggle(self) -> None:  # noqa: N802 - pywinauto API name
+    def Toggle(self) -> None:
         self.toggled = True
 
 
@@ -89,7 +89,7 @@ class FakeWrapper:
     def select(self) -> None:
         self.selected = True
 
-    def descendants(self) -> tuple["FakeWrapper", ...]:
+    def descendants(self) -> tuple[FakeWrapper, ...]:
         return ()
 
 
@@ -123,7 +123,17 @@ BUTTON_ELEMENT = {"automation_id": "okButton", "control_type": "Button"}
 def provider_with(children, *, windows=None, sleep=lambda _s: None, clock=lambda: 0.0):
     """Build a provider bound to one fake desktop with fixed time."""
     if windows is None:
-        windows = [FakeWindow(FakeElementInfo(name=WINDOW_IDENTITY["title"], class_name="DemoEditor", control_type="Window", process_id=99), children)]
+        windows = [
+            FakeWindow(
+                FakeElementInfo(
+                    name=WINDOW_IDENTITY["title"],
+                    class_name="DemoEditor",
+                    control_type="Window",
+                    process_id=99,
+                ),
+                children,
+            )
+        ]
     desktop = FakeDesktop(windows)
     provider = PywinautoDesktopActions(
         desktop_factory=lambda: desktop,
@@ -189,9 +199,7 @@ def test_type_text_refuses_non_text_controls() -> None:
 
 def test_type_text_refuses_password_controls_without_logging_text() -> None:
     secret = FakeWrapper(
-        FakeElementInfo(
-            class_name="DemoEditClass", control_type="Edit", is_password=True
-        )
+        FakeElementInfo(class_name="DemoEditClass", control_type="Edit", is_password=True)
     )
     provider = provider_with([secret])
     with pytest.raises(Exception, match="password"):
@@ -397,9 +405,7 @@ def test_launch_fails_closed_for_a_missing_executable(tmp_path: Path) -> None:
         registry=WindowsApplicationRegistry(),
         popen=must_not_launch,
     )
-    result = provider.launch_application(
-        json.dumps({"executable": str(tmp_path / "gone.exe")})
-    )
+    result = provider.launch_application(json.dumps({"executable": str(tmp_path / "gone.exe")}))
     assert result.status is StepStatus.FAILED
     assert "missing" in result.message
     assert launched == []
@@ -422,9 +428,7 @@ def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
         observed["shell"] = kwargs.get("shell")
         return real_popen(argv, shell=False, stdout=subprocess.DEVNULL)
 
-    monkeypatch.setattr(
-        "integrations.windows_desktop.subprocess.Popen", recording_popen
-    )
+    monkeypatch.setattr("integrations.windows_desktop.subprocess.Popen", recording_popen)
     argv = [sys.executable, "--version"]
     process = PywinautoDesktopActions._default_popen(argv)
     assert observed["shell"] is False

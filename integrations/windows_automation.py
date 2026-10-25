@@ -28,7 +28,9 @@ class PywinautoWindowInspector:
         except json.JSONDecodeError as error:
             raise ExecutionError("The UI Automation target is not valid JSON.") from error
         matches = [
-            wrapper for wrapper in self._desktop_factory().windows() if window_matches(wrapper, target)
+            wrapper
+            for wrapper in self._desktop_factory().windows()
+            if window_matches(wrapper, target)
         ]
         if not matches:
             raise ExecutionError("The identified window was not found.")

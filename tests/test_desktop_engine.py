@@ -102,7 +102,9 @@ def desktop_step(step_id: str, kind: StepKind, target: str, **kw) -> tuple[str, 
     )
 
 
-def run_with_fakes(steps: tuple[WorkflowStep, ...], actions=FakeDesktopActions(), *, root=None):
+def run_with_fakes(steps: tuple[WorkflowStep, ...], actions=None, *, root=None):
+    if actions is None:
+        actions = FakeDesktopActions()
     workflow = Workflow("desktop-demo", "Desktop demo", steps)
     runner = WorkflowRunner()
     run = runner.run(workflow, allowed_root=root, desktop_actions=actions)
@@ -111,21 +113,15 @@ def run_with_fakes(steps: tuple[WorkflowStep, ...], actions=FakeDesktopActions()
 
 def test_read_only_policy_rejects_mutating_desktop_steps() -> None:
     """Unapproved replay must refuse every mutating desktop step kind."""
-    launch = desktop_step(
-        "launch", StepKind.LAUNCH_APPLICATION, json.dumps(LAUNCH_TARGET)
-    )[1]
+    launch = desktop_step("launch", StepKind.LAUNCH_APPLICATION, json.dumps(LAUNCH_TARGET))[1]
     workflow = Workflow("x", "x", (launch,))
     with pytest.raises(ExecutionError, match="does not allow these step kinds"):
         ReplayExecutor().validate(workflow)  # default policy = read-only
 
 
 def test_desktop_policy_allows_and_media_pixels_nothing_unapproved() -> None:
-    launch = desktop_step(
-        "launch", StepKind.LAUNCH_APPLICATION, json.dumps(LAUNCH_TARGET)
-    )[1]
-    ReplayExecutor(DESKTOP_INTERACTION_POLICY).validate(
-        Workflow("x", "x", (launch,))
-    )
+    launch = desktop_step("launch", StepKind.LAUNCH_APPLICATION, json.dumps(LAUNCH_TARGET))[1]
+    ReplayExecutor(DESKTOP_INTERACTION_POLICY).validate(Workflow("x", "x", (launch,)))
 
 
 def test_launch_validation_rejects_shell_style_and_relative_executables() -> None:
@@ -140,7 +136,7 @@ def test_launch_validation_rejects_shell_style_and_relative_executables() -> Non
         StepKind.LAUNCH_APPLICATION,
         json.dumps({"executable": "C:\\tmp\\evil.bat"}),
     )[1]
-    with pytest.raises(WorkflowValidationError, match="must be a .exe"):
+    with pytest.raises(WorkflowValidationError, match=r"must be a \.exe"):
         WorkflowRunner.validate(Workflow("w2", "w2", (bad_suffix,)))
 
     unknown_app = desktop_step(
@@ -160,18 +156,14 @@ def test_launch_validation_rejects_shell_style_and_relative_executables() -> Non
     too_many_args = desktop_step(
         "s5",
         StepKind.LAUNCH_APPLICATION,
-        json.dumps(
-            {"application": "notepad", "arguments": ["a"] * (16 + 1)}
-        ),
+        json.dumps({"application": "notepad", "arguments": ["a"] * (16 + 1)}),
     )[1]
     with pytest.raises(WorkflowValidationError, match="arguments"):
         WorkflowRunner.validate(Workflow("w5", "w5", (too_many_args,)))
 
 
 def test_shortcut_validation_allows_only_listed_combinations() -> None:
-    allowed = desktop_step(
-        "s", StepKind.PRESS_SHORTCUT, json.dumps(SHORTCUT_TARGET)
-    )[1]
+    allowed = desktop_step("s", StepKind.PRESS_SHORTCUT, json.dumps(SHORTCUT_TARGET))[1]
     WorkflowRunner.validate(Workflow("w", "w", (allowed,)))
     alt_f4 = desktop_step(
         "s2", StepKind.PRESS_SHORTCUT, json.dumps({**SHORTCUT_TARGET, "keys": "alt+f4"})
@@ -184,9 +176,7 @@ def test_type_text_validation_bounds_and_required_fields() -> None:
     ok = desktop_step("s", StepKind.TYPE_TEXT, json.dumps(TYPE_TARGET))[1]
     WorkflowRunner.validate(Workflow("w", "w", (ok,)))
 
-    no_text = desktop_step(
-        "s2", StepKind.TYPE_TEXT, json.dumps({**TYPE_TARGET, "text": ""})
-    )[1]
+    no_text = desktop_step("s2", StepKind.TYPE_TEXT, json.dumps({**TYPE_TARGET, "text": ""}))[1]
     with pytest.raises(WorkflowValidationError, match="needs text"):
         WorkflowRunner.validate(Workflow("w2", "w2", (no_text,)))
 
@@ -214,29 +204,29 @@ def test_type_text_validation_bounds_and_required_fields() -> None:
 def test_timeout_bounds_are_enforced() -> None:
     ok = desktop_step("s", StepKind.WAIT_WINDOW, json.dumps(WINDOW), timeout_seconds=60.0)[1]
     WorkflowRunner.validate(Workflow("w", "w", (ok,)))
-    too_short = desktop_step(
-        "s2", StepKind.WAIT_WINDOW, json.dumps(WINDOW), timeout_seconds=0.1
-    )[1]
-    with pytest.raises(WorkflowValidationError, match="between 0.5 and 60"):
+    too_short = desktop_step("s2", StepKind.WAIT_WINDOW, json.dumps(WINDOW), timeout_seconds=0.1)[1]
+    with pytest.raises(WorkflowValidationError, match=r"between 0\.5 and 60"):
         WorkflowRunner.validate(Workflow("w2", "w2", (too_short,)))
-    too_long = desktop_step(
-        "s3", StepKind.WAIT_WINDOW, json.dumps(WINDOW), timeout_seconds=120
-    )[1]
-    with pytest.raises(WorkflowValidationError, match="between 0.5 and 60"):
+    too_long = desktop_step("s3", StepKind.WAIT_WINDOW, json.dumps(WINDOW), timeout_seconds=120)[1]
+    with pytest.raises(WorkflowValidationError, match=r"between 0\.5 and 60"):
         WorkflowRunner.validate(Workflow("w3", "w3", (too_long,)))
 
 
 def test_postcondition_on_desktop_step_is_refused() -> None:
     from engine.workflow import PostconditionKind
 
-    bad = desktop_step(
-        "s",
-        StepKind.TYPE_TEXT,
-        json.dumps(TYPE_TARGET),
-        postcondition=PostconditionKind.PATH_EXISTS,
-    )[1]
-    with pytest.raises(WorkflowValidationError, match="cannot carry a postcondition"):
-        WorkflowRunner.validate(Workflow("w", "w", (bad,)))
+    for kind in (StepKind.TYPE_TEXT, StepKind.LAUNCH_APPLICATION):
+        target = json.dumps(TYPE_TARGET if kind is StepKind.TYPE_TEXT else LAUNCH_TARGET)
+        bad = WorkflowStep(
+            "s",
+            "s",
+            kind,
+            kind.value,
+            target=target,
+            postcondition=PostconditionKind.PATH_EXISTS,
+        )
+        with pytest.raises(WorkflowValidationError, match="cannot carry a postcondition"):
+            WorkflowRunner.validate(Workflow("w", "w", (bad,)))
 
 
 def test_full_desktop_flow_runs_with_provider_and_records_step_ids() -> None:
@@ -255,7 +245,9 @@ def test_full_desktop_flow_runs_with_provider_and_records_step_ids() -> None:
 
 
 def test_provider_failure_stops_following_steps() -> None:
-    actions = FakeDesktopActions(script={"TYPE_TEXT": (StepStatus.FAILED, "The element is disabled.", ())})
+    actions = FakeDesktopActions(
+        script={"TYPE_TEXT": (StepStatus.FAILED, "The element is disabled.", ())}
+    )
     steps = (
         desktop_step("launch", StepKind.LAUNCH_APPLICATION, json.dumps(LAUNCH_TARGET))[1],
         desktop_step("type", StepKind.TYPE_TEXT, json.dumps(TYPE_TARGET))[1],
@@ -270,9 +262,7 @@ def test_provider_failure_stops_following_steps() -> None:
 
 def test_missing_provider_is_inconclusive_not_executed() -> None:
     """Without a provider nothing runs and nothing changes on the desktop."""
-    launch = desktop_step(
-        "launch", StepKind.LAUNCH_APPLICATION, json.dumps(LAUNCH_TARGET)
-    )[1]
+    launch = desktop_step("launch", StepKind.LAUNCH_APPLICATION, json.dumps(LAUNCH_TARGET))[1]
     run = WorkflowRunner().run(Workflow("x", "x", (launch,)))
     assert run.status.value == "FAILED"
     assert run.results[0].status is StepStatus.INCONCLUSIVE
@@ -336,9 +326,7 @@ def test_pubsub_cancellation_skips_remaining_desktop_steps() -> None:
 
 
 def test_approval_gate_records_the_exact_workflow() -> None:
-    steps = (
-        desktop_step("type", StepKind.TYPE_TEXT, json.dumps(TYPE_TARGET))[1],
-    )
+    steps = (desktop_step("type", StepKind.TYPE_TEXT, json.dumps(TYPE_TARGET))[1],)
     approval = approve_desktop_workflow(Workflow("gate", "gate", steps))
     assert isinstance(approval, DesktopApproval)
     assert approval.workflow.steps == steps
@@ -355,16 +343,66 @@ def test_approval_gate_refuses_invalid_desktop_workflows() -> None:
 
 
 def test_mutating_kinds_constant_covers_the_four_mutations() -> None:
-    assert MUTATING_DESKTOP_KINDS == frozenset(
+    assert frozenset(
         {
             StepKind.LAUNCH_APPLICATION,
             StepKind.CLICK_UI_ELEMENT,
             StepKind.TYPE_TEXT,
             StepKind.PRESS_SHORTCUT,
         }
-    )
+    ) == MUTATING_DESKTOP_KINDS
     # read-only kinds are never part of the approval gate
     assert StepKind.WAIT_WINDOW not in MUTATING_DESKTOP_KINDS
     assert StepKind.VERIFY_FILE_TEXT not in MUTATING_DESKTOP_KINDS
     assert StepKind.WAIT_WINDOW in READ_ONLY_POLICY.allowed_kinds
     assert StepKind.VERIFY_FILE_TEXT in READ_ONLY_POLICY.allowed_kinds
+
+
+def test_window_identity_allows_process_and_class_without_a_title() -> None:
+    """Title-free identification is valid for windows whose title changes."""
+    from engine.workflow import StepKind as Kind
+
+    identity = {"process_id": 4321, "class_name": "Notepad"}
+    step = WorkflowStep(
+        "s",
+        "Save",
+        Kind.PRESS_SHORTCUT,
+        "Saved.",
+        target=json.dumps({"window": identity, "keys": "ctrl+s"}),
+    )
+    WorkflowRunner.validate(Workflow("w", "w", (step,)))
+
+
+def test_window_identity_requires_some_identifier() -> None:
+    from engine.errors import WorkflowValidationError
+
+    step = WorkflowStep(
+        "s",
+        "Wait",
+        StepKind.WAIT_WINDOW,
+        "Waited.",
+        target=json.dumps({}),
+    )
+    with pytest.raises(
+        WorkflowValidationError, match="title, process ID, or class name"
+    ):
+        WorkflowRunner.validate(Workflow("w", "w", (step,)))
+
+
+def test_verify_file_text_may_carry_a_path_postcondition(tmp_path: Path) -> None:
+    from engine.errors import WorkflowValidationError
+    from engine.workflow import PostconditionKind
+
+    """Postconditions stay on plain-path steps; VERIFY_FILE_TEXT proves its own existence."""
+    target = tmp_path / "note.txt"
+    target.write_text("Once automated this file\n", encoding="utf-8")
+    verify = WorkflowStep(
+        "verify",
+        "Verify",
+        StepKind.VERIFY_FILE_TEXT,
+        "Verified.",
+        target=json.dumps({"path": str(target), "contains": "automated"}),
+        postcondition=PostconditionKind.PATH_EXISTS,
+    )
+    with pytest.raises(WorkflowValidationError, match="cannot carry a postcondition"):
+        WorkflowRunner.validate(Workflow("w", "w", (verify,)))

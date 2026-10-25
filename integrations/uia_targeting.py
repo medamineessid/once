@@ -15,7 +15,7 @@ def window_matches(wrapper: Any, target: object) -> bool:
     if not isinstance(target, dict):
         return False
     info = wrapper.element_info
-    if info.name != target.get("title"):
+    if "title" in target and info.name != target["title"]:
         return False
     for field, attribute in (
         ("process_id", "process_id"),

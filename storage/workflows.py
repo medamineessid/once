@@ -93,9 +93,7 @@ def workflow_from_dict(data: object) -> Workflow:
         except ValueError as error:
             raise WorkflowValidationError("Workflow contains an unknown postcondition.") from error
         timeout_value = raw_step.get("timeout_seconds", DEFAULT_STEP_TIMEOUT_SECONDS)
-        if isinstance(timeout_value, bool) or not isinstance(
-            timeout_value, (int, float)
-        ):
+        if isinstance(timeout_value, bool) or not isinstance(timeout_value, (int, float)):
             raise WorkflowValidationError("Step timeout_seconds must be a number.")
         raw_target = raw_step.get("target")
         targets_kept = schema_version >= 2 and raw_target is not None

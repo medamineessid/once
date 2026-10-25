@@ -10,8 +10,8 @@ from controller.service import WorkflowService
 from engine.desktop import DesktopApproval, approve_desktop_workflow
 from engine.errors import WorkflowValidationError
 from engine.workflow import StepKind, StepStatus, Workflow, WorkflowStep
-from storage.history import ExecutionHistory
 from storage.database import connect
+from storage.history import ExecutionHistory
 from tests.test_desktop_engine import FakeDesktopActions
 
 WINDOW = {"title": "Once demo", "class_name": "DemoWindowClass"}
@@ -112,5 +112,5 @@ def test_desktop_approval_object_is_not_constructible_outside_the_gate(tmp_path)
         target=json.dumps({"window": WINDOW, "keys": "ctrl+unlisted"}),
     )
     forged = DesktopApproval(Workflow("bad", "bad", (bad_step,)), None)  # type: ignore[arg-type]
-    with pytest.raises(Exception):
+    with pytest.raises(WorkflowValidationError):
         service.run_desktop_approved(forged)

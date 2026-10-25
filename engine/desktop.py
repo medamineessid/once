@@ -20,7 +20,6 @@ from engine.replay import (
 )
 from engine.workflow import StepKind, Workflow
 
-
 MAX_DESKTOP_STEPS = 20
 
 
@@ -43,9 +42,7 @@ def approve_desktop_workflow(workflow: Workflow) -> DesktopApproval:
 
 def mutating_kind_names(workflow: Workflow) -> tuple[str, ...]:
     """Return the mutating step kinds a desktop workflow contains, for the UI."""
-    return tuple(
-        step.kind.value for step in workflow.steps if step.kind in MUTATING_DESKTOP_KINDS
-    )
+    return tuple(step.kind.value for step in workflow.steps if step.kind in MUTATING_DESKTOP_KINDS)
 
 
 def requires_desktop_approval(workflow: Workflow) -> bool:
