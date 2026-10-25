@@ -17,6 +17,7 @@ import socket
 import struct
 
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+OP_CONT = 0x0
 OP_TEXT = 0x1
 OP_CLOSE = 0x8
 OP_PING = 0x9
@@ -54,11 +55,13 @@ class WebSocketClient:
             "\r\n"
         )
         self.sock.sendall(request.encode("ascii"))
+        # Initialize before the handshake: any WebSocket bytes that arrived in
+        # the same TCP segment as the HTTP response are kept for reading.
+        self._buffer = b""
         response = self._read_handshake_response()
         if f"Sec-WebSocket-Accept: {self._accept_of(key)}" not in response:
             self.close()
             raise ValueError("The DevTools endpoint refused the WebSocket handshake.")
-        self._buffer = b""
 
     @property
     def url(self) -> str:
@@ -91,7 +94,10 @@ class WebSocketClient:
             if not chunk:
                 raise WebSocketClosed("The socket closed during the handshake.")
             data += chunk
-        return data.decode("latin-1")
+        # Bytes after the HTTP header belong to the WebSocket stream; Chrome
+        # may send the first frame in the same TCP segment as the handshake.
+        header, _, self._buffer = data.partition(b"\r\n\r\n")
+        return header.decode("latin-1")
 
     def _recv_exact(self, count: int) -> bytes:
         while len(self._buffer) < count:
@@ -133,12 +139,15 @@ class WebSocketClient:
         self.sock.sendall(header + mask + masked)
 
     def receive_json(self) -> dict:
-        """Return the next complete JSON message, absorbing pings and fragments.
+        """Return the next complete JSON message, reassembling fragments.
 
         A received ping is answered immediately with a pong carrying the same
-        payload (RFC 6455 section 5.5.2) before reading continues.
+        payload (RFC 6455 section 5.5.2) before reading continues. Fragmented
+        messages (text frame followed by continuation frames) are reassembled;
+        a message that starts while another is still open is a protocol error.
         """
         fragments = bytearray()
+        message_open = False
         while True:
             opcode, fin, payload = self._read_one_frame()
             if opcode == OP_PING:
@@ -148,13 +157,25 @@ class WebSocketClient:
                 continue
             if opcode == OP_CLOSE:
                 self.close()
-                raise WebSocketClosed("The DevTools endpoint closed the connection.")
-            if opcode != OP_TEXT:
+                raise WebSocketClosedError("The DevTools endpoint closed the connection.")
+            if opcode == OP_TEXT:
+                if message_open:
+                    raise ValueError(
+                        "A new message started before the previous one was finished."
+                    )
+                message_open = True
+                fragments += payload
+            elif opcode == OP_CONT:
+                if not message_open:
+                    raise ValueError(
+                        "A continuation frame arrived without a message to continue."
+                    )
+                fragments += payload
+            else:
                 raise ValueError(
                     f"Unexpected DevTools frame opcode {opcode}; only text is supported."
                 )
-            fragments += payload
-            if fin:
+            if fin and message_open:
                 return json.loads(bytes(fragments).decode("utf-8"))
 
     def _send_pong(self, payload: bytes) -> None:
