@@ -343,3 +343,23 @@ was added to the development requirements and installed successfully.
 - Evidence: test-module survey run 2026-10-24 (counts of tests per module from
   the committed suite); grep of `ui/main_window.py` panel/step wiring;
   `grep -rn INSPECT_PATH engine` for the read-only path-inspection step.
+
+### 2026-10-25 — Desktop interactions are allowed only with an identified target, and window identity needs only one identifier
+- Question: modern (WinUI) Notepad exposes an editor with an empty
+  AutomationId and titles that gain an unsaved-changes marker after typing;
+  should the engine reject title-free identities or element targets without an
+  AutomationId?
+- Choice: (1) allow a window target with any one of title/process_id/class_name
+  (still no unknown fields, all bounded); (2) allow an element target by
+  class_name when the AutomationId is empty; (3) keep the runtime refusal for
+  ambiguous/missing/disabled targets unchanged. Documented in
+  docs/desktop_automation.md with the Notepad live-demo evidence.
+- Reason: fail-closed ambiguity checks happen at execution time against the
+  real desktop, so requiring a title or AutomationId at validation time would
+  prohibit real applications that legitimately lack them; refusing ambiguity at
+  runtime preserves the safety invariant (never act on a guessed target).
+- Evidence: live Notepad probes (class Notepad, RichEditD2DPT Document, empty
+  automation_id); scripts/notepad_demo.py PASS run 2026-10-25;
+  tests/test_desktop_engine.py::test_window_identity_allows_process_and_class_without_a_title,
+  ::test_window_identity_requires_some_identifier, tests/test_replay.py updated
+  selector-requirement test (refusal message now "automation_id or class_name").
