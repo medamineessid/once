@@ -8,6 +8,7 @@ from typing import Final
 
 from engine.errors import WorkflowValidationError
 from engine.workflow import (
+    DEFAULT_STEP_TIMEOUT_SECONDS,
     PostconditionKind,
     StepKind,
     Workflow,
@@ -15,12 +16,13 @@ from engine.workflow import (
     WorkflowStep,
 )
 
-SCHEMA_VERSION: Final = 2
-_SUPPORTED_SCHEMA_VERSIONS = frozenset({1, SCHEMA_VERSION})
+SCHEMA_VERSION: Final = 3
+_SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2, SCHEMA_VERSION})
 _ROOT_KEYS = frozenset({"schema_version", "workflow_id", "name", "steps"})
-_STEP_KEYS = frozenset(
+_TO_JSON_STEP_KEYS = frozenset(
     {"step_id", "name", "kind", "message", "target", "max_attempts", "postcondition"}
 )
+_VERSIONED_STEP_KEYS = _TO_JSON_STEP_KEYS | {"timeout_seconds"}
 _LEGACY_STEP_KEYS = frozenset({"step_id", "name", "kind", "message"})
 
 
@@ -46,6 +48,7 @@ def workflow_to_dict(workflow: Workflow) -> dict[str, object]:
                 "target": step.target,
                 "max_attempts": step.max_attempts,
                 "postcondition": step.postcondition.value if step.postcondition else None,
+                "timeout_seconds": step.timeout_seconds,
             }
             for step in workflow.steps
         ],
@@ -65,36 +68,45 @@ def workflow_from_dict(data: object) -> Workflow:
 
     steps: list[WorkflowStep] = []
     for raw_step in raw_steps:
-        expected_keys = _STEP_KEYS if schema_version == SCHEMA_VERSION else _LEGACY_STEP_KEYS
+        if schema_version == SCHEMA_VERSION:
+            expected_keys = _VERSIONED_STEP_KEYS
+        elif schema_version == 2:
+            expected_keys = _TO_JSON_STEP_KEYS
+        else:
+            expected_keys = _LEGACY_STEP_KEYS
         if not isinstance(raw_step, dict) or set(raw_step) != expected_keys:
             raise WorkflowValidationError("A workflow step has unknown or missing fields.")
         try:
             kind = StepKind(_text(raw_step["kind"], "Step kind"))
         except ValueError as error:
             raise WorkflowValidationError("Workflow contains an unknown step kind.") from error
-        max_attempts = raw_step["max_attempts"] if schema_version == SCHEMA_VERSION else 1
+        max_attempts = raw_step.get("max_attempts", 1)
         if not isinstance(max_attempts, int):
             raise WorkflowValidationError("Step max_attempts must be an integer.")
-        raw_postcondition = raw_step["postcondition"] if schema_version == SCHEMA_VERSION else None
+        raw_postcondition = raw_step.get("postcondition")
+        if raw_postcondition is not None and not isinstance(raw_postcondition, str):
+            raw_postcondition = None
         try:
             postcondition = (
                 PostconditionKind(raw_postcondition) if raw_postcondition is not None else None
             )
         except ValueError as error:
             raise WorkflowValidationError("Workflow contains an unknown postcondition.") from error
+        timeout_value = raw_step.get("timeout_seconds", DEFAULT_STEP_TIMEOUT_SECONDS)
+        if isinstance(timeout_value, bool) or not isinstance(timeout_value, (int, float)):
+            raise WorkflowValidationError("Step timeout_seconds must be a number.")
+        raw_target = raw_step.get("target")
+        targets_kept = schema_version >= 2 and raw_target is not None
         steps.append(
             WorkflowStep(
                 step_id=_text(raw_step["step_id"], "Step ID"),
                 name=_text(raw_step["name"], "Step name"),
                 kind=kind,
                 message=_text(raw_step["message"], "Step message"),
-                target=(
-                    _text(raw_step["target"], "Step target")
-                    if schema_version == SCHEMA_VERSION and raw_step["target"] is not None
-                    else None
-                ),
+                target=_text(raw_target, "Step target") if targets_kept else None,
                 max_attempts=max_attempts,
                 postcondition=postcondition,
+                timeout_seconds=float(timeout_value),
             )
         )
 

@@ -7,7 +7,9 @@ from pathlib import Path
 
 from .errors import ExecutionError
 from .workflow import (
+    BrowserActions,
     CancelCheck,
+    DesktopActions,
     ProgressCallback,
     StepKind,
     StepResult,
@@ -31,9 +33,51 @@ class ReplayPolicy:
             StepKind.VERIFY_PATH_EXISTS,
             StepKind.INSPECT_WINDOW,
             StepKind.INSPECT_UI_ELEMENT,
+            StepKind.VERIFY_FILE_TEXT,
+            StepKind.WAIT_WINDOW,
         }
     )
     max_steps: int = 20
+
+
+#: Read-only inspection and waiting, runnable without mutating anything.
+READ_ONLY_POLICY = ReplayPolicy()
+
+#: Desktop interaction kinds that mutate the desktop and therefore require an
+#: explicit, recorded approval of the exact workflow before they may run.
+MUTATING_DESKTOP_KINDS: frozenset[StepKind] = frozenset(
+    {
+        StepKind.LAUNCH_APPLICATION,
+        StepKind.CLICK_UI_ELEMENT,
+        StepKind.TYPE_TEXT,
+        StepKind.PRESS_SHORTCUT,
+        StepKind.LAUNCH_BROWSER,
+        StepKind.NAVIGATE_BROWSER,
+        StepKind.INTERACT_PAGE_ELEMENT,
+    }
+)
+
+#: Read-only page steps that need the browser provider but never mutate it.
+BROWSER_READ_KINDS: frozenset[StepKind] = frozenset(
+    {StepKind.INSPECT_PAGE, StepKind.FIND_PAGE_ELEMENT, StepKind.WAIT_PAGE}
+)
+
+#: Cross-application policy: read-only steps plus approved desktop/browser
+#: mutations. The same approval gate covers both surfaces.
+DESKTOP_INTERACTION_POLICY = ReplayPolicy(
+    allowed_kinds=frozenset(
+        {
+            StepKind.INSPECT_PATH,
+            StepKind.VERIFY_PATH_EXISTS,
+            StepKind.INSPECT_WINDOW,
+            StepKind.INSPECT_UI_ELEMENT,
+            StepKind.VERIFY_FILE_TEXT,
+            StepKind.WAIT_WINDOW,
+        }
+        | MUTATING_DESKTOP_KINDS
+        | BROWSER_READ_KINDS
+    )
+)
 
 
 @dataclass(frozen=True)
@@ -93,6 +137,8 @@ class ReplayExecutor:
         progress_callback: ProgressCallback | None = None,
         window_inspector: WindowInspector | None = None,
         ui_element_inspector: UIElementInspector | None = None,
+        desktop_actions: DesktopActions | None = None,
+        browser_actions: BrowserActions | None = None,
     ) -> WorkflowRun:
         """Preview or execute the allowlisted read-only actions."""
         self.validate(workflow)
@@ -124,4 +170,6 @@ class ReplayExecutor:
             progress_callback=progress_callback,
             window_inspector=window_inspector,
             ui_element_inspector=ui_element_inspector,
+            desktop_actions=desktop_actions,
+            browser_actions=browser_actions,
         )

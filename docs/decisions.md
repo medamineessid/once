@@ -343,3 +343,54 @@ was added to the development requirements and installed successfully.
 - Evidence: test-module survey run 2026-10-24 (counts of tests per module from
   the committed suite); grep of `ui/main_window.py` panel/step wiring;
   `grep -rn INSPECT_PATH engine` for the read-only path-inspection step.
+
+### 2026-10-25 — Desktop interactions are allowed only with an identified target, and window identity needs only one identifier
+- Question: modern (WinUI) Notepad exposes an editor with an empty
+  AutomationId and titles that gain an unsaved-changes marker after typing;
+  should the engine reject title-free identities or element targets without an
+  AutomationId?
+- Choice: (1) allow a window target with any one of title/process_id/class_name
+  (still no unknown fields, all bounded); (2) allow an element target by
+  class_name when the AutomationId is empty; (3) keep the runtime refusal for
+  ambiguous/missing/disabled targets unchanged. Documented in
+  docs/desktop_automation.md with the Notepad live-demo evidence.
+- Reason: fail-closed ambiguity checks happen at execution time against the
+  real desktop, so requiring a title or AutomationId at validation time would
+  prohibit real applications that legitimately lack them; refusing ambiguity at
+  runtime preserves the safety invariant (never act on a guessed target).
+- Evidence: live Notepad probes (class Notepad, RichEditD2DPT Document, empty
+  automation_id); scripts/notepad_demo.py PASS run 2026-10-25;
+  tests/test_desktop_engine.py::test_window_identity_allows_process_and_class_without_a_title,
+  ::test_window_identity_requires_some_identifier, tests/test_replay.py updated
+  selector-requirement test (refusal message now "automation_id or class_name").
+
+## 2026-10-25 — Browser session lifetime through the controller
+- Question: engine-launched Chrome previously lived until an explicit
+  provider `shutdown()` (only the demo script called it). When must the real
+  app close the browser and delete its temporary profile?
+- Choice: `WorkflowService.run_desktop_approved` closes every browser
+  session the provider holds at the end of each approved run — finished,
+  failed, or cancelled — via a `finally` block. `keep_browsers_after_run=True`
+  is the documented exception for a launch-only run whose DevTools port is
+  consumed by exactly one later run, which then closes the browser when it
+  finishes. Normal exit is covered by an `atexit` hook registered when the
+  service is constructed (`close_browser_sessions`, idempotent). Hard app
+  crashes are intentionally NOT handled yet.
+- Reason: the approval gate is per workflow, so no browser should outlive its
+  approved run by default; this is the safest interpretation (no leaked
+  Chrome on any normal path). The opt-out exists only because a browser's
+  DevTools port is dynamic (`--remote-debugging-port=0`), so the demonstrated
+  two-run pattern (launch, read the port from evidence, then approve and run
+  the consuming workflow) needs the browser alive between two executions.
+- Consequence/known gap: if the app is killed (crash, power loss, Task
+  Manager), the browser survives as an orphan with its `once-chrome-profile-*`
+  temp profile until Windows clears `%TEMP%`. Options for the future (not
+  implemented, ordered roughly by cost): (1) Windows Job Object via
+  `pywin32`'s `win32job` — create a kill-on-close job, assign the Chrome
+  process: the OS closes Chrome on any host-process death, cheap and robust
+  (~1-2 hundred lines + tests); (2) a lockfile owned by the app whose
+  existence Chrome's lifetime is reconciled against on the next startup,
+  reuse the pattern planned for run-journal reconciliation (~1 day, needs a
+  runner process or startup scan, can also clean stale temp profiles); (3)
+  `--remote-allow-origins`-style watchdog — a shell parent watching Once;
+  rejected because it adds an unmanaged wrapper process.

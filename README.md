@@ -135,10 +135,18 @@ pytest-qt 4.5.0, Ruff 0.17.1, PyInstaller 6.22.3.
 
 Version and compatibility evidence is recorded in `docs/decisions.md`.
 
+## Desktop automation engine
+
+A small, approval-gated set of Windows desktop actions now exists
+(`docs/desktop_automation.md`): launch (registry/validated `.exe`), wait, type
+onto an identified control, allow-listed shortcuts, and read-only file text
+verification. Mutating desktop workflows run only through
+`WorkflowService.run_desktop_approved` after `engine.desktop.approve_desktop_workflow`;
+`scripts/notepad_demo.py` is the live end-to-end scenario.
+
 ## Reproducible demonstration
 
-`scripts/run_demo.py` walks the complete supervised journey end to end inside
-one throwaway directory: a miniature invoice-extractor repo with a seeded
+`scripts/run_demo.py` walks the complete supervised journey end to end insideone throwaway directory: a miniature invoice-extractor repo with a seeded
 defect, synthetic inputs with recorded ground truth (INV-1 total 105.0), an
 allowlisted verifier that proves the defect, a deterministic rule-based fix
 generator standing in for a coding agent, the exact proposed diff, isolated
