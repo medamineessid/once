@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
         self.workspace.addWidget(self.review_page)
         self.workspace.addWidget(self.create_automation_page)
         self.activity_page.set_service(self._service)
+        self.my_automations_page.set_service(self._service)
         central = QWidget(self)
         central_layout = QVBoxLayout(central)
         central_layout.setContentsMargins(12, 12, 12, 12)
@@ -197,8 +198,6 @@ class MainWindow(QMainWindow):
         self.home_page.run_demo_requested.connect(self._run_demo_from_home)
         self.home_page.my_automations_requested.connect(self._show_my_automations)
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
-        self.my_automations_page.preview_requested.connect(self._preview_workflow)
-        self.my_automations_page.run_requested.connect(self._run_workflow_from_list)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)
         self.review_page.approved.connect(self._on_approved)
         self.review_page.cancelled.connect(self._on_review_cancelled)
@@ -219,6 +218,7 @@ class MainWindow(QMainWindow):
 
     def _show_page_automations(self) -> None:
         self._show_page(ShellPages.MY_AUTOMATIONS)
+        self.my_automations_page.refresh()
 
     def _show_page_activity(self) -> None:
         self._show_page(ShellPages.ACTIVITY)
@@ -241,20 +241,12 @@ class MainWindow(QMainWindow):
 
     def _show_my_automations(self) -> None:
         self.workspace.setCurrentWidget(self.my_automations_page)
+        self.my_automations_page.refresh()
 
     def _open_workflow(self, path: Path) -> None:
         workflow = self._service.load(path)
         self.workspace.setCurrentWidget(self.review_page)
         self.review_page.set_workflow(workflow)
-
-    def _preview_workflow(self, path: Path) -> None:
-        workflow = self._service.load(path)
-        self.workspace.setCurrentWidget(self.review_page)
-        self.review_page.set_workflow(workflow)
-
-    def _run_workflow_from_list(self, path: Path) -> None:
-        workflow = self._service.load(path)
-        self._service.run_workflow(workflow)
 
     def _handle_task_entered(self, text: str) -> None:
         workflow = self._service.build_workflow_from_task(text)

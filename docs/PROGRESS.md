@@ -1,7 +1,7 @@
 # Once progress
 
-- Last completed step: PHASE A tooling fixes + S2 activity page (verify.ps1 rewritten as PowerShell, workflow audited)
-- Last commit: (pending this PHASE A commit; previously dab53da style fix, 588ed21 S2)
+- Last completed step: PHASE A (7155971) + PHASE B slice 3 code complete on slice/my-automations-page, merge awaiting CHECKPOINT 3 review
+- Last commit: (pending slice 3 commit; PHASE A commit 7155971)
 - Verified this session (PHASE 0): 
   - git branch --show-current: docs/ui-migration-plan
   - git status --short: ?? app.spec, ?? once-app.spec
@@ -10,7 +10,7 @@
   - ui/pages/ exists with home,my_automations,activity,create_automation,review,settings
   - ui/review_view.py, ui/verifier_dialog.py, ui/workers.py exist
   - tests/test_verifier_dialog.py does not exist (tests cover verifier dialog inline in test_review_ui.py)
-- Next action: Continue to S3 (My automations page, UI migration seam B)
+- Next action: CHECKPOINT 3 - user reviews the slice/my-automations-page diff and clicks through app.py --shell My automations, then merge and start S4
 - Currently failing tests or known breakage: none
 - Open items: see docs/ui_migration_plan.md for full details
 
@@ -31,7 +31,7 @@
 ### PHASE 2: UI MIGRATION SLICES
 - [x] S1: Add --shell flag to app.py (slice/shell-flag). Default stays old window. --smoke-test works with and without --shell. Add tests. (2a0573b, style fix dab53da; CHECKPOINT 1 user-tested) — DONE — CHECKPOINT 1 passed
 - [x] S2: Activity/history page wiring (slice/activity-page) (588ed21) — DONE
-- [ ] S3: My automations page (slice/my-automations-page) — TODO (next action)
+- [ ] S3: My automations page (slice/my-automations-page) — IN PROGRESS: implemented (list/open/preview read-only + confirmed worker run), 14 new tests, screenshots docs/screenshots/slice-3/, branch pushed, merge blocked on CHECKPOINT 3 (pending)
 - [ ] S4: Create automation and draft editing (slice/create-automation) — TODO
 - [ ] S5: Recording lifecycle in shell (slice/recording-shell) — TODO
 - [ ] S6: Review/approval and verifier configuration (slice/review-approval-shell) — TODO
