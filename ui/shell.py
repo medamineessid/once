@@ -168,6 +168,7 @@ class MainWindow(QMainWindow):
         self.workspace.addWidget(self.settings_page)
         self.workspace.addWidget(self.review_page)
         self.workspace.addWidget(self.create_automation_page)
+        self.activity_page.set_service(self._service)
         central = QWidget(self)
         central_layout = QVBoxLayout(central)
         central_layout.setContentsMargins(12, 12, 12, 12)
@@ -221,6 +222,7 @@ class MainWindow(QMainWindow):
 
     def _show_page_activity(self) -> None:
         self._show_page(ShellPages.ACTIVITY)
+        self.activity_page.refresh()
 
     def _show_page_settings(self) -> None:
         self._show_page(ShellPages.SETTINGS)

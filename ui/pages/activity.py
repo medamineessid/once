@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from controller.service import WorkflowService
+from engine.workflow import WorkflowRun
 
 
 class ActivityPage(QWidget):
@@ -24,6 +25,7 @@ class ActivityPage(QWidget):
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._service: WorkflowService | None = None
+        self._runs: tuple[WorkflowRun, ...] = ()
         self._history_list: QListWidget | None = None
         self._init_ui()
 
@@ -66,21 +68,29 @@ class ActivityPage(QWidget):
     def _on_selection_changed(self) -> None:
         self.run_selected.emit()
         row = self._history_list.currentRow()
-        if row < 0 or self._service is None:
+        if row < 0 or row >= len(self._runs):
             self._details_label.setText("Select a run to see details.")
             return
-        for idx, run in enumerate(reversed(self._service.history()), start=0):
-            if idx == row:
-                self._details_label.setText(
-                    f"{run.workflow_id} — {run.status.value} — {len(run.results)} steps"
-                )
-                break
+        run = self._runs[row]
+        step_lines = "\n".join(
+            f"{result.step_id} — {result.status.value} — {result.message}" for result in run.results
+        )
+        self._details_label.setText(
+            f"{run.workflow_id} — {run.status.value} — {len(run.results)} steps"
+            + (f"\n{step_lines}" if step_lines else "")
+        )
+
+    def refresh(self) -> None:
+        """Reload the history shown on this read-only page."""
+        self._refresh()
 
     def _refresh(self) -> None:
         self._history_list.clear()
         if self._service is None:
+            self._runs = ()
             return
-        for idx, run in enumerate(self._service.history()):
+        self._runs = self._service.history()
+        for idx, run in enumerate(self._runs):
             item = QListWidgetItem(f"{idx + 1}. {run.workflow_id}")
             item.setData(Qt.UserRole, run.workflow_id)
             item.setToolTip(f"{run.workflow_id} — {run.status.value} — {len(run.results)} steps")

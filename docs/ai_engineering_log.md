@@ -888,3 +888,11 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED.
 - Human review: left blank. Confirm the three untracked files (`app.spec`, `once-app.spec`, `ui/components/__init__.py`) should be landed or deleted, and consider a visual click-through of the new blue status label styling.
 
+
+## 2026-10-26 — UI migration Slice 2: Activity page wiring (read-only)   (commit: pending)
+- Task: Wire the redesigned shell's ActivityPage to the controller service so it shows real persisted run history, read-only, reusing existing `WorkflowService.history()`.
+- AI contribution: new `tests/test_activity_page.py` (7 pytest-qt tests, written first); modifications in `ui/pages/activity.py` (runs cache, selection→details mapping fix, step-level detail lines, public `refresh()`) and `ui/shell.py` (service injected into the activity page at construction; list refreshed when the Activity page is shown).
+- Defect found: the details label mapped the selected row through `reversed(self._service.history())` while the list itself is populated newest-first, so selecting the newest run displayed the oldest run's details; fixed and pinned by `test_details_label_matches_selected_run`.
+- Verification: `.venv/Scripts/python.exe -m pytest tests/test_activity_page.py` → first 4 passed / 3 failed (pre-implementation), after implementation `tests/test_activity_page.py tests/test_shell.py` → `15 passed`; `.venv/Scripts/python.exe -m ruff format .` → 1 file reformatted, `.venv/Scripts/python.exe -m ruff check .` → `All checks passed!`; full suite `.venv/Scripts/python.exe -m pytest -q` → `316 passed, 2 skipped in 182.47s` (same 2 symlink-environment skips as slice 1).
+- Outcome: PASSED
+- Human review:
