@@ -9,6 +9,7 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
+    QMessageBox,
     QStackedWidget,
     QToolBar,
     QToolButton,
@@ -249,9 +250,18 @@ class MainWindow(QMainWindow):
         self.review_page.set_workflow(workflow)
 
     def _handle_task_entered(self, text: str) -> None:
-        workflow = self._service.build_workflow_from_task(text)
-        self.workspace.setCurrentWidget(self.review_page)
-        self.review_page.set_workflow(workflow)
+        """Acknowledge a described task without pretending to build a workflow.
+
+        Turning a description into real steps is later migration work: the
+        controller has no builder for it, and faking one here would hand the
+        user a workflow that cannot run.
+        """
+        QMessageBox.information(
+            self,
+            "Not available yet",
+            f"Once cannot turn this description into an automation yet:\n\n{text[:200]}\n\n"
+            "Nothing was created and no workflow was started.",
+        )
 
     def _on_approved(self) -> None:
         pass

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ui.shell import MainWindow, ShellPages
 
@@ -49,6 +49,45 @@ def test_create_automation_page_has_description_input(qtbot, window):
     assert input_field.placeholderText().startswith("Example:")
     QTest.keyClicks(input_field, "Open invoices folder and read PDFs")
     assert page._description_input.toPlainText() == "Open invoices folder and read PDFs"
+
+
+def test_create_automation_button_emits_typed_task(qtbot, window, monkeypatch):
+    notices: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        lambda parent, title, text, *args, **kwargs: notices.append(text),
+    )
+    window._show_create_automation()
+    page = window.create_automation_page
+    page._description_input.setPlainText("Open invoices folder and read PDFs")
+    received: list[str] = []
+    page.task_entered.connect(received.append)
+
+    qtbot.mouseClick(page._create_button, Qt.MouseButton.LeftButton)
+
+    assert received == ["Open invoices folder and read PDFs"]
+    assert len(notices) == 1
+    assert "cannot turn this description into an automation yet" in notices[0]
+
+
+def test_create_automation_button_ignores_blank_input(qtbot, window, monkeypatch):
+    notices: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "information",
+        lambda parent, title, text, *args, **kwargs: notices.append(text),
+    )
+    window._show_create_automation()
+    page = window.create_automation_page
+    page._description_input.setPlainText("   ")
+    received: list[str] = []
+    page.task_entered.connect(received.append)
+
+    qtbot.mouseClick(page._create_button, Qt.MouseButton.LeftButton)
+
+    assert received == []
+    assert notices == []
 
 
 def test_sidebar_active_state_after_sidebar_click(qtbot, window):

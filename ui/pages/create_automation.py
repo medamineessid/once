@@ -82,7 +82,7 @@ class CreateAutomationPage(QWidget):
         layout.addWidget(actions_container, alignment=Qt.AlignHCenter)
 
     def _create_from_description(self) -> None:
-        text = self._description_input.text().strip() if self._description_input else ""
+        text = self._description_input.toPlainText().strip() if self._description_input else ""
         if text:
             self.task_entered.emit(text)
 
