@@ -72,6 +72,13 @@ def test_details_label_matches_selected_run(qtbot, tmp_path):
     assert "SUCCEEDED" in details
     assert "inspect-2" in details
 
+    page._history_list.setCurrentRow(1)
+    oldest_details = page._details_label.text()
+    assert oldest_details != details
+    assert oldest_details.startswith("demo-local-workflow")
+    assert "demo-local-workflow-2" not in oldest_details
+    assert "2 steps" in oldest_details
+
 
 def test_empty_history_shows_placeholder(qtbot, tmp_path):
     service = make_service(tmp_path)

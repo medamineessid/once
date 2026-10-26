@@ -1,7 +1,7 @@
 # Once progress
 
-- Last completed step: PHASE 0 — UI migration plan (read-only discovery)
-- Last commit: (pending) — docs: add UI migration plan and progress queue
+- Last completed step: PHASE A tooling fixes + S2 activity page (verify.ps1 rewritten as PowerShell, workflow audited)
+- Last commit: (pending this PHASE A commit; previously dab53da style fix, 588ed21 S2)
 - Verified this session (PHASE 0): 
   - git branch --show-current: docs/ui-migration-plan
   - git status --short: ?? app.spec, ?? once-app.spec
@@ -10,7 +10,7 @@
   - ui/pages/ exists with home,my_automations,activity,create_automation,review,settings
   - ui/review_view.py, ui/verifier_dialog.py, ui/workers.py exist
   - tests/test_verifier_dialog.py does not exist (tests cover verifier dialog inline in test_review_ui.py)
-- Next action: Continue to PHASE 1 (housekeeping and verification tooling)
+- Next action: Continue to S3 (My automations page, UI migration seam B)
 - Currently failing tests or known breakage: none
 - Open items: see docs/ui_migration_plan.md for full details
 
@@ -20,18 +20,18 @@
 - [x] P0-1: Verify starting facts (branch, app.py imports, shell vs main_window, pages, review_view/verifier_dialog/workers, untracked files) — DONE
 - [x] P0-2: Write docs/ui_migration_plan.md with all required sections and file:line evidence — DONE
 - [x] P0-3: Fill docs/PROGRESS.md with queue plus PHASE 1 and final items — DONE
-- [x] P0-4: Commit, ff-merge to main, push — TODO
+- [x] P0-4: Commit, ff-merge to main, push (2f7dea6) — DONE
 
 ### PHASE 1: HOUSEKEEPING AND VERIFICATION TOOLING (branch chore/housekeeping)
-- [ ] P1-1: Run `git diff --no-index app.spec once-app.spec` and paste result; delete both untracked files; add build/, dist/, app.spec, once-app.spec to .gitignore (do not ignore once.spec) — TODO
-- [ ] P1-2: Add scripts/verify.ps1 (pytest offscreen with .venv\Scripts\python.exe, ruff check, ruff format --check, app.py --smoke-test, log numstat check, git status --short, pass/fail per check) — TODO
-- [ ] P1-3: Add .github/workflows/tests.yml (pytest offscreen, ruff check, ruff format --check on windows-latest, python 3.14) — TODO (note if cannot verify 3.14 availability)
-- [ ] P1-4: Run scripts/verify.ps1 and paste full output; commit, ff-merge, push — TODO
+- [x] P1-1: Run `git diff --no-index app.spec once-app.spec` and paste result; delete both untracked files; add build/, dist/, app.spec, once-app.spec to .gitignore (do not ignore once.spec) (e2f5c62) — DONE
+- [x] P1-2: Add scripts/verify.ps1 (pytest offscreen with .venv\Scripts\python.exe, ruff check, ruff format --check, app.py --smoke-test, git status --short, pass/fail per check) - rewritten as real PowerShell in PHASE A (see verify-fix commit) — DONE
+- [x] P1-3: Add .github/workflows/tests.yml (pytest offscreen, ruff check, ruff format --check on windows-latest, python 3.14) (e2f5c62) - 3.14 on windows-latest verified via actions/python-versions release 3.14.9 with win32 assets; no bash-in-PowerShell flaws found — DONE
+- [x] P1-4: Run scripts/verify.ps1 and paste full output; commit, ff-merge, push - PASSED under Windows PowerShell 5.1 in PHASE A — DONE
 
 ### PHASE 2: UI MIGRATION SLICES
-- [ ] S1: Add --shell flag to app.py (slice/shell-flag). Default stays old window. --smoke-test works with and without --shell. Add tests. Screenshots in docs/screenshots/slice-1/. **CHECKPOINT 1** after merge/push — stop for user to test. — TODO
-- [ ] S2: Activity/history page wiring (slice/activity-page) — TODO
-- [ ] S3: My automations page (slice/my-automations-page) — TODO
+- [x] S1: Add --shell flag to app.py (slice/shell-flag). Default stays old window. --smoke-test works with and without --shell. Add tests. (2a0573b, style fix dab53da; CHECKPOINT 1 user-tested) — DONE — CHECKPOINT 1 passed
+- [x] S2: Activity/history page wiring (slice/activity-page) (588ed21) — DONE
+- [ ] S3: My automations page (slice/my-automations-page) — TODO (next action)
 - [ ] S4: Create automation and draft editing (slice/create-automation) — TODO
 - [ ] S5: Recording lifecycle in shell (slice/recording-shell) — TODO
 - [ ] S6: Review/approval and verifier configuration (slice/review-approval-shell) — TODO

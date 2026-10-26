@@ -896,3 +896,11 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: `.venv/Scripts/python.exe -m pytest tests/test_activity_page.py` → first 4 passed / 3 failed (pre-implementation), after implementation `tests/test_activity_page.py tests/test_shell.py` → `15 passed`; `.venv/Scripts/python.exe -m ruff format .` → 1 file reformatted, `.venv/Scripts/python.exe -m ruff check .` → `All checks passed!`; full suite `.venv/Scripts/python.exe -m pytest -q` → `316 passed, 2 skipped in 182.47s` (same 2 symlink-environment skips as slice 1).
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-26 — PHASE A: tooling fixes and slice 2 follow-up   (commit: pending)
+- Task: Rewrite scripts/verify.ps1 as real PowerShell, audit .github/workflows/tests.yml, strengthen the slice 2 newest/oldest-row regression test, and update docs/PROGRESS.md status lines.
+- AI contribution: rewrote scripts/verify.ps1 (venv guard, offscreen QT_QPA_PLATFORM, 8 checks, summary table, exit semantics); no change needed to tests.yml; extended test_details_label_matches_selected_run with oldest-row assertions; PROGRESS.md P0-4/P1-1..4/S1/S2 marked DONE, next action S3.
+- Defect found: verify.ps1 was bash inside a .ps1 file (run_check(), if "$@"; then, [ ! -f ... ]) and could not parse under PowerShell; the slice 2 regression test did not assert the oldest row shows different details; PROGRESS.md still marked completed items TODO.
+- Verification: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1 run twice this session; second run output: pytest "316 passed, 2 skipped in 187.10s", ruff check "All checks passed!", format "106 files already formatted", both smoke tests PASS, "ALL CHECKS PASSED" (full output in session report). tests/test_activity_page.py: 7 passed. PROGRESS.md encoding checked with od -c: valid UTF-8 (em dash 342 200 224), left untouched per instruction.
+- Outcome: PASSED
+- Human review:

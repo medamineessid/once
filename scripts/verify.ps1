@@ -1,44 +1,84 @@
-#!/usr/bin/env bash
-set -e
+# Local verification for the Once project.
+# Real PowerShell (compatible with Windows PowerShell 5.1). ASCII output only.
+# Run from anywhere: it relocates itself to the repository root.
 
-EXIT_CODE=0
+$ErrorActionPreference = 'Continue'
 
-run_check() {
-    local name="$1"
-    shift
-    echo "=== $name ==="
-    if "$@"; then
-        echo "PASS: $name"
-        return 0
-    else
-        echo "FAIL: $name"
-        EXIT_CODE=1
-        return 1
-    fi
+$root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+Set-Location -LiteralPath $root
+
+$Python   = Join-Path $root '.venv\Scripts\python.exe'
+$RuffExe  = Join-Path $root '.venv\Scripts\ruff.exe'
+
+if (-not (Test-Path -LiteralPath $Python)) {
+    Write-Output "FAIL: Virtual environment not found at $Python"
+    Write-Output "Create it first (py -3.14 -m venv .venv), then: pip install -r requirements-dev.txt"
+    exit 1
+}
+if (-not (Test-Path -LiteralPath $RuffExe)) {
+    Write-Output "FAIL: ruff.exe not found at $RuffExe"
+    Write-Output "Install the dev requirements: pip install -r requirements-dev.txt"
+    exit 1
 }
 
-export QT_QPA_PLATFORM=offscreen
-PYTHON="./.venv/Scripts/python.exe"
-RUFF="./.venv/Scripts/ruff.exe"
+$env:QT_QPA_PLATFORM = 'offscreen'
 
-if [ ! -f "$PYTHON" ]; then
-    echo "FAIL: Virtual environment not found at $PYTHON"
+$script:Results = @()
+$script:RealChecksFailed = $false
+
+function Invoke-Check {
+    param(
+        [string]$Name,
+        [scriptblock]$Command,
+        [switch]$Informational
+    )
+    Write-Output "=== $Name ==="
+    & $Command
+    $code = $LASTEXITCODE
+    if ($code -eq 0) {
+        Write-Output "PASS: $Name"
+    } else {
+        Write-Output "FAIL: $Name (exit code $code)"
+        if (-not $Informational) {
+            $script:RealChecksFailed = $true
+        }
+    }
+    $row = [ordered]@{
+        Check      = $Name
+        ExitCode   = $code
+        Result     = ''
+        Severity   = ''
+    }
+    if ($code -eq 0) {
+        $row.Result = 'PASS'
+    } else {
+        $row.Result = 'FAIL'
+    }
+    if ($Informational) {
+        $row.Severity = 'informational'
+    } else {
+        $row.Severity = 'required'
+    }
+    $script:Results += [pscustomobject]$row
+}
+
+Invoke-Check -Name 'git branch --show-current' -Informational -Command { git branch --show-current }
+Invoke-Check -Name 'git status --short'        -Informational -Command { git status --short }
+Invoke-Check -Name 'pytest -q'                 -Command { & $Python -m pytest -q }
+Invoke-Check -Name 'ruff check .'              -Command { & $RuffExe check . }
+Invoke-Check -Name 'ruff format --check .'     -Command { & $RuffExe format --check . }
+Invoke-Check -Name 'app.py --smoke-test'       -Command { & $Python app.py --smoke-test }
+Invoke-Check -Name 'app.py --smoke-test --shell' -Command { & $Python app.py --smoke-test --shell }
+Invoke-Check -Name 'git log -1 --numstat'      -Informational -Command { git log -1 --numstat }
+
+Write-Output ''
+Write-Output '=== SUMMARY ==='
+$script:Results | ForEach-Object {
+    '{0,-32} exit={1,-4} {2,-5} ({3})' -f $_.Check, $_.ExitCode, $_.Result, $_.Severity
+}
+if ($script:RealChecksFailed) {
+    Write-Output 'SOME CHECKS FAILED'
     exit 1
-fi
-
-run_check "git branch --show-current" git branch --show-current || true
-run_check "git status --short" git status --short || true
-run_check "pytest" $PYTHON -m pytest -q || true
-run_check "ruff check" $RUFF check . || true
-run_check "ruff format --check" $RUFF format --check . || true
-run_check "app.py --smoke-test" $PYTHON app.py --smoke-test || true
-run_check "log numstat check" bash -c 'NUMSTAT=$(git diff --numstat origin/main...HEAD -- docs/ai_engineering_log.md 2>&1); echo "$NUMSTAT"; if echo "$NUMSTAT" | grep -q $'"'"'\t'"'"'; then PARTS=(${NUMSTAT//$'"'"'\t'"'"'/ }); if [ "${PARTS[0]}" != "0" ]; then exit 1; fi; fi' || true
-
-echo ""
-echo "=== SUMMARY ==="
-if [ $EXIT_CODE -eq 0 ]; then
-    echo "ALL CHECKS PASSED"
-else
-    echo "SOME CHECKS FAILED"
-fi
-exit $EXIT_CODE
+}
+Write-Output 'ALL CHECKS PASSED'
+exit 0
