@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -12,12 +12,16 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from controller.service import WorkflowService
+from engine.errors import WorkflowValidationError
+from engine.workflow import Workflow
+from ui.workers import WorkflowWorker
 
 
 class MyAutomationsPage(QWidget):
@@ -32,6 +36,8 @@ class MyAutomationsPage(QWidget):
         super().__init__(parent)
         self._service: WorkflowService | None = None
         self._workflow_list: QListWidget | None = None
+        self._worker: WorkflowWorker | None = None
+        self._thread: QThread | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -85,45 +91,179 @@ class MyAutomationsPage(QWidget):
         actions_container_layout.setSpacing(8)
         actions_container_layout.addLayout(actions_row)
         layout.addWidget(actions_container, alignment=Qt.AlignHCenter)
-        self._empty_state = self._workflow_list
+        layout.addSpacing(8)
+        self._details_label = QLabel("No saved automations yet. Create one from Home.", self)
+        self._details_label.setObjectName("automationDetailsLabel")
+        self._details_label.setStyleSheet(
+            "font-size: 13px; color: #6b6b6b;border-top: 1px solid #e5e7eb; padding-top: 8px;"
+        )
+        self._details_label.setWordWrap(True)
+        layout.addWidget(self._details_label, alignment=Qt.AlignHCenter)
         self._refresh()
+
+    # ------------------------------------------------------------------ state
+
+    def _set_running(self, running: bool) -> None:
+        self._open_button.setEnabled(not running)
+        self._preview_button.setEnabled(not running)
+        self._run_button.setEnabled(not running)
+
+    def _thread_finished(self) -> None:
+        self._worker = None
+        self._thread = None
+        self._set_running(False)
+
+    # ------------------------------------------------------------ read paths
+
+    def _show_workflow_details(self, workflow: Workflow) -> None:
+        lines = [f"{workflow.name} ({workflow.workflow_id})"]
+        lines.extend(f"{step.kind.value} - {step.name}: {step.message}" for step in workflow.steps)
+        self._details_label.setText("\n".join(lines))
 
     def _on_selection_changed(self) -> None:
         self.workflow_selected.emit()
+        item = self._workflow_list.currentItem()
+        if item is None or self._service is None:
+            self._details_label.setText("Select an automation to see its details.")
+            return
+        row_path = item.data(Qt.UserRole)
+        if row_path is None:
+            return
+        try:
+            workflow = self._service.load(Path(row_path))
+        except WorkflowValidationError as error:
+            # Row navigation stays modal-free; the message is shown inline.
+            self._details_label.setText(f"Could not show '{item.text()}': {error}")
+            return
+        self._show_workflow_details(workflow)
 
     def _open_selected(self) -> None:
         item = self._workflow_list.currentItem()
         if item is None or self._service is None:
             return
-        self._service.load(item.data(Qt.UserRole))
-        self.opened_workflow.emit(Path(item.text()))
+        saved_path = Path(item.data(Qt.UserRole))
+        try:
+            workflow = self._service.load(saved_path)
+        except WorkflowValidationError as error:
+            self._show_page_error(str(error))
+            return
+        self._show_workflow_details(workflow)
+        self.opened_workflow.emit(saved_path)
 
     def _preview_selected(self) -> None:
         item = self._workflow_list.currentItem()
         if item is None or self._service is None:
             return
-        workflow = self._service.load(item.data(Qt.UserRole))
+        saved_path = Path(item.data(Qt.UserRole))
+        try:
+            workflow = self._service.load(saved_path)
+        except WorkflowValidationError as error:
+            self._show_page_error(str(error))
+            return
+        try:
+            preview = self._service.preview_replay(workflow)
+        except WorkflowValidationError as error:
+            self._show_page_error(str(error))
+            return
+        lines = [f"Preview (read-only): {workflow.name} ({preview.workflow_id})"]
+        lines.extend(f" - {step}" for step in preview.steps)
+        if preview.executable:
+            lines.append("Status: this replay can be executed.")
+        else:
+            lines.append("Status: this replay contains unsupported actions and cannot be executed.")
+        self._details_label.setText("\n".join(lines))
         self.preview_requested.emit()
-        return self._service.preview_replay(workflow)
+
+    # ----------------------------------------------------------- run (mutating)
 
     def _run_selected(self) -> None:
         item = self._workflow_list.currentItem()
         if item is None or self._service is None:
             return
-        workflow = self._service.load(item.data(Qt.UserRole))
-        self.run_requested.emit(Path(item.text()))
-        self._service.run_workflow(workflow)
+        saved_path = Path(item.data(Qt.UserRole))
+        try:
+            workflow = self._service.load(saved_path)
+        except WorkflowValidationError as error:
+            self._show_page_error(str(error))
+            return
+        answer = QMessageBox.question(
+            self,
+            "Confirm run",
+            f"Run '{workflow.name}' now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer is not QMessageBox.StandardButton.Yes:
+            return
+        self.run_requested.emit(saved_path)
+        self._start_run(workflow)
+
+    def _start_run(self, workflow: Workflow) -> None:
+        if self._thread is not None:
+            return
+        self._details_label.setText(f"Running '{workflow.name}'...")
+        self._set_running(True)
+        self._thread = QThread(self)
+        self._worker = WorkflowWorker(self._service, workflow)
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.progress.connect(self._on_run_progress)
+        self._worker.finished.connect(self._on_run_finished)
+        self._worker.finished.connect(self._quit_run_thread)
+        self._worker.failed.connect(self._on_run_failed)
+        self._worker.failed.connect(self._quit_run_thread)
+        self._thread.finished.connect(self._worker.deleteLater)
+        self._thread.finished.connect(self._thread_finished)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.start()
+
+    def _quit_run_thread(self) -> None:
+        if self._thread is not None:
+            self._thread.quit()
+
+    def _on_run_progress(self, step_result: object) -> None:
+        evidence = (
+            f" [{'; '.join(step_result.evidence)}]" if step_result.evidence else ""  # type: ignore[attr-defined]
+        )
+        line = (
+            f"{step_result.step_id}: {step_result.status.value}"  # type: ignore[attr-defined]
+            f" - {step_result.message}{evidence}"  # type: ignore[attr-defined]
+        )
+        self._details_label.setText(f"{self._details_label.text()}\n{line}")
+
+    def _on_run_finished(self, run: object) -> None:
+        self._details_label.setText(
+            f"Run {run.status.value}: {len(run.results)} steps recorded."  # type: ignore[attr-defined]
+        )
+
+    def _on_run_failed(self, message: str) -> None:
+        self._details_label.setText(f"Error: {message}")
+        QMessageBox.warning(self, "Workflow error", message)
+
+    def _show_page_error(self, message: str) -> None:
+        self._details_label.setText(f"Error: {message}")
+        QMessageBox.warning(self, "Workflow error", message)
+
+    # ---------------------------------------------------------------- refresh
+
+    def refresh(self) -> None:
+        """Reload the saved workflow list shown on this page."""
+        self._refresh()
 
     def _refresh(self) -> None:
         self._workflow_list.clear()
         if self._service is None:
+            self._details_label.setText("No saved automations yet. Create one from Home.")
             return
-        for path in self._service.list_saved():
+        saved_paths = tuple(self._service.list_saved())
+        for path in saved_paths:
             item = QListWidgetItem(path.name)
             item.setData(Qt.UserRole, path)
             self._workflow_list.addItem(item)
-        if self._workflow_list.count() == 0:
-            self._empty_state.show()
+        if not saved_paths:
+            self._details_label.setText("No saved automations yet. Create one from Home.")
+            return
+        self._details_label.setText("Select an automation to see its details.")
 
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service
