@@ -920,3 +920,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: `pytest tests/test_shell.py -q -k "create_automation"` before the fix: `2 failed, 1 passed, 7 deselected, 1 error` (traceback pasted in session). After both fixes: `tests/test_shell.py` 10 passed; full suite `332 passed, 2 skipped in 82.00s` (2 symlink skips), `ruff check .` -> `All checks passed!`, `ruff format --check .` -> `107 files already formatted`. Merge trial before the merge: `330 passed, 2 skipped`, both smokes exit 0. `main` == `origin/main` == `84b6443`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-27 — Phase A: repair main (slice/repair-main)   (commit: 0ecbea0, d332aa1, 716a22c, fdf17d4, 1f146a3)
+- Task: Reproduce and fix the flaky full-suite crash, fix ruff/format, rewrite verify.ps1 as real PowerShell with an append-only log guard, remove Qt-unknown stylesheet properties, add the working agreement, and re-verify every file:line citation in docs/PROGRESS.md and docs/ui_migration_plan.md.
+- AI contribution: Created docs/WORKING_AGREEMENT.md, tests/test_styles.py, scripts/verify.ps1 (rewrite); edited ui/pages/my_automations.py (threading fix), ui/shell.py (home_page.set_service), ui/styles/__init__.py (box-shadow removal), docs/PROGRESS.md and docs/ui_migration_plan.md (citation corrections).
+- Defect found: The crash was real and flaky, not a hang: `Fatal Python error: Aborted` in `_thread_finished` (ui/pages/my_automations.py:112). Root cause 1: `worker.deleteLater` connected to `thread.finished` double-deletes the worker (QThread flushes the DeferredDelete itself while finishing; the Python wrapper still owns it) -> heap corruption. Root cause 2: widget-touching handlers ran in the worker thread (plain Python callables), producing `QBasicTimer::stop: Failed. Possibly trying to stop from a different thread`. Also found: the shell never called `home_page.set_service`, so Home's Recent activity could never render.
+- Verification (exact commands and results):
+  - Repro: `pytest tests/test_my_automations_page.py -q -X faulthandler` looped 40x -> crashed on runs 3 and 21 (exit 3, faulthandler trace pointing at my_automations.py:112); a temporary 1000-cycle stress harness crashed 3/3 runs before the fix.
+  - After fix: stress harness 6/6 clean (6000 cycles), original test file 15/15 clean, no `QBasicTimer` warnings.
+  - Full suite x3 with `-X faulthandler -q -rf --tb=short`: `335 passed, 2 skipped in 95.66s`, `335 passed, 2 skipped in 96.44s`, `335 passed, 2 skipped in 78.94s`. The failure was flaky (reproduced ~10% of test-file runs), now deterministic-green in these runs.
+  - `ruff check .` -> `All checks passed!` (exit 0); `ruff format --check .` -> `109 files already formatted` (exit 0).
+  - verify.ps1 failure detection: with a temporary unused `import os`, script output showed `ruff check . exit=1 FAIL`, `SOME CHECKS FAILED` and exit code 1 (the same run also showed `pytest -q exit=3 FAIL` because the flaky crash hit during it - that is the bug fixed above); the break was removed afterwards.
+  - GitHub Actions: `.github/workflows/tests.yml` exists; latest run on main passed (read from https://github.com/medamineessid/once/actions in this session).
+  - A6: `app.py --smoke-test --shell` output contains 0 "Unknown property" lines (only the offscreen QFontDatabase warning).
+- Outcome: PASSED
+- Human review:
