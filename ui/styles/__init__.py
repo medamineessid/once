@@ -152,49 +152,49 @@ def _set_stylesheet(app):
             background: #FFFFFF;
             border-radius: 12px;
             padding: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+            border: 1px solid #ECECEC;
         }
         QFrame#activitiesList {
             background: #FFFFFF;
             border-radius: 10px;
             padding: 6px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            border: 1px solid #ECECEC;
         }
         QFrame#workflowList {
             background: #FFFFFF;
             border-radius: 10px;
             padding: 6px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            border: 1px solid #ECECEC;
         }
         QFrame#recordingList {
             background: #FFFFFF;
             border-radius: 10px;
             padding: 6px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            border: 1px solid #ECECEC;
         }
         QFrame#stepsList {
             background: #FFFFFF;
             border-radius: 10px;
             padding: 6px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            border: 1px solid #ECECEC;
         }
         QFrame#detailsContainer {
             background: #FFFFFF;
             border-radius: 10px;
             padding: 8px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            border: 1px solid #ECECEC;
         }
         QFrame#actionsContainer {
             background: #FFFFFF;
             border-radius: 10px;
             padding: 6px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            border: 1px solid #ECECEC;
         }
         QFrame#settingsWidget {
             background: #FFFFFF;
             border-radius: 12px;
             padding: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            border: 1px solid #E5E5E5;
         }
         QScrollArea#settingsScroll {
             border: none;
