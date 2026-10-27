@@ -1,7 +1,7 @@
 # Once progress
 
-- Last completed step: S3 merged to main (70d8ce1) after CHECKPOINT 3 approval; create-page crash found during the click-through fixed in 84b6443. Branch cleanup left a single branch, main, in sync with origin.
-- Last commit: 84b6443 fix(ui): create automation button crashed reading its description
+- Last completed step: PHASE A repair (branch slice/repair-main): A1 working agreement, A2 flaky suite crash root-caused and fixed (0ecbea0), A3 ruff clean, A4 verify.ps1 rewritten as PowerShell 5.1 with append-only log guard + failure-detection proof, A5 docs citations re-verified, A6 box-shadow removed + tests/test_styles.py, A7 CI workflow confirmed (last GitHub Actions run on main passed), A8 pending verify/merge/push. Launcher run-shell.bat merged to main earlier (39f1d2d).
+- Last commit: 7bdc6e2 docs(log): record phase A repair verification (append only)
 - Verified this session (PHASE 0): 
   - git branch --show-current: docs/ui-migration-plan
   - git status --short: ?? app.spec, ?? once-app.spec
