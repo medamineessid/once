@@ -207,14 +207,23 @@ class MyAutomationsPage(QWidget):
         self._worker = WorkflowWorker(self._service, workflow)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
-        self._worker.progress.connect(self._on_run_progress)
-        self._worker.finished.connect(self._on_run_finished)
+        # The handlers below touch widgets, so they must run in the GUI thread.
+        # WorkflowWorker emits from its own thread and these slots are plain
+        # Python callables, which Qt would otherwise invoke in the worker
+        # thread (cross-thread widget access aborts the process).
+        queued = Qt.ConnectionType.QueuedConnection
+        self._worker.progress.connect(self._on_run_progress, queued)
+        self._worker.finished.connect(self._on_run_finished, queued)
         self._worker.finished.connect(self._quit_run_thread)
-        self._worker.failed.connect(self._on_run_failed)
+        self._worker.failed.connect(self._on_run_failed, queued)
         self._worker.failed.connect(self._quit_run_thread)
-        self._thread.finished.connect(self._worker.deleteLater)
-        self._thread.finished.connect(self._thread_finished)
+        self._thread.finished.connect(self._thread_finished, queued)
         self._thread.finished.connect(self._thread.deleteLater)
+        # Note: worker.deleteLater is deliberately NOT connected to
+        # thread.finished. QThread flushes that DeferredDelete itself while
+        # finishing, and the Python wrapper still owns the worker until
+        # _thread_finished drops it; the two deletions race and corrupt the
+        # heap (intermittent process abort, reproduced in tests).
         self._thread.start()
 
     def _quit_run_thread(self) -> None:
