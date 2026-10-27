@@ -51,6 +51,13 @@ def test_create_automation_page_has_description_input(qtbot, window):
     assert page._description_input.toPlainText() == "Open invoices folder and read PDFs"
 
 
+def test_shell_injects_the_service_into_the_home_page(qtbot, window):
+    # Without this, HomePage._refresh_activity() returns early and the Home
+    # page shows an empty Recent activity block forever.
+    assert window.home_page._service is not None
+    assert window.home_page._service is window._service
+
+
 def test_create_automation_button_emits_typed_task(qtbot, window, monkeypatch):
     notices: list[str] = []
     monkeypatch.setattr(

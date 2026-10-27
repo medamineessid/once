@@ -169,6 +169,7 @@ class MainWindow(QMainWindow):
         self.workspace.addWidget(self.settings_page)
         self.workspace.addWidget(self.review_page)
         self.workspace.addWidget(self.create_automation_page)
+        self.home_page.set_service(self._service)
         self.activity_page.set_service(self._service)
         self.my_automations_page.set_service(self._service)
         central = QWidget(self)
