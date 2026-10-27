@@ -6,12 +6,13 @@
   - git branch --show-current: docs/ui-migration-plan
   - git status --short: ?? app.spec, ?? once-app.spec
   - git log --oneline -5: cd2e77e Merge redesign-ui: resolve conflicts in docs keeping both sides; 93cb6cb Merge branch 'desktop-automation-engine' into integration-full; f407c5b fix(browser): keep frame bytes coalesced with the handshake and reassemble continuation frames; 9857b18 build(packaging): add browser integration modules to PyInstaller hidden imports; c6e482f test(browser): transport-level WebSocket client tests over a local socket
-  - app.py imports ui.main_window.MainWindow (app.py:20,120-127); ui/shell.py has separate MainWindow (shell.py:137); only tests/test_shell.py exercises it
+  - app.py imports ui.main_window.MainWindow (app.py:21) and ui.shell.MainWindow (app.py:22), selecting at app.py:78; ui/shell.py has its own MainWindow (shell.py:138); tests/test_shell.py and app.py --smoke-test --shell exercise it (re-checked 2026-10-27)
   - ui/pages/ exists with home,my_automations,activity,create_automation,review,settings
   - ui/review_view.py, ui/verifier_dialog.py, ui/workers.py exist
-  - tests/test_verifier_dialog.py does not exist (tests cover verifier dialog inline in test_review_ui.py)
+  - tests/test_verifier_dialog.py does not exist (tests cover verifier dialog inline in test_review_ui.py:371-440; re-checked 2026-10-27)
 - Next action: S4 - create automation and draft editing (ui/pages/create_automation.py currently only acknowledges a description; no workflow builder exists in the controller)
-- Currently failing tests or known breakage: none
+- Currently failing tests or known breakage: none (full suite green on slice/repair-main, 2026-10-27: 3 consecutive runs, see ai_engineering_log.md)
+- Known UI gaps: shell never calls review_page.set_service (ui/pages/review.py:110) or settings_page.set_service (ui/pages/settings.py:231), so review approval and settings service actions cannot work yet; ui/shell.py:267-283 has stub handlers (_show_run_details, _on_approved, _on_verifier_configured, _on_recording_*). These are tracked as journeys J6/J8, not hidden.
 - Open items: see docs/ui_migration_plan.md for full details
 
 ## Work queue
