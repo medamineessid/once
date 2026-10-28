@@ -29,7 +29,7 @@ from ui.pages import (
     ReviewPage,
     SettingsPage,
 )
-from ui.styles import apply_theme
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, apply_theme
 
 
 class ShellPages:
@@ -37,6 +37,7 @@ class ShellPages:
     MY_AUTOMATIONS = 1
     ACTIVITY = 2
     SETTINGS = 3
+    CREATE = 5  # stacked page without a sidebar entry; sidebar shows nothing checked
 
     @classmethod
     def all(cls):
@@ -51,21 +52,15 @@ class ShellPages:
 class SidebarButton(QToolButton):
     clicked_custom = Signal()
 
-    def __init__(self, text: str, parent=None):
+    def __init__(self, text: str, object_name: str, parent=None):
+        """Object name keyed by the theme so styling lives in one place."""
         super().__init__(parent)
         self.setText(text)
+        self.setObjectName(object_name)
         self.setCheckable(True)
         self.setAutoExclusive(False)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.setStyleSheet(
-            "QToolButton { background: transparent; border: none; "
-            "border-left: 3px solid transparent; color: #4A4A4A; "
-            "font-size: 14px; padding: 10px 12px; border-radius: 0 8px 8px 0; "
-            "font-family: 'Inter', 'Segoe UI', 'SF Pro Display', system-ui, sans-serif; }"
-            "QToolButton:hover { background: #F3F4F6; color: #1D1D1D; }"
-            "QToolButton:checked { background: #FFFFFF; "
-            "border-left: 3px solid #2563EB; color: #1D1D1D; font-weight: 500; }"
-        )
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.clicked.connect(self.clicked_custom.emit)
 
 
@@ -81,21 +76,21 @@ class Sidebar(QToolBar):
         self.setIconSize(QSize(20, 20))
         self.setMovable(False)
         self.setFloatable(False)
-        self.setStyleSheet("QToolBar { background: transparent; };")
+        self.setStyleSheet("QToolBar { background: transparent; }")
         logo = QLabel("Once")
         logo.setObjectName("onceLogo")
         self.addWidget(logo)
         self.addWidget(Spacer())
-        self._home_button = SidebarButton("Home")
+        self._home_button = SidebarButton("Home", "sidebarHomeButton")
         self._home_button.clicked_custom.connect(self.homeClicked.emit)
         self.addWidget(self._home_button)
-        self._automations_button = SidebarButton("My automations")
+        self._automations_button = SidebarButton("My automations", "sidebarAutomationsButton")
         self._automations_button.clicked_custom.connect(self.automationsClicked.emit)
         self.addWidget(self._automations_button)
-        self._activity_button = SidebarButton("Activity")
+        self._activity_button = SidebarButton("Activity", "sidebarActivityButton")
         self._activity_button.clicked_custom.connect(self.activityClicked.emit)
         self.addWidget(self._activity_button)
-        self._settings_button = SidebarButton("Settings")
+        self._settings_button = SidebarButton("Settings", "sidebarSettingsButton")
         self._settings_button.clicked_custom.connect(self.settingsClicked.emit)
         self.addWidget(self._settings_button)
         for button in (
@@ -106,18 +101,8 @@ class Sidebar(QToolBar):
         ):
             button.setAutoRepeat(False)
         self.addWidget(Spacer())
-        mfr = QLabel("Once")
-        mfr.setObjectName("onceManufacturer")
-        self.addWidget(mfr)
-        self.addWidget(Spacer())
-        self.addWidget(QLabel("Assistive automation"))
-        self.addWidget(QLabel("local"))
-        self.addWidget(Spacer())
-        self.addWidget(QLabel("offline by default"))
-        self.addSeparator()
         footer = QLabel("Once Assistive Automation")
         footer.setObjectName("sidebarFooter")
-        footer.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.addWidget(footer)
 
     def set_checked(self, page: ShellPages) -> None:
@@ -172,22 +157,25 @@ class MainWindow(QMainWindow):
         self.home_page.set_service(self._service)
         self.activity_page.set_service(self._service)
         self.my_automations_page.set_service(self._service)
+        self.settings_page.configure(
+            app_data_dir=self._app_data_dir, verifier_config=self._verifier_config
+        )
         central = QWidget(self)
         central_layout = QVBoxLayout(central)
-        central_layout.setContentsMargins(12, 12, 12, 12)
+        central_layout.setContentsMargins(SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD)
         central_layout.setSpacing(0)
         side_panel = QWidget(self)
         side_panel.setObjectName("sidePanel")
         side_layout = QVBoxLayout(side_panel)
-        side_layout.setContentsMargins(8, 8, 8, 8)
-        side_layout.setSpacing(8)
+        side_layout.setContentsMargins(SPACING_SM, SPACING_SM, SPACING_SM, SPACING_SM)
+        side_layout.setSpacing(SPACING_SM)
         side_layout.addWidget(self.sidebar)
         side_panel.setFixedWidth(220)
         main_panel = QWidget(self)
         main_panel.setObjectName("mainPanel")
         main_layout = QVBoxLayout(main_panel)
-        main_layout.setContentsMargins(16, 16, 16, 16)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(SPACING_LG, SPACING_LG, SPACING_LG, SPACING_LG)
+        main_layout.setSpacing(SPACING_MD)
         main_layout.addWidget(self.workspace)
         central_layout.addWidget(side_panel)
         central_layout.addWidget(main_panel)
@@ -198,15 +186,11 @@ class MainWindow(QMainWindow):
         self.sidebar.settingsClicked.connect(self._show_page_settings)
         self.home_page.created_automation.connect(self._show_create_automation)
         self.home_page.run_demo_requested.connect(self._run_demo_from_home)
-        self.home_page.my_automations_requested.connect(self._show_my_automations)
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)
         self.review_page.approved.connect(self._on_approved)
         self.review_page.cancelled.connect(self._on_review_cancelled)
         self.activity_page.run_selected.connect(self._show_run_details)
-        self.settings_page.verifier_configured.connect(self._on_verifier_configured)
-        self.settings_page.recording_started.connect(self._on_recording_started)
-        self.settings_page.recording_stopped.connect(self._on_recording_stopped)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 
@@ -236,14 +220,11 @@ class MainWindow(QMainWindow):
         self._current_page = ShellPages.HOME
 
     def _show_create_automation(self) -> None:
-        self.workspace.setCurrentWidget(self.create_automation_page)
+        """Enter the create flow through the typed page state, like every page."""
+        self._show_page(ShellPages.CREATE)
 
     def _run_demo_from_home(self) -> None:
         self._service.run_demo()
-
-    def _show_my_automations(self) -> None:
-        self.workspace.setCurrentWidget(self.my_automations_page)
-        self.my_automations_page.refresh()
 
     def _open_workflow(self, path: Path) -> None:
         workflow = self._service.load(path)
@@ -271,15 +252,6 @@ class MainWindow(QMainWindow):
         self._show_page(ShellPages.HOME)
 
     def _show_run_details(self) -> None:
-        pass
-
-    def _on_verifier_configured(self) -> None:
-        pass
-
-    def _on_recording_started(self) -> None:
-        pass
-
-    def _on_recording_stopped(self) -> None:
         pass
 
     @override

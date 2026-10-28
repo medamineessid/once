@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import SIGNAL, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton, QToolButton
 
+from ui.components.spacer import Spacer
 from ui.shell import MainWindow, ShellPages
 
 
@@ -109,38 +110,151 @@ def test_settings_page_opens_from_sidebar(qtbot, window):
     settings = window.settings_page
     assert window.workspace.currentIndex() == ShellPages.SETTINGS
     assert settings._authorized_group.isVisible() is True
-    assert settings._recordings_group.isVisible() is True
-    assert settings._gemini_group.isVisible() is True
-    assert settings._coding_agent_group.isVisible() is True
-    assert settings._advanced_group.isVisible() is True
+    assert settings._verifier_group.isVisible() is True
+    assert window.sidebar._settings_button.isChecked() is True
 
 
-def test_settings_page_shows_placeholder_integration_messages(qtbot, window):
-    window._show_page(ShellPages.SETTINGS)
-    qtbot.wait(50)
+def test_settings_page_keeps_no_placeholder_controls(qtbot, window):
+    """Settings shows only real configuration, never dead placeholder groups."""
     settings = window.settings_page
-    settings._start_recording()
-    settings._connect_gemini()
-    assert settings._status_label.isVisible() is True
-    assert settings._status_label.text().startswith("Connect Gemini")
-    settings._disconnect_gemini()
-    assert settings._status_label.text().startswith("Disconnect Gemini")
-    settings._open_coding_agent_proposals()
-    assert settings._status_label.text().startswith("There are no recorded")
-    settings._open_coding_agent_review()
-    assert settings._status_label.text().startswith("No proposal is ready")
-    settings._delete_recording()
-    assert settings._status_label.text().startswith("No recording is selected")
+    for removed in (
+        "_recordings_group",
+        "_gemini_group",
+        "_coding_agent_group",
+        "_advanced_group",
+        "_start_recording_button",
+        "_stop_recording_button",
+        "_delete_recording_button",
+        "_connect_gemini_button",
+        "_status_label",
+    ):
+        assert not hasattr(settings, removed), f"placeholder still present: {removed}"
 
 
-def test_settings_page_has_recording_controls(qtbot, window):
+def test_settings_verifier_button_saves_and_signals(qtbot, window, monkeypatch, tmp_path):
+    """The verifier entry point uses the real editor dialog and reports the save."""
     settings = window.settings_page
-    assert settings._start_recording_button.text() == "Start recording"
-    assert settings._stop_recording_button.text() == "Stop recording"
-    assert settings._delete_recording_button.text() == "Delete selected"
-    assert settings._start_recording_button.isEnabled() is True
-    assert settings._stop_recording_button.isEnabled() is True
-    assert settings._delete_recording_button.isEnabled() is True
+    saved_flags: list[bool] = []
+    seen_dirs: list[object] = []
+
+    class FakeVerifierDialog:
+        def __init__(self, app_data_dir, current=None, parent=None):
+            seen_dirs.append(app_data_dir)
+            self.saved = None
+
+        def exec(self):
+            self.saved = True
+            return 1
+
+    monkeypatch.setattr("ui.pages.settings.VerifierConfigDialog", FakeVerifierDialog)
+    settings.verifier_configured.connect(lambda: saved_flags.append(True))
+
+    settings.configure(app_data_dir=tmp_path)
+    settings._configure_verifier()
+
+    assert seen_dirs == [tmp_path]
+    assert saved_flags == [True]
+
+
+def test_settings_verifier_button_without_data_dir_does_not_crash(qtbot, window, monkeypatch):
+    """Without a data folder Once explains itself instead of failing later."""
+    settings = window.settings_page
+    notices: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "information", lambda parent, title, text, *a, **k: notices.append(text)
+    )
+    settings.configure(app_data_dir=None)
+    settings._configure_verifier()
+    assert len(notices) == 1
+
+
+# --- Layout foundation (B3): structure and honest controls -------------------------------
+
+
+def test_sidebar_has_four_nav_items_brand_and_one_footer(qtbot, window):
+    widgets = [window.sidebar.widgetForAction(a) for a in window.sidebar.actions()]
+    buttons = [w for w in widgets if isinstance(w, QToolButton)]
+    labels = [w for w in widgets if isinstance(w, QLabel) and not isinstance(w, Spacer)]
+    assert [b.text() for b in buttons] == ["Home", "My automations", "Activity", "Settings"]
+    assert [label.text() for label in labels] == ["Once", "Once Assistive Automation"]
+
+
+def test_every_page_has_no_unwired_buttons(qtbot, window):
+    """Honest-controls rule: a visible enabled button must be actually connected."""
+    pages = [
+        window.home_page,
+        window.my_automations_page,
+        window.activity_page,
+        window.settings_page,
+        window.review_page,
+        window.create_automation_page,
+    ]
+    unwired: list[str] = []
+    for page in pages:
+        window.workspace.setCurrentWidget(page)
+        qtbot.wait(10)
+        for button in page.findChildren(QPushButton):
+            if (
+                button.isVisible()
+                and button.isEnabled()
+                and button.receivers(SIGNAL("clicked()")) == 0
+            ):
+                unwired.append(f"{page.__class__.__name__}: {button.text()}")
+    assert unwired == []
+
+
+def test_pages_use_spacing_tokens_for_margins(qtbot, window):
+    from ui.styles import SPACING_VALUES
+
+    layouts = [
+        window.home_page.layout(),
+        window.my_automations_page.layout(),
+        window.activity_page.layout(),
+        window.create_automation_page.layout(),
+        window.review_page.layout(),
+        window.settings_page._scroll_layout,
+    ]
+    for layout in layouts:
+        margins = layout.contentsMargins()
+        for value in (margins.left(), margins.top(), margins.right(), margins.bottom()):
+            assert value in SPACING_VALUES
+
+
+def test_type_scale_is_declared_once_in_the_theme(qtbot, window):
+    from ui.styles import (
+        TYPE_CAPTION_PX,
+        TYPE_HOME_TITLE_PX,
+        TYPE_QUESTION_PX,
+        TYPE_SUBTITLE_PX,
+        TYPE_TITLE_PX,
+    )
+
+    pages = [
+        window.home_page,
+        window.my_automations_page,
+        window.activity_page,
+        window.create_automation_page,
+        window.review_page,
+        window.settings_page,
+    ]
+    for page in pages:
+        for widget in (*page.findChildren(QLabel), *page.findChildren(QPushButton)):
+            assert "font-size:" not in widget.styleSheet(), (
+                f"inline font-size on {page.__class__.__name__}: {widget.styleSheet()}"
+            )
+
+    sheet = QApplication.instance().styleSheet()
+    for rule, size in (
+        ("QLabel#pageTitle", TYPE_TITLE_PX),
+        ("QLabel#pageSubtitle", TYPE_SUBTITLE_PX),
+        ("QLabel#homeTitle", TYPE_HOME_TITLE_PX),
+        ("QLabel#questionLabel", TYPE_QUESTION_PX),
+        ("QLabel#hintLabel", TYPE_CAPTION_PX),
+    ):
+        start = sheet.index(rule)
+        block = sheet[start : sheet.index("}", start)]
+        assert f"font-size: {size}px" in block, f"{rule} does not use its token"
+    assert window.sidebar._home_button.styleSheet() == ""
 
 
 def test_sidebar_buttons_resist_stuck_repeats(qtbot, window):

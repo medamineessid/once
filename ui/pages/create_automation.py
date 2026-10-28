@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
+
 
 class CreateAutomationPage(QWidget):
     """Beginner-friendly screen for describing a task to automate."""
@@ -27,19 +29,17 @@ class CreateAutomationPage(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 28, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
+        layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self._title_label = QLabel("Create automation", self)
         self._title_label.setObjectName("pageTitle")
-        self._title_label.setStyleSheet("font-size: 26px; font-weight: 600; color: #1d1d1d;")
         layout.addWidget(self._title_label, alignment=Qt.AlignHCenter)
         layout.addSpacing(4)
         self._question_label = QLabel("What would you like Once to do?", self)
         self._question_label.setObjectName("questionLabel")
-        self._question_label.setStyleSheet("font-size: 18px; font-weight: 500; color: #3a3a3a;")
         layout.addWidget(self._question_label, alignment=Qt.AlignHCenter)
-        layout.addSpacing(12)
+        layout.addSpacing(SPACING_MD)
         self._description_input = QTextEdit(self)
         self._description_input.setObjectName("descriptionInput")
         self._description_input.setPlaceholderText(
@@ -51,33 +51,27 @@ class CreateAutomationPage(QWidget):
 
         self._description_input.setWordWrapMode(QTextOption.WrapMode.WordWrap)
         layout.addWidget(self._description_input, alignment=Qt.AlignHCenter)
-        layout.addSpacing(8)
+        layout.addSpacing(SPACING_SM)
         self._hint_label = QLabel(
             "Once will prepare a plan for your review before any action is executed.",
             self,
         )
         self._hint_label.setObjectName("hintLabel")
-        self._hint_label.setStyleSheet("font-size: 13px; color: #6b6b6b;")
         layout.addWidget(self._hint_label, alignment=Qt.AlignHCenter)
-        layout.addSpacing(12)
+        layout.addSpacing(SPACING_MD)
         actions_row = QHBoxLayout()
-        actions_row.setSpacing(10)
+        actions_row.setSpacing(SPACING_SM)
         self._create_button = QPushButton("Create automation", self)
         self._create_button.setObjectName("primaryActionButton")
         self._create_button.setMinimumHeight(42)
         self._create_button.setDefault(True)
         self._create_button.clicked.connect(self._create_from_description)
-        self._cancel_button = QPushButton("Cancel", self)
-        self._cancel_button.setObjectName("secondaryActionButton")
-        self._cancel_button.setMinimumHeight(42)
-        self._cancel_button.clicked.connect(self._cancel)
-        actions_row.addWidget(self._create_button, stretch=3)
-        actions_row.addWidget(self._cancel_button, stretch=1)
+        actions_row.addWidget(self._create_button)
         actions_container = QFrame(self)
         actions_container.setObjectName("actionsContainer")
         actions_container_layout = QVBoxLayout(actions_container)
         actions_container_layout.setContentsMargins(0, 0, 0, 0)
-        actions_container_layout.setSpacing(8)
+        actions_container_layout.setSpacing(SPACING_SM)
         actions_container_layout.addLayout(actions_row)
         layout.addWidget(actions_container, alignment=Qt.AlignHCenter)
 
@@ -85,9 +79,6 @@ class CreateAutomationPage(QWidget):
         text = self._description_input.toPlainText().strip() if self._description_input else ""
         if text:
             self.task_entered.emit(text)
-
-    def _cancel(self) -> None:
-        pass
 
     def clear(self) -> None:
         if self._description_input:

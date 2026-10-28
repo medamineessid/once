@@ -19,6 +19,7 @@ from ai.approval import approve_proposal
 from ai.models import ProviderDraft
 from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
 
 class ReviewPage(QWidget):
@@ -36,16 +37,14 @@ class ReviewPage(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 28, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
+        layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self._title_label = QLabel("Review automation", self)
         self._title_label.setObjectName("pageTitle")
-        self._title_label.setStyleSheet("font-size: 26px; font-weight: 600; color: #1d1d1d;")
         layout.addWidget(self._title_label, alignment=Qt.AlignHCenter)
         self._goal_label = QLabel("No proposal loaded.", self)
         self._goal_label.setObjectName("goalLabel")
-        self._goal_label.setStyleSheet("font-size: 15px; color: #525252; margin-top: 4px;")
         layout.addWidget(self._goal_label, alignment=Qt.AlignHCenter)
         self._steps_list = QListWidget(self)
         self._steps_list.setObjectName("stepsList")
@@ -53,13 +52,13 @@ class ReviewPage(QWidget):
         self._steps_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._steps_list.addItems(self._empty_steps())
         layout.addWidget(self._steps_list, alignment=Qt.AlignHCenter)
-        layout.addSpacing(12)
+        layout.addSpacing(SPACING_MD)
         self._actions_container = QFrame(self)
         actions_layout = QVBoxLayout(self._actions_container)
         actions_layout.setContentsMargins(0, 0, 0, 0)
-        actions_layout.setSpacing(8)
+        actions_layout.setSpacing(SPACING_SM)
         buttons_row = QHBoxLayout()
-        buttons_row.setSpacing(10)
+        buttons_row.setSpacing(SPACING_SM)
         self._edit_button = QPushButton("Edit", self)
         self._edit_button.setObjectName("secondaryActionButton")
         self._edit_button.setMinimumHeight(38)

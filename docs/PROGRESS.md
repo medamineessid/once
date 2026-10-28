@@ -1,7 +1,7 @@
 # Once progress
 
 - Last completed step: PHASE A repair (branch slice/repair-main, merged and pushed to main at 1685475): A1 working agreement, A2 flaky suite crash root-caused and fixed (0ecbea0), A3 ruff clean, A4 verify.ps1 rewritten as PowerShell 5.1 with append-only log guard + failure-detection proof, A5 docs citations re-verified, A6 box-shadow removed + tests/test_styles.py, A7 CI workflow confirmed (last GitHub Actions run on main passed), A8 full verify.ps1 run, ff-merge, push. Launcher run-shell.bat merged to main earlier (39f1d2d).
-- Last completed step (PHASE B, branch slice/layout-foundation): B1 UX brief (docs/UX_BRIEF.md) and B2 PHASE C journey queue written; B3 BLOCKED before any code change (see docs/BLOCKED.md).
+- Last completed step (PHASE B, branch slice/layout-foundation): B1 UX brief (docs/UX_BRIEF.md) and B2 PHASE C journey queue written; B3 done after the user approved BLOCKED.md option A (2026-10-28): four non-functional Settings groups removed and replaced by a real "Configure checker" entry wired to the existing VerifierConfigDialog, the three placeholder-proving tests in tests/test_shell.py rewritten to assert the honest state, duplicate Home "My automations" button removed, sidebar reduced to 4 nav buttons + brand + one footer label, SPACING_*/TYPE_*/FONT_STACK tokens in ui/styles drive the whole shell stylesheet, demo double-run fixed (page only emits the signal; the shell runs the demo once), ShellPages.CREATE state makes the sidebar reflect the create flow, 7 new layout/honest-controls tests, screenshots through the app.py --shell path in docs/screenshots/layout-foundation/.
 - Last commit: see git log (this commit adds the PHASE B docs: UX brief, journey queue, B3 blocked decision).
 - Verified this session (PHASE 0): 
   - git branch --show-current: docs/ui-migration-plan
@@ -11,8 +11,9 @@
   - ui/pages/ exists with home,my_automations,activity,create_automation,review,settings
   - ui/review_view.py, ui/verifier_dialog.py, ui/workers.py exist
   - tests/test_verifier_dialog.py does not exist (tests cover verifier dialog inline in test_review_ui.py:371-440; re-checked 2026-10-27)
-- Next action: user decision on docs/BLOCKED.md (option A recommended: remove the four non-functional Settings groups and rewrite the three placeholder-proving tests in tests/test_shell.py:106,118,136). On approval, resume B3 (layout rules, sidebar, tokens, tests, screenshots) then CHECKPOINT 1; PHASE C journeys wait for the user's "continue"
-- Currently failing tests or known breakage: none (full suite green on slice/repair-main, 2026-10-27: 3 consecutive runs, see ai_engineering_log.md)
+- Next action: run scripts/verify.ps1, commit B3, ff-merge slice/layout-foundation to main, push, then CHECKPOINT 1 for the user to test the new shell layout and Settings page; PHASE C journeys (J1-J9) wait for the user's "continue"
+- Currently failing tests or known breakage: none (full suite green on slice/layout-foundation, 2026-10-28: "340 passed, 2 skipped in 331.81s", see ai_engineering_log.md)
+- Known UI gaps (updated 2026-10-28): shell never calls review_page.set_service, so review approval still needs J6; review page's Edit button is wired to a pass handler (unwired rule will catch it in J6); create flow cannot build a workflow yet (J2)
 - Known UI gaps: shell never calls review_page.set_service (ui/pages/review.py:110) or settings_page.set_service (ui/pages/settings.py:231), so review approval and settings service actions cannot work yet; ui/shell.py:267-283 has stub handlers (_show_run_details, _on_approved, _on_verifier_configured, _on_recording_*). These are tracked as journeys J6/J8, not hidden.
 - Open items: see docs/ui_migration_plan.md for full details
 
@@ -33,7 +34,7 @@
 ### PHASE B: UX BRIEF AND DESIGN FOUNDATION (docs/UX_BRIEF.md written 2026-10-27)
 - [x] B1: docs/UX_BRIEF.md from evidence (audience, journeys, page specs, honest-controls rule, layout rules, fact-7 defect list) — DONE
 - [x] B2: replace this slice queue with the PHASE C journey queue — DONE
-- [ ] B3: slice/layout-foundation — layout rules on the four existing pages, remove every unwired control and the duplicate Home button, fix the sidebar footer, spacing/type tokens in ui/styles, four layout tests, screenshots through the real app.py --shell path into docs/screenshots/layout-foundation/ — **BLOCKED** (2026-10-27): removing the unwired Settings controls requires deleting/rewriting three tests in tests/test_shell.py:106,118,136, which the working agreement forbids me to decide alone; see docs/BLOCKED.md for options and recommendation. Layout/sidebar/token work not started yet — no partial edits were made.
+- [x] B3: slice/layout-foundation — layout rules, unwired controls removed per approved option A (see docs/BLOCKED.md), sidebar footer, spacing/type tokens in ui/styles, layout tests, screenshots in docs/screenshots/layout-foundation/ — DONE (commit: see git log, 2026-10-28)
 
 **Safety rule for every journey below (unchanged):** `ui/` never mutates the file system — pages call controller services only (AGENTS.md S8); no new approval path, no policy/validator changes (working agreement hard rules 1-3).
 

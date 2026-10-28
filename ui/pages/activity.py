@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from controller.service import WorkflowService
 from engine.workflow import WorkflowRun
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
 
 class ActivityPage(QWidget):
@@ -31,36 +32,33 @@ class ActivityPage(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 28, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
+        layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self._title_label = QLabel("Activity", self)
         self._title_label.setObjectName("pageTitle")
-        self._title_label.setStyleSheet("font-size: 26px; font-weight: 600; color: #1d1d1d;")
         layout.addWidget(self._title_label)
         self._subtitle_label = QLabel(
             "Recent runs and their outcomes.",
             self,
         )
         self._subtitle_label.setObjectName("pageSubtitle")
-        self._subtitle_label.setStyleSheet("font-size: 15px; color: #525252; margin-top: 2px;")
         layout.addWidget(self._subtitle_label)
-        layout.addSpacing(16)
+        layout.addSpacing(SPACING_LG)
         self._history_list = QListWidget(self)
         self._history_list.setObjectName("activitiesList")
         self._history_list.setAlternatingRowColors(True)
         self._history_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._history_list.itemSelectionChanged.connect(self._on_selection_changed)
         layout.addWidget(self._history_list, alignment=Qt.AlignHCenter)
-        layout.addSpacing(12)
+        layout.addSpacing(SPACING_MD)
         self._details_container = QFrame(self)
         self._details_container.setObjectName("detailsContainer")
         details_layout = QVBoxLayout(self._details_container)
         details_layout.setContentsMargins(0, 0, 0, 0)
-        details_layout.setSpacing(8)
+        details_layout.setSpacing(SPACING_SM)
         self._details_label = QLabel("Select a run to see details.", self._details_container)
         self._details_label.setObjectName("activityDetailsLabel")
-        self._details_label.setStyleSheet("font-size: 13px; color: #6b6b6b;")
         details_layout.addWidget(self._details_label)
         layout.addWidget(self._details_container, alignment=Qt.AlignHCenter)
         self._refresh()

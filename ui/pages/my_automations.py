@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 from ui.workers import WorkflowWorker
 
 
@@ -42,30 +43,28 @@ class MyAutomationsPage(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 28, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
+        layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         self._title_label = QLabel("My automations", self)
         self._title_label.setObjectName("pageTitle")
-        self._title_label.setStyleSheet("font-size: 26px; font-weight: 600; color: #1d1d1d;")
         layout.addWidget(self._title_label)
         self._subtitle_label = QLabel(
             "Open and manage your saved workflows.",
             self,
         )
         self._subtitle_label.setObjectName("pageSubtitle")
-        self._subtitle_label.setStyleSheet("font-size: 15px; color: #525252; margin-top: 2px;")
         layout.addWidget(self._subtitle_label)
-        layout.addSpacing(16)
+        layout.addSpacing(SPACING_LG)
         self._workflow_list = QListWidget(self)
         self._workflow_list.setObjectName("workflowList")
         self._workflow_list.setAlternatingRowColors(True)
         self._workflow_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._workflow_list.itemSelectionChanged.connect(self._on_selection_changed)
         layout.addWidget(self._workflow_list, alignment=Qt.AlignHCenter)
-        layout.addSpacing(12)
+        layout.addSpacing(SPACING_MD)
         actions_row = QHBoxLayout()
-        actions_row.setSpacing(10)
+        actions_row.setSpacing(SPACING_SM)
         self._open_button = QPushButton("Open", self)
         self._open_button.setObjectName("secondaryActionButton")
         self._open_button.setMinimumHeight(38)
@@ -88,15 +87,12 @@ class MyAutomationsPage(QWidget):
         actions_container.setObjectName("actionsContainer")
         actions_container_layout = QVBoxLayout(actions_container)
         actions_container_layout.setContentsMargins(0, 0, 0, 0)
-        actions_container_layout.setSpacing(8)
+        actions_container_layout.setSpacing(SPACING_SM)
         actions_container_layout.addLayout(actions_row)
         layout.addWidget(actions_container, alignment=Qt.AlignHCenter)
-        layout.addSpacing(8)
+        layout.addSpacing(SPACING_SM)
         self._details_label = QLabel("No saved automations yet. Create one from Home.", self)
         self._details_label.setObjectName("automationDetailsLabel")
-        self._details_label.setStyleSheet(
-            "font-size: 13px; color: #6b6b6b;border-top: 1px solid #e5e7eb; padding-top: 8px;"
-        )
         self._details_label.setWordWrap(True)
         layout.addWidget(self._details_label, alignment=Qt.AlignHCenter)
         self._refresh()
