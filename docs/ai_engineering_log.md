@@ -935,3 +935,11 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   - A6: `app.py --smoke-test --shell` output contains 0 "Unknown property" lines (only the offscreen QFontDatabase warning).
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-27 — PHASE B: B1 UX brief + B2 journey queue + B3 blocked decision   (commit: see git log)
+- Task: B research-and-decision phase — write the UX brief from measured behaviour, replace the old slice queue with the PHASE C journey queue, and start B3 layout-foundation. 
+- AI contribution: docs/UX_BRIEF.md (audience, three journeys, per-page specs for Home/Create/My automations/Activity/Settings, honest-controls rule, layout and type/spacing rules, edit-queue); rewritten PHASE B/C sections of docs/PROGRESS.md; docs/BLOCKED.md decision document.
+- Defect found: B3's requirement "remove every unwired control" collides with three existing tests. tests/test_shell.py:106 (test_settings_page_opens_from_sidebar asserts the four placeholder groups are visible), :118 (test_settings_page_shows_placeholder_integration_messages asserts fake Gemini/coding-agent status text), :136 (test_settings_page_has_recording_controls asserts three non-functional recording buttons). Per the working agreement I may not remove/weaken tests without the user's decision, so B3 stopped BEFORE any code edit — no partial Settings changes were made.
+- Verification: collisions located by `grep -rn "_recordings_group|_gemini_group|_coding_agent_group|_advanced_group|_start_recording|_connect_gemini|_delete_recording" tests/` → only tests/test_shell.py:112-115,122-132,138-143. Placeholder behaviour re-confirmed in ui/pages/settings.py:195-218 (status-sentence handlers) and ui/shell.py:279-283 (pass handlers); Advanced group is a label with no controls (ui/pages/settings.py:165-180). No engine, storage, controller or approval-path test references the affected controls, so the documented recommendation (BLOCKED.md option A: rewrite the three shell tests to assert the honest state) does not touch any safety invariant.
+- Outcome: BLOCKED (decision requested; B1/B2 complete and committed)
+- Human review:

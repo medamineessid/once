@@ -1,7 +1,8 @@
 # Once progress
 
-- Last completed step: PHASE A repair (branch slice/repair-main): A1 working agreement, A2 flaky suite crash root-caused and fixed (0ecbea0), A3 ruff clean, A4 verify.ps1 rewritten as PowerShell 5.1 with append-only log guard + failure-detection proof, A5 docs citations re-verified, A6 box-shadow removed + tests/test_styles.py, A7 CI workflow confirmed (last GitHub Actions run on main passed), A8 pending verify/merge/push. Launcher run-shell.bat merged to main earlier (39f1d2d).
-- Last commit: 7bdc6e2 docs(log): record phase A repair verification (append only)
+- Last completed step: PHASE A repair (branch slice/repair-main, merged and pushed to main at 1685475): A1 working agreement, A2 flaky suite crash root-caused and fixed (0ecbea0), A3 ruff clean, A4 verify.ps1 rewritten as PowerShell 5.1 with append-only log guard + failure-detection proof, A5 docs citations re-verified, A6 box-shadow removed + tests/test_styles.py, A7 CI workflow confirmed (last GitHub Actions run on main passed), A8 full verify.ps1 run, ff-merge, push. Launcher run-shell.bat merged to main earlier (39f1d2d).
+- Last completed step (PHASE B, branch slice/layout-foundation): B1 UX brief (docs/UX_BRIEF.md) and B2 PHASE C journey queue written; B3 BLOCKED before any code change (see docs/BLOCKED.md).
+- Last commit: see git log (this commit adds the PHASE B docs: UX brief, journey queue, B3 blocked decision).
 - Verified this session (PHASE 0): 
   - git branch --show-current: docs/ui-migration-plan
   - git status --short: ?? app.spec, ?? once-app.spec
@@ -10,7 +11,7 @@
   - ui/pages/ exists with home,my_automations,activity,create_automation,review,settings
   - ui/review_view.py, ui/verifier_dialog.py, ui/workers.py exist
   - tests/test_verifier_dialog.py does not exist (tests cover verifier dialog inline in test_review_ui.py:371-440; re-checked 2026-10-27)
-- Next action: S4 - create automation and draft editing (ui/pages/create_automation.py currently only acknowledges a description; no workflow builder exists in the controller)
+- Next action: user decision on docs/BLOCKED.md (option A recommended: remove the four non-functional Settings groups and rewrite the three placeholder-proving tests in tests/test_shell.py:106,118,136). On approval, resume B3 (layout rules, sidebar, tokens, tests, screenshots) then CHECKPOINT 1; PHASE C journeys wait for the user's "continue"
 - Currently failing tests or known breakage: none (full suite green on slice/repair-main, 2026-10-27: 3 consecutive runs, see ai_engineering_log.md)
 - Known UI gaps: shell never calls review_page.set_service (ui/pages/review.py:110) or settings_page.set_service (ui/pages/settings.py:231), so review approval and settings service actions cannot work yet; ui/shell.py:267-283 has stub handlers (_show_run_details, _on_approved, _on_verifier_configured, _on_recording_*). These are tracked as journeys J6/J8, not hidden.
 - Open items: see docs/ui_migration_plan.md for full details
@@ -29,19 +30,23 @@
 - [x] P1-3: Add .github/workflows/tests.yml (pytest offscreen, ruff check, ruff format --check on windows-latest, python 3.14) (e2f5c62) - 3.14 on windows-latest verified via actions/python-versions release 3.14.9 with win32 assets; no bash-in-PowerShell flaws found — DONE
 - [x] P1-4: Run scripts/verify.ps1 and paste full output; commit, ff-merge, push - PASSED under Windows PowerShell 5.1 in PHASE A — DONE
 
-### PHASE 2: UI MIGRATION SLICES
-- [x] S1: Add --shell flag to app.py (slice/shell-flag). Default stays old window. --smoke-test works with and without --shell. Add tests. (2a0573b, style fix dab53da; CHECKPOINT 1 user-tested) — DONE — CHECKPOINT 1 passed
-- [x] S2: Activity/history page wiring (slice/activity-page) (588ed21) — DONE
-- [x] S3: My automations page (slice/my-automations-page, merged as 70d8ce1) — DONE: list/open/preview read-only + confirmed worker run, 14 new tests, screenshots docs/screenshots/slice-3/, CHECKPOINT 3 approved
-- [ ] S4: Create automation and draft editing (slice/create-automation) — TODO
-- [ ] S5: Recording lifecycle in shell (slice/recording-shell) — TODO
-- [ ] S6: Review/approval and verifier configuration (slice/review-approval-shell) — TODO
-- [ ] S7: Desktop and browser steps in create_automation (slice/desktop-browser-steps) — TODO
-- [ ] S8: Switch default to shell (slice/switch-default) — **CHECKPOINT 2** before changing default/retiring main_window, stop and report — TODO
+### PHASE B: UX BRIEF AND DESIGN FOUNDATION (docs/UX_BRIEF.md written 2026-10-27)
+- [x] B1: docs/UX_BRIEF.md from evidence (audience, journeys, page specs, honest-controls rule, layout rules, fact-7 defect list) — DONE
+- [x] B2: replace this slice queue with the PHASE C journey queue — DONE
+- [ ] B3: slice/layout-foundation — layout rules on the four existing pages, remove every unwired control and the duplicate Home button, fix the sidebar footer, spacing/type tokens in ui/styles, four layout tests, screenshots through the real app.py --shell path into docs/screenshots/layout-foundation/ — **BLOCKED** (2026-10-27): removing the unwired Settings controls requires deleting/rewriting three tests in tests/test_shell.py:106,118,136, which the working agreement forbids me to decide alone; see docs/BLOCKED.md for options and recommendation. Layout/sidebar/token work not started yet — no partial edits were made.
 
-### FINAL ITEMS
-- [ ] F1: Create docs/MVP_CHECKLIST.md (table of every old-window capability, new-window location file:line, test covering it, DONE/MISSING) — TODO
-- [ ] F2: CHECKPOINT 2 report before default switch — TODO
+**Safety rule for every journey below (unchanged):** `ui/` never mutates the file system — pages call controller services only (AGENTS.md S8); no new approval path, no policy/validator changes (working agreement hard rules 1-3).
+
+### PHASE C: USER JOURNEYS (continue only after the user says "continue"; slice by slice)
+- [ ] J1 Try a demonstration: Home's demo button runs the existing demo through the controller service, shows progress and result, appears in Activity — TODO
+- [ ] J2 Create an automation: task form + draft step editing (add/move/remove), save, appears in My automations; entry point "Record what I do" — **CHECKPOINT 2** after J2 for the user to try — TODO
+- [ ] J3 My automations: list, open, preview, run, cancel, plus the old window's other actions for saved workflows (delete only if the old window has it) — TODO
+- [ ] J4 Activity: history list and per-step results — TODO
+- [ ] J5 Recording lifecycle inside the create flow: record, stop, analyze offline, delete a recording — TODO
+- [ ] J6 AI proposals: review and approve through the existing approval path (ui/review_view.py, ui/workers.py) — TODO
+- [ ] J7 Desktop and browser steps in the create flow via engine/desktop.py approve_desktop_workflow; UI lists exactly which steps mutate something before approve is enabled; never a second approval path — TODO
+- [ ] J8 Settings: authorized folder, verifier configuration, coding-agent connection only if it really works; no non-functional entries — TODO
+- [ ] J9 docs/MVP_CHECKLIST.md: every old-window capability, new location (file:line), test, DONE or MISSING — **CHECKPOINT 3** before changing the default window in app.py or retiring ui/main_window.py: stop and report; never make that change without approval — TODO
 
 ## Status tracking
 Each item: id, status (TODO/IN PROGRESS/DONE/BLOCKED), branch, commit hashes, raw test summary line.
