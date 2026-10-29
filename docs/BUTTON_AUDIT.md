@@ -35,9 +35,9 @@ Handler defences found on this audit pass and fixed in this slice:
 | 9 | My automations | Preview QPushButton | `ui/pages/my_automations.py:149` | Details label shows read-only preview steps and executability; never runs | test_preview_shows_steps_and_never_calls_run |
 | 10 | My automations | Run QPushButton | `ui/pages/my_automations.py:175` → `_start_run` (ui/workers.py WorkflowWorker) | Confirmation question, then a real run with progress lines and final status; buttons disabled while running | test_run_with_confirmation_calls_run_once_with_loaded_workflow, test_run_button_stays_disabled_until_run_finishes |
 | 11 | Activity | history run row | `ui/pages/activity.py:41` `_on_selection_changed` | Details label shows id, status, step lines | test_activity_run_click_shows_its_steps |
-| 12 | Review | Edit QPushButton | `ui/pages/review.py:83` | none — body is `pass` | clicks asserted impossible until J6 (see section 3) |
+| 12 | Review | Edit QPushButton | none — hidden (2026-10-29 amendment) | hidden until J6 wires it; no pass handler exists any more (removed with the connection) | test_review_edit_and_approve_are_hidden_until_j6 |
 | 13 | Review | Cancel QPushButton | `ui/pages/review.py:86` → `cancelled` → `ui/shell.py:252` | Workspace → Home | test_review_cancel_button_click_returns_home |
-| 14 | Review | Approve and run QPushButton | `ui/pages/review.py:89` | Real handler, but inert until the page has a service and a proposal (see section 3, J6) | scheduled for J6 acceptance test |
+| 14 | Review | Approve and run QPushButton | none — hidden (2026-10-29 amendment) | hidden until J6 wires Approve through the approval path | test_review_edit_and_approve_are_hidden_until_j6 |
 | 15 | Create | "Create automation" QPushButton | `ui/pages/create_automation.py:77` `_create_from_description` | Non-blank text emits `task_entered`; shell acknowledges in plain language (J2 replaces) | test_create_automation_button_emits_typed_task, test_create_automation_button_ignores_blank_input |
 | 16 | Settings | "Choose folder" QPushButton | `ui/pages/settings.py` `_choose_authorized_folder` | Dialog → `service.set_allowed_root`, label shows the chosen folder; cancel changes nothing | test_settings_authorized_folder_persists_through_service, test_settings_authorized_folder_cancel_keeps_previous_value |
 | 17 | Settings | "Configure checker…" QPushButton | `ui/pages/settings.py` `_configure_verifier` | Real `VerifierConfigDialog`; on save emits `verifier_configured` | test_settings_verifier_button_saves_and_signals |
@@ -55,25 +55,32 @@ the session decision) does not apply — a workflow run is not a delete.
 - `my_automations_page.opened_workflow` → `_open_workflow` (works after this slice)
 - `create_automation_page.task_entered` → `_handle_task_entered` (acknowledge; J2 builds)
 - `review_page.cancelled` → `_on_review_cancelled` (works)
-- `activity_page.run_selected` → `_show_run_details` (`pass`, ui/shell.py:255; J4)
-- `review_page.approved` → `_on_approved` (`pass`, ui/shell.py:249; J6)
+- `activity_page.run_selected` — the dead `pass` connection was REMOVED (2026-10-29);
+  details come from the page's own selection handler (test 11)
+- `review_page.approved` — the dead `pass` connection was REMOVED (2026-10-29);
+  Approve itself is hidden until J6
 - `my_automations_page.run_requested` `preview_requested` — emitted but never connected (J3)
 - `settings_page.verifier_configured` — emitted but not connected; its only
   effect today is the page's own `_verifier_config` update (acceptable: the
   verifier dialog persists the configuration itself; J8 may surface a banner)
 
-Unwired-controls guard: `test_every_page_has_no_unwired_buttons` covers
-QPushButton **and** QToolButton on every page plus the sidebar; proved able to
-fail by temporarily adding an unconnected visible "Ghost" button on Home — the
-test failed with `FAILED tests/test_shell.py::test_every_page_has_no_unwired_buttons`
-(AssertionError listing `HomePage: Ghost`); the temporary button was removed
-immediately afterwards (git diff confirmed zero changes in ui/pages/home.py).
+Unwired-controls guard (strengthened 2026-10-29): `test_every_page_has_no_unwired_buttons`
+covers QPushButton **and** QToolButton on every page plus the sidebar, and now
+follows the wiring statically (AST): a connected handler may not be `pass`-only,
+and a handler that only emits a signal must chain to a downstream shell handler
+(relay hops like the sidebar's `clicked_custom` → `homeClicked` are followed,
+bounded to 6 hops). Proved able to fail twice, both pasted in the log:
+(1) pass-only — before the fix it reported `shell.py connects a pass-only
+handler: _on_approved` and 3 more; (2) chain — with a temporary emit-only
+"Ghost" button on Home it reported `home.py: _ghost_requested -> signal
+ghost_requested has no downstream connection`. Both temporaries were reverted
+(`git diff ui/pages/home.py` empty afterwards).
 
 ## 3. `pass` bodies and dead wiring (assigned, not claimed as-working)
 
 | Location | What doesn't work yet | Assigned journey | Interim honest state |
 |---|---|---|---|
-| `ui/shell.py:255` `_show_run_details` body `pass` | selecting a run emits a signal the shell ignores; details come from the page itself | J4 | Activity page still shows steps in its own details label (test 11) |
-| `ui/shell.py:249` `_on_approved` body `pass` | approving a proposal has no effect | J6 | approval path exists at `ai.approval.approve_proposal`; page's approve handler is real but inert without service/proposal |
-| `ui/pages/review.py:83` `_edit` body `pass` | Edit button does nothing | J6 | audited, deferred; hidden only if J6 leaves it without a real effect |
-| `my_automations_page.run_requested`/`preview_requested` | signals no listener | J3 | buttons still have direct service effects (they do not depend on the signals) |
+| `ui/pages/review.py` `_edit` (removed) | Edit button has no handler | J6 | button hidden and unconnected; test asserts it stays hidden until J6 |
+| `ui/pages/review.py` `_approve` (hidden) | approving needs a service + proposal the shell does not inject yet | J6 | button hidden; shell does not call `review_page.set_service` yet |
+| `my_automations_page.run_requested`/`preview_requested` | signals have no listener | J3 | buttons have direct page-local service effects and stay visible; J3 wires them through the shell |
+| `ui/shell.py` `_on_approved`/`_show_run_details` (removed) | — | J6/J4 | dead `pass` connections deleted, not hidden: their pages show the effects themselves |

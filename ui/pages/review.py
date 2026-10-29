@@ -63,7 +63,9 @@ class ReviewPage(QWidget):
         self._edit_button = QPushButton("Edit", self)
         self._edit_button.setObjectName("secondaryActionButton")
         self._edit_button.setMinimumHeight(38)
-        self._edit_button.clicked.connect(self._edit)
+        # No handler yet: J6 wires Edit through the approval path. An unfinished
+        # feature is hidden, so the button stays unconnected and invisible until
+        # then (the honest-controls test rejects pass-only handlers).
         self._cancel_button = QPushButton("Cancel", self)
         self._cancel_button.setObjectName("secondaryActionButton")
         self._cancel_button.setMinimumHeight(38)
@@ -72,6 +74,11 @@ class ReviewPage(QWidget):
         self._approve_button.setObjectName("primaryActionButton")
         self._approve_button.setMinimumHeight(38)
         self._approve_button.clicked.connect(self._approve)
+        # Honest-controls rule (2026-10-29): Edit has no real handler and Approve
+        # does nothing until this page receives a service and a proposal (J6).
+        # An unfinished feature is hidden, not shown inert.
+        self._edit_button.hide()
+        self._approve_button.hide()
         buttons_row.addWidget(self._edit_button)
         buttons_row.addWidget(self._cancel_button)
         buttons_row.addWidget(self._approve_button)
@@ -80,9 +87,6 @@ class ReviewPage(QWidget):
 
     def _empty_steps(self) -> list[str]:
         return ["No step details to review."]
-
-    def _edit(self) -> None:
-        pass
 
     def _cancel_review(self) -> None:
         self.cancelled.emit()

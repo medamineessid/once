@@ -189,9 +189,7 @@ class MainWindow(QMainWindow):
         self.home_page.run_demo_requested.connect(self._run_demo_from_home)
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)
-        self.review_page.approved.connect(self._on_approved)
         self.review_page.cancelled.connect(self._on_review_cancelled)
-        self.activity_page.run_selected.connect(self._show_run_details)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 
@@ -246,14 +244,8 @@ class MainWindow(QMainWindow):
             "Nothing was created and no workflow was started.",
         )
 
-    def _on_approved(self) -> None:
-        pass
-
     def _on_review_cancelled(self) -> None:
         self._show_page(ShellPages.HOME)
-
-    def _show_run_details(self) -> None:
-        pass
 
     @override
     def closeEvent(self, event) -> None:

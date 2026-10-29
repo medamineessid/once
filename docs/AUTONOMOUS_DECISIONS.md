@@ -105,3 +105,32 @@ Format per item: id, date, question, options, choice, reason.
 - Reason: the flows are equal, not weaker; adding existence checks here would
   be new validation behavior beyond parity, and approval/policy/validator
   semantics are frozen by the working agreement.
+
+## AD-007 — 2026-10-29 — What "hide until the signal is wired" means
+
+- Question: the amendment says to hide every visible enabled control whose
+  downstream signal is unconnected until J3, and the unwired test must follow
+  signals through to a handler. How far does that go?
+- Choice: three concrete rules, applied in this slice:
+  1. A connected `pass`-only handler is dead wiring: the connection and the
+     handler are REMOVED (not hidden), because the page itself does the work
+     (`activity_page.run_selected` → `_show_run_details`,
+     `review_page.approved` → `_on_approved` in ui/shell.py).
+  2. A visible enabled control with no observable click effect is HIDDEN
+     (Review Edit and Approve until J6; Edit's `pass` handler was deleted
+     with its connection).
+  3. Controls whose click has a real page-local effect (My automations
+     Preview and Run, Activity row selection — each asserted by an existing
+     mouseClick test) stay VISIBLE; their extra page→shell signals are wired
+     in their assigned journeys (J3, J4), where the test then follows them.
+- Reason: (3) follows the working agreement's "observable effect" definition —
+  the control is not inert, only its shell-level signal is pending — and the
+  user's explicit J3 instruction ("wire run_requested and preview_requested
+  through the controller") implies those buttons exist and are used until
+  then. Hiding a working control and re-showing it one slice later would churn
+  the UI for no honesty gain.
+- Evidence: the strengthened `test_every_page_has_no_unwired_buttons` now fails
+  on rule-2 cases (pasted in the log: 4 violations including
+  `shell.py connects a pass-only handler: _on_approved`) and on chain breaks
+  (pasted: `home.py: _ghost_requested -> signal ghost_requested has no
+  downstream connection` from a temporary emit-only ghost button, reverted).

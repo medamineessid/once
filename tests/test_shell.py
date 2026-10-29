@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import ast
+import re
+from pathlib import Path
+
 import pytest
 from PySide6.QtCore import SIGNAL, Qt
 from PySide6.QtTest import QTest
@@ -18,6 +22,8 @@ from controller.service import WorkflowService
 from engine.workflow import StepKind, Workflow, WorkflowStep
 from ui.components.spacer import Spacer
 from ui.shell import MainWindow, ShellPages
+
+UI_ROOT = Path(__file__).resolve().parents[1] / "ui"
 
 
 @pytest.fixture
@@ -336,12 +342,146 @@ def test_sidebar_has_four_nav_items_brand_and_one_footer(qtbot, window):
     assert [label.text() for label in labels] == ["Once", "Once Assistive Automation"]
 
 
-def test_every_page_has_no_unwired_buttons(qtbot, window):
-    """Honest-controls rule: a visible enabled button must be actually connected.
+def _ui_sources() -> dict[Path, str]:
+    pages = sorted(UI_ROOT.glob("*.py")) + sorted((UI_ROOT / "pages").glob("*.py"))
+    return {path: path.read_text(encoding="utf-8") for path in pages}
 
-    Covers QPushButton and QToolButton (push buttons on the pages plus the four
-    sidebar QToolButtons); a click on the sidebar buttons is exercised by the
-    navigation tests above.
+
+def _pass_only_handlers(source: str) -> set[str]:
+    """Method names whose body does nothing but pass (with an optional docstring)."""
+    names: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = [
+                stmt
+                for stmt in node.body
+                if not (
+                    isinstance(stmt, ast.Expr)
+                    and isinstance(stmt.value, ast.Constant)
+                    and isinstance(stmt.value.value, str)
+                )
+            ]
+            if body and all(isinstance(stmt, ast.Pass) for stmt in body):
+                names.add(node.name)
+    return names
+
+
+def _emitted_signals(source: str, method_name: str) -> set[str] | None:
+    """Signals a named method emits; None when the body does anything else too."""
+    signals: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == method_name:
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Call):
+                    func = sub.func
+                    if (
+                        isinstance(func, ast.Attribute)
+                        and func.attr == "emit"
+                        and isinstance(func.value, ast.Attribute)
+                        and isinstance(func.value.value, ast.Name)
+                        and func.value.value.id == "self"
+                    ):
+                        signals.add(func.value.attr)
+                    else:
+                        return None  # a real call: the handler does its own work
+            return signals
+    return None
+
+
+def _connect_self_targets(source: str) -> list[tuple[str, bool]]:
+    """(name, is_terminal_emit) pairs from `...connect(self.X)` / `...connect(self.X.emit)`."""
+    targets: list[tuple[str, bool]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "connect"
+            and node.args
+        ):
+            continue
+        first = node.args[0]
+        if not isinstance(first, ast.Attribute):
+            continue
+        if isinstance(first.value, ast.Name) and first.value.id == "self":
+            targets.append((first.attr, False))  # bound method handler
+        elif (
+            first.attr == "emit"
+            and isinstance(first.value, ast.Attribute)
+            and isinstance(first.value.value, ast.Name)
+            and first.value.value.id == "self"
+        ):
+            targets.append((first.value.attr, True))  # signal relay
+    return targets
+
+
+def _follow_chain(sources: dict[Path, str], signal: str) -> str | None:
+    """Follow `<signal>.connect(self.X)` to a real handler; return why not, else None."""
+    seen: set[str] = set()
+    current = signal
+    for _ in range(6):  # bounded pass-through depth
+        if current in seen:
+            return f"signal chain for {current} loops back on itself"
+        seen.add(current)
+        # recompile per hop: relays change the signal being followed
+        pattern = re.compile(
+            rf"\.{re.escape(current)}\.connect\(\s*self\.([A-Za-z_]\w*)(\.emit)?\s*[,)]"
+        )
+        hit = None
+        for path, source in sources.items():
+            match = pattern.search(source)
+            if match is not None:
+                hit = (path, match)
+                break
+        if hit is None:
+            return f"signal {current} has no downstream connection"
+        path, match = hit
+        target, relay = match.group(1), match.group(2)
+        if relay:  # connected as `.emit`: the chain continues with the next signal
+            current = target
+            continue
+        if target in _pass_only_handlers(sources[path]):
+            return f"signal {current} ends in the pass-only handler {target}"
+        return None
+    return None
+
+
+def _static_unwired_reasons(sources: dict[Path, str]) -> list[str]:
+    """Chain-follow the `clicked -> handler -> signal -> shell` wiring of the ui."""
+    reasons: list[str] = []
+    connected: set[str] = set()
+    relays: set[str] = set()
+    for source in sources.values():
+        for name, is_emit in _connect_self_targets(source):
+            (relays if is_emit else connected).add(name)
+    for path, source in sources.items():
+        trivial = _pass_only_handlers(source)
+        for name, is_emit in _connect_self_targets(source):
+            if not is_emit and name in trivial:
+                reasons.append(f"{path.name} connects a pass-only handler: {name}")
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name not in connected:
+                continue
+            emitted = _emitted_signals(source, node.name) or set()
+            for signal in emitted:
+                failure = _follow_chain(sources, signal)
+                if failure is not None:
+                    reasons.append(f"{path.name}: {node.name} -> {failure}")
+    for signal in relays:
+        failure = _follow_chain(sources, signal)
+        if failure is not None:
+            reasons.append(f"relay {signal} -> {failure}")
+    return reasons
+
+
+def test_every_page_has_no_unwired_buttons(qtbot, window):
+    """Honest-controls rule, strengthened (2026-10-29 amendment).
+
+    A visible enabled button must be actually connected (QPushButton and
+    QToolButton, including the four sidebar items), AND its wiring is followed
+    through: a connected handler may not be pass-only, and a handler that only
+    emits a signal must reach a downstream shell connection with a real handler.
     """
     targets = [
         window.home_page,
@@ -364,7 +504,18 @@ def test_every_page_has_no_unwired_buttons(qtbot, window):
                 and button.receivers(SIGNAL("clicked()")) == 0
             ):
                 unwired.append(f"{target.__class__.__name__}: {button.text()}")
+    sources = _ui_sources()
+    unwired.extend(_static_unwired_reasons(sources))
     assert unwired == []
+
+
+def test_review_edit_and_approve_are_hidden_until_j6(qtbot, window):
+    """Per the 2026-10-29 amendment: approval controls stay hidden until J6."""
+    window.workspace.setCurrentWidget(window.review_page)
+    qtbot.wait(10)
+    assert window.review_page._edit_button.isHidden()
+    assert window.review_page._approve_button.isHidden()
+    assert window.review_page._cancel_button.isVisible()
 
 
 def test_pages_use_spacing_tokens_for_margins(qtbot, window):
