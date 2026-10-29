@@ -134,3 +134,96 @@ Format per item: id, date, question, options, choice, reason.
   `shell.py connects a pass-only handler: _on_approved`) and on chain breaks
   (pasted: `home.py: _ghost_requested -> signal ghost_requested has no
   downstream connection` from a temporary emit-only ghost button, reverted).
+## AD-008 — 2026-10-29 — Missing spec files and reference image
+
+- Question: the session prompt names `docs/specs/visual_workflow_editor.md` and
+  `docs/specs/reference/workflow_editor.png` as strong guidance. Do they exist?
+- Evidence: `ls docs/specs` shows only an empty `reference/` folder;
+  `find docs/specs -type f` returns no files. Nothing to read.
+- Options: (a) wait for the files to appear; (b) work from the prompt only.
+- Choice: (b). Work from the prompt's MISSION/DESIGN LANGUAGE/ACCEPTANCE sections
+  and record every place a judgement call deviates (this file and PARKED.md).
+- Reason: the prompt says to do exactly that ("If the spec files are missing, work
+  from this prompt and record that"). One known consequence: the DESIGN LANGUAGE
+  tokens cannot be refined by sampling the reference image with QImage; they are
+  taken from the prompt's textual description (single blue accent ≈ #2563EB, dark
+  primary ≈ #111827, category tints, dot grid) and refined by tests (contrast),
+  not by an image sample (refinement note in docs/design/visual_editor.md §2.6).
+
+## AD-009 — 2026-10-29 — When the first-time acceptance test completes it fully
+
+- Question: P2 must "add the first-time-user acceptance test" whose journey ends
+  with `Create from scratch -> add a step -> save -> it appears in the list -> open
+  -> run -> Activity shows the result`. That leg needs the visual editor (adding a
+  step is an editor operation), which lands in P3/P4, while the shell redesign lands
+  in P2.
+- Options: (a) duplicate the create journey in P2 with a minimal non-canvas
+  add-a-step form (the list-style page the prompt forbids); (b) deliver the
+  acceptance test when its last leg exists (P4), with P2 covering the earlier legs
+  (demo → Activity; list; open).
+- Choice: (b), same test text as P2, executed through the real editor in P4.
+- Reason: the prompt explicitly forbids building the list-style create page and
+  defines the editor as the create surface; test-first sequencing is respected by
+  writing the P4 test brief now. The P2 acceptance covers every leg that exists by
+  then.
+
+## AD-010 — 2026-10-29 — The editor graph is a linear chain
+
+- Question: how does the canvas represent a workflow definition?
+- Evidence: the engine iterates `enumerate(workflow.steps)` in tuple order and stops
+  the remaining steps on failure or cancel (engine/workflow.py:832-869); steps are
+  frozen dataclasses with no successor field (engine/workflow.py:70-90); no
+  branching exists anywhere in the model (PARKED.md PARKED-1).
+- Options: (a) free graph with draggable independent nodes and arbitrary wires;
+  (b) a linear chain: Start → step[0] → … → step[n-1] → Finish, connections exactly
+  as adjacent edges; (c) delayed until branching exists.
+- Choice: (b). Connections represent execution order; insert-on-connection = tuple
+  insertion at that index; delete/duplicate/move are tuple ops. Terminals are
+  rendered, never persisted.
+- Reason: the editor and the engine must share one executable definition (prompt
+  pre-decision); (a) would imply semantics the engine cannot run; (c) loses the core
+  editor. A later branching engine can extend (b) — nodes stay on a laid-out chain
+  with explicit lanes at that point (PARKED-1).
+
+## AD-011 — 2026-10-29 — Presentation metadata is not undoable-definition state
+
+- Question: are "move node" and note edits part of the undoable editor command
+  stack?
+- Choice: no. Undo/redo reverse definition edits only (prompt pre-decision);
+  node positions and notes are presentation metadata in the storage-layer layout
+  record (new `workflow_layouts` table via the existing CREATE TABLE mechanism,
+  storage/database.py:9-132 pattern). Moving a node rewrites the record directly.
+- Reason: undo/redo would otherwise mix configuration state with cosmetics and make
+  "Repeat undo until definition equals the saved one" ambiguous; the prompt's own
+  ruler says notes/positions "never affects execution".
+
+## AD-012 — 2026-10-29 — Node category tints and their boundaries
+
+- Question: the prompt fixes tint families ("application and file interaction peach
+  or orange; wait and verification pale green; decision lavender; start and manual
+  review pale yellow; note soft yellow; finish light grey") but the engine has
+  categories the list does not name (REPORT, FAIL) and no decision or manual-review
+  steps exist.
+- Choice: families in force (docs/design/visual_editor.md §2.6): mutating steps →
+  peach; inspect/wait/verify → pale green; REPORT → pale-blue "progress"; FAIL →
+  pale red "stop" (each state has icon + word, never color alone); Start → pale
+  yellow; Finish → light grey; notes → soft yellow. The decision (lavender) and
+  manual-review (pale yellow) families stay unused while branching is parked
+  (PARKED-1) — they appear only if P7 lands.
+- Reason: every of the 18 kinds must land in one family; FAIL as pale green would
+  falsely suggest a benign step.
+
+## AD-013 — 2026-10-29 — Blocking modals leave the shell
+
+- Question: the pre-decided shell rule bans blocking modals, but several existing
+  controls rely on them (audit C1: ui/shell.py:240-245, ui/pages/settings.py:125-137,
+  ui/pages/my_automations.py:185-191,246,250, ui/pages/review.py:102) and their tests
+  monkeypatch `QMessageBox` — the tests must change with the behavior.
+- Choice: in the SHELL only, replace with non-modal banners and inline two-step
+  confirm; the verifier configuration becomes an inline panel (no `QDialog.exec`)
+  and the affected tests are replaced with tests asserting the same or more
+  (banner text, config actually saved, signal emitted; the swap is logged in the
+  slice commit). The old window (ui/main_window.py) keeps its dialogs and tests.
+- Reason: the prompt's pre-decided errors rule overrides the current pattern;
+  replacing rather than suppressing keeps evidence real (no handler behind a hidden
+  modal). Swapped tests are enumerated in the P2 commit message.

@@ -992,3 +992,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification (exact outputs in the session report): failing-first run `2 failed in 3.42s` with `shell.py connects a pass-only handler: _on_approved` among 4 violations; chain-failure proof with ghost `1 failed in 2.06s` with `home.py: _ghost_requested -> signal ghost_requested has no downstream connection`; after the fix `28 passed in 17.70s` (tests/test_shell.py) and full suite `352 passed, 2 skipped in 146.33s (0:02:26)`; `ruff check .` → `All checks passed!`; `ruff format --check .` → `114 files already formatted`; `git diff --stat ui/pages/home.py` empty after reverting the ghost.
 - Outcome: PASSED
 - Human review: 
+
+## 2026-10-30 — P0: session start, verify repair, j2 merge   (commit: 85a5893 in slice/j2-create-automation)
+- Task: P0.1 paste the real branch/status/log/verify outputs and repair failures; P0.2 merge slice/j2-create-automation once verify passes; P0.3 re-read the digest docs.
+- AI contribution: diagnosis of the append-only-guard failure; the LF-normalising repair commit; the ff-merge and push.
+- Defect found: docs/ai_engineering_log.md was stored as a CRLF blob in commit eb3773c while main is LF, so verify's append-only numstat read "994 added, 980 deleted" although the ignore-cr diff is exactly "14 added, 0 deleted" (a pure append; nothing lost). Also the whole worktree showed ~58 modified files that were line-ending churn only.
+- Verification: git diff --ignore-cr-at-eol --stat (empty) -> noise only; git show blobs od -c (main LF, branch CRLF); verify.ps1 run 1 paste (engineering log append-only FAIL, everything else PASS); repair commit 85a5893; git diff --numstat origin/main...HEAD -- docs/ai_engineering_log.md -> "14 0"; verify.ps1 run 2 paste ended "ALL CHECKS PASSED" with pytest "352 passed, 2 skipped in 170.03s"; ff-merge e638e5e..85a5893 pushed to origin/main; git branch --show-current -> slice/p1-editor-discovery after branching.
+- Outcome: PASSED
+- Human review:
+
+## 2026-10-30 — P1: editor discovery and UX audit docs   (commit: slice/p1-editor-discovery, hash in PROGRESS/report)
+- Task: docs/design/visual_editor.md with evidence (workflow model, kind table, persistence, recording pipeline, run events) and design decisions (chain semantics, controller edit API + undo, layout-record schema, auto-layout, keyboard, test strategy, tokens); docs/UX_AUDIT.md audit of the shell.
+- AI contribution: both documents; AD-008..AD-013; PARKED.md PARKED-1 (branching); QUESTIONS.md Q1..Q4.
+- Defect found: ui/pages/review.py:117-125 load_proposal reads proposal.steps but ProviderDraft has only goal+workflow (ai/models.py:27-33) - latent AttributeError; plus review page never gets the service injected (ui/shell.py:157-160). Both assigned to P6 with the review journey.
+- Verification: doc claims cite file:line reads made this slice on the merged main tree (engine/workflow.py, engine/replay.py, engine/desktop.py, controller/service.py, controller/recording.py, ai/*, recorder/*, storage/*, ui/shell.py, ui/pages/*.py, app.py); no code changed in this slice.
+- Outcome: PASSED
+- Human review:
