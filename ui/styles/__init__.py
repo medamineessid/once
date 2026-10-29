@@ -35,6 +35,54 @@ TYPE_FOOTER_PX = 11
 
 FONT_STACK = '"Segoe UI", "SF Pro Display", system-ui, sans-serif'
 
+# --- Color tokens (single source for both stylesheet and painted widgets) ----
+BG_APP = "#F5F6F8"
+BG_CANVAS = "#FBFCFE"
+DOT_GRID = "#DDE3EC"
+SURFACE = "#FFFFFF"
+SURFACE_ALT = "#F9FAFB"
+BORDER = "#E3E7EE"
+BORDER_STRONG = "#D1D5DB"
+ACCENT = "#2563EB"
+ACCENT_TEXT = "#1D4ED8"
+ACCENT_SOFT = "#EEF2FF"
+PRIMARY_BTN = "#111827"
+TEXT_STRONG = "#1D2733"
+TEXT_BODY = "#525A66"
+TEXT_FAINT = "#6B7280"
+STATUS_OK = "#15803D"
+STATUS_ERROR = "#B91C1C"
+STATUS_WARNING = "#92400E"
+TINT_ACTION = "#FDF0E2"
+TINT_VERIFY = "#EAF6EE"
+TINT_PROGRESS = "#EAF3F8"
+TINT_STOP = "#FDECEC"
+TINT_START = "#FCF6E3"
+TINT_FINISH = "#F2F4F7"
+TINT_NOTE = "#FBF7DC"
+
+#: Text/surface pairs used by pages; the contrast test walks this list.
+CONTRAST_PAIRS = (
+    ("body on card", TEXT_BODY, "#FFFFFF"),
+    ("strong on card", TEXT_STRONG, "#FFFFFF"),
+    ("faint on card", TEXT_FAINT, "#FFFFFF"),
+    ("body on app", TEXT_BODY, BG_APP),
+    ("body on accent tint", TEXT_BODY, ACCENT_SOFT),
+    ("accent text on card", ACCENT_TEXT, "#FFFFFF"),
+    ("accent text on app", ACCENT_TEXT, BG_APP),
+    ("button text on primary", "#FFFFFF", PRIMARY_BTN),
+    ("status ok text", STATUS_OK, "#FFFFFF"),
+    ("status error text", STATUS_ERROR, "#FFFFFF"),
+    ("status warning text", STATUS_WARNING, "#FFFFFF"),
+    ("strong on action tint", TEXT_STRONG, TINT_ACTION),
+    ("strong on verify tint", TEXT_STRONG, TINT_VERIFY),
+    ("strong on progress tint", TEXT_STRONG, TINT_PROGRESS),
+    ("strong on stop tint", TEXT_STRONG, TINT_STOP),
+    ("strong on start tint", TEXT_STRONG, TINT_START),
+    ("strong on finish tint", TEXT_STRONG, TINT_FINISH),
+    ("strong on note tint", TEXT_STRONG, TINT_NOTE),
+)
+
 
 def apply_theme(window):
     """Install the Once design system on the whole application."""
@@ -63,7 +111,28 @@ def _set_palette(app):
 
 def _set_stylesheet(app):
     substitutions = {
-        "ACCENT": "#2563EB",
+        "ACCENT": ACCENT,
+        "ACCENT_TEXT": ACCENT_TEXT,
+        "ACCENT_SOFT": ACCENT_SOFT,
+        "BG_APP": BG_APP,
+        "SURFACE": SURFACE,
+        "SURFACE_ALT": SURFACE_ALT,
+        "BORDER": BORDER,
+        "BORDER_STRONG": BORDER_STRONG,
+        "PRIMARY_BTN": PRIMARY_BTN,
+        "TEXT_STRONG": TEXT_STRONG,
+        "TEXT_BODY": TEXT_BODY,
+        "TEXT_FAINT": TEXT_FAINT,
+        "STATUS_OK": STATUS_OK,
+        "STATUS_ERROR": STATUS_ERROR,
+        "STATUS_WARNING": STATUS_WARNING,
+        "TINT_ACTION": TINT_ACTION,
+        "TINT_VERIFY": TINT_VERIFY,
+        "TINT_PROGRESS": TINT_PROGRESS,
+        "TINT_STOP": TINT_STOP,
+        "TINT_START": TINT_START,
+        "TINT_FINISH": TINT_FINISH,
+        "TINT_NOTE": TINT_NOTE,
         "FONT_STACK": FONT_STACK,
         "TYPE_HOME_TITLE_PX": TYPE_HOME_TITLE_PX,
         "TYPE_TITLE_PX": TYPE_TITLE_PX,
@@ -386,5 +455,186 @@ _STYLESHEET_TEMPLATE = Template("""
     QListWidget#recordingList::item:hover,
     QListWidget#stepsList::item:hover {
         background: #F9FAFB;
+    }
+
+    /* --- P2 components: page header, banners, footer, cards, chips, ghost --- */
+    QWidget#pageHeader {
+        background: transparent;
+    }
+    QLabel#pageDescription {
+        font-size: ${TYPE_SUBTITLE_PX}px;
+        color: ${TEXT_BODY};
+        font-family: $FONT_STACK;
+    }
+    QFrame#cardTile {
+        background: ${SURFACE};
+        border: 1px solid ${BORDER};
+        border-radius: 12px;
+    }
+    QLabel#cardTitle {
+        font-size: ${TYPE_SUBTITLE_PX}px;
+        font-weight: 600;
+        color: ${TEXT_STRONG};
+        font-family: $FONT_STACK;
+    }
+    QLabel#cardBody {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${TEXT_BODY};
+        font-family: $FONT_STACK;
+    }
+    QLabel#chip {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${TEXT_BODY};
+        background: ${ACCENT_SOFT};
+        border-radius: 8px;
+        padding: 2px 8px;
+        font-family: $FONT_STACK;
+    }
+    QLabel#chip[chipKind="ok"] {
+        color: ${STATUS_OK};
+        background: ${TINT_VERIFY};
+    }
+    QLabel#chip[chipKind="fail"] {
+        color: ${STATUS_ERROR};
+        background: ${TINT_STOP};
+    }
+    QLabel#chip[chipKind="warn"] {
+        color: ${STATUS_WARNING};
+        background: ${TINT_ACTION};
+    }
+    QFrame#banner {
+        border-radius: 10px;
+        border: 1px solid ${BORDER};
+        background: ${SURFACE};
+    }
+    QFrame#banner[severity="error"] {
+        border-color: #FCA5A5;
+    }
+    QFrame#banner[severity="warning"] {
+        border-color: #FCD34D;
+    }
+    QFrame#banner[severity="success"] {
+        border-color: #86EFAC;
+    }
+    QLabel#bannerBadge {
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-weight: 600;
+        color: ${TEXT_BODY};
+        font-family: $FONT_STACK;
+    }
+    QLabel#bannerTitle {
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 600;
+        color: ${TEXT_STRONG};
+        font-family: $FONT_STACK;
+    }
+    QLabel#bannerBody {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${TEXT_BODY};
+        font-family: $FONT_STACK;
+    }
+    QPushButton#bannerDismiss {
+        background: transparent;
+        border: none;
+        color: ${TEXT_FAINT};
+        font-size: ${TYPE_CAPTION_PX}px;
+        padding: 4px 6px;
+        font-family: $FONT_STACK;
+    }
+    QPushButton#bannerDismiss:hover {
+        color: ${TEXT_STRONG};
+    }
+    QPushButton#ghostButton {
+        background: transparent;
+        border: none;
+        color: ${ACCENT_TEXT};
+        font-size: ${TYPE_BODY_PX}px;
+        padding: 6px 10px;
+        font-family: $FONT_STACK;
+    }
+    QPushButton#ghostButton:hover {
+        text-decoration: underline;
+    }
+    QPushButton#ghostButton:disabled {
+        color: #9CA3AF;
+    }
+    QPushButton#confirmButton {
+        background: ${PRIMARY_BTN};
+        color: #FFFFFF;
+        border: none;
+        border-radius: 8px;
+        padding: 9px 16px;
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 500;
+        font-family: $FONT_STACK;
+    }
+    QPushButton#confirmButton:hover {
+        background: #01192F;
+    }
+    QPushButton#confirmButton[armed="true"] {
+        background: ${STATUS_ERROR};
+    }
+    QPushButton#confirmButton:disabled {
+        background: #9CA3AF;
+        color: #FFFFFF;
+    }
+    QLabel#statusFooterText {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${TEXT_BODY};
+        font-family: $FONT_STACK;
+    }
+    QLabel#emptyHeading {
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 600;
+        color: ${TEXT_STRONG};
+        font-family: $FONT_STACK;
+    }
+    QLabel#emptyBody {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${TEXT_BODY};
+        font-family: $FONT_STACK;
+    }
+    /* inputBase is objectName-based on purpose: the verifier panel's classes
+       (QLineEdit/QTextEdit/QPlainTextEdit) are all QWidget subclasses, so one
+       selector covers them without naming widget classes the audit does not
+       track. */
+    QWidget#inputBase {
+        background: ${SURFACE};
+        color: ${TEXT_STRONG};
+        border: 1px solid ${BORDER_STRONG};
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: ${TYPE_BODY_PX}px;
+        font-family: $FONT_STACK;
+    }
+    QWidget#inputBase:focus {
+        border-color: ${ACCENT};
+    }
+
+    /* --- P2 page rows and inline panel ----------------------------------- */
+    QWidget#automationRow,
+    QWidget#runRow {
+        background: transparent;
+    }
+    QLabel#rowTitle {
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 500;
+        color: ${TEXT_STRONG};
+        font-family: $FONT_STACK;
+    }
+    QLabel#rowCaption {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${TEXT_FAINT};
+        font-family: $FONT_STACK;
+    }
+    QFrame#verifierEditorPanel {
+        background: ${SURFACE_ALT};
+        border: 1px solid ${BORDER};
+        border-radius: 10px;
+    }
+    QLabel#panelErrorLabel {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${STATUS_ERROR};
+        font-family: $FONT_STACK;
     }
 """)
