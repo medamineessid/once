@@ -5,8 +5,17 @@ from __future__ import annotations
 import pytest
 from PySide6.QtCore import SIGNAL, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton, QToolButton
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QApplication,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QToolButton,
+)
 
+from controller.service import WorkflowService
+from engine.workflow import StepKind, Workflow, WorkflowStep
 from ui.components.spacer import Spacer
 from ui.shell import MainWindow, ShellPages
 
@@ -168,6 +177,154 @@ def test_settings_verifier_button_without_data_dir_does_not_crash(qtbot, window,
     assert len(notices) == 1
 
 
+def test_settings_authorized_folder_persists_through_service(qtbot, window, monkeypatch, tmp_path):
+    """Mirrors the old window: dialog choice is stored on the service and shown."""
+    settings = window.settings_page
+    chosen = tmp_path / "authorized"
+    chosen.mkdir()
+    monkeypatch.setattr(
+        "ui.pages.settings.QFileDialog.getExistingDirectory",
+        staticmethod(lambda *args, **kwargs: str(chosen)),
+    )
+
+    qtbot.mouseClick(settings._choose_authorized_button, Qt.MouseButton.LeftButton)
+
+    assert window._service.allowed_root == chosen
+    assert f"Authorized folder: {chosen}" in settings._authorized_label.text()
+
+
+def test_settings_authorized_folder_cancel_keeps_previous_value(qtbot, window, monkeypatch):
+    """Closing the folder dialog changes nothing, like the old window."""
+    settings = window.settings_page
+    before = settings._authorized_label.text()
+    monkeypatch.setattr(
+        "ui.pages.settings.QFileDialog.getExistingDirectory",
+        staticmethod(lambda *args, **kwargs: ""),
+    )
+
+    qtbot.mouseClick(settings._choose_authorized_button, Qt.MouseButton.LeftButton)
+
+    assert settings._authorized_label.text() == before
+    assert window._service.allowed_root is None
+
+
+def test_settings_displays_a_previously_chosen_folder(qtbot, window, tmp_path):
+    """The stored authorized folder is displayed again, not only chosen once."""
+    settings = window.settings_page
+    window._service.set_allowed_root(tmp_path)
+
+    settings.set_service(window._service)
+
+    assert f"Authorized folder: {tmp_path}" in settings._authorized_label.text()
+
+
+def test_shell_injects_the_service_into_the_settings_page(qtbot, window):
+    """The settings page cannot record a folder without the real service."""
+    assert window.settings_page._service is window._service
+
+
+# --- Button audit (P1.2): every clicked control shows an observable effect -------
+
+
+def _window_with_service(qtbot, tmp_path):
+    """A real shell backed by a real, history-persisting service in tmp_path."""
+    service = WorkflowService.for_app_data(tmp_path)
+    window = MainWindow(service=service)
+    qtbot.addWidget(window)
+    window.show()
+    return window, service
+
+
+def demo_workflow_for_tests() -> Workflow:
+    return Workflow(
+        workflow_id="open-me",
+        name="List invoices",
+        steps=(
+            WorkflowStep(
+                step_id="s1",
+                name="List",
+                kind=StepKind.REPORT,
+                message="Listed.",
+            ),
+        ),
+    )
+
+
+def test_sidebar_click_settings_switches_and_checks(qtbot, window):
+    qtbot.mouseClick(window.sidebar._settings_button, Qt.MouseButton.LeftButton)
+    qtbot.wait(50)
+    assert window.workspace.currentIndex() == ShellPages.SETTINGS
+    assert window.sidebar.is_on(ShellPages.SETTINGS)
+
+
+def test_sidebar_click_home_returns_to_home(qtbot, window):
+    window._show_page(ShellPages.SETTINGS)
+    qtbot.mouseClick(window.sidebar._home_button, Qt.MouseButton.LeftButton)
+    qtbot.wait(50)
+    assert window.workspace.currentIndex() == ShellPages.HOME
+    assert window.sidebar.is_on(ShellPages.HOME)
+
+
+def test_home_create_button_clicks_into_create_flow(qtbot, window):
+    qtbot.mouseClick(window.home_page._create_automation_button, Qt.MouseButton.LeftButton)
+    qtbot.wait(50)
+    assert window.workspace.currentWidget() is window.create_automation_page
+
+
+def test_home_demo_button_runs_the_demo_exactly_once(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+
+    qtbot.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: len(service.history()) == 1, timeout=10_000)
+
+    runs = service.history()
+    assert len(runs) == 1
+    assert runs[0].workflow_id == "demo-local-workflow"
+    assert runs[0].status.value == "SUCCEEDED"
+
+
+def test_open_button_click_shows_opened_workflow_on_the_review_page(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+    service.save(demo_workflow_for_tests())
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+
+    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+
+    assert window.workspace.currentWidget() is window.review_page
+    assert "List invoices" in window.review_page._goal_label.text()
+    assert window.review_page._steps_list.count() == 1
+
+
+def test_review_cancel_button_click_returns_home(qtbot, window):
+    window.workspace.setCurrentWidget(window.review_page)
+    qtbot.mouseClick(window.review_page._cancel_button, Qt.MouseButton.LeftButton)
+    qtbot.wait(50)
+    assert window.workspace.currentIndex() == ShellPages.HOME
+
+
+def test_activity_run_click_shows_its_steps(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+    service.run_demo()
+    window._show_page(ShellPages.ACTIVITY)
+    page = window.activity_page
+    page.refresh()
+    history_list = page._history_list
+    item = history_list.item(0)
+    assert item is not None
+
+    qtbot.mouseClick(
+        history_list.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=history_list.visualItemRect(item).center(),
+    )
+
+    assert "demo-local-workflow" in page._details_label.text()
+    assert "SUCCEEDED" in page._details_label.text()
+
+
 # --- Layout foundation (B3): structure and honest controls -------------------------------
 
 
@@ -180,26 +337,33 @@ def test_sidebar_has_four_nav_items_brand_and_one_footer(qtbot, window):
 
 
 def test_every_page_has_no_unwired_buttons(qtbot, window):
-    """Honest-controls rule: a visible enabled button must be actually connected."""
-    pages = [
+    """Honest-controls rule: a visible enabled button must be actually connected.
+
+    Covers QPushButton and QToolButton (push buttons on the pages plus the four
+    sidebar QToolButtons); a click on the sidebar buttons is exercised by the
+    navigation tests above.
+    """
+    targets = [
         window.home_page,
         window.my_automations_page,
         window.activity_page,
         window.settings_page,
         window.review_page,
         window.create_automation_page,
+        window.sidebar,
     ]
     unwired: list[str] = []
-    for page in pages:
-        window.workspace.setCurrentWidget(page)
+    for target in targets:
+        if target is not window.sidebar:
+            window.workspace.setCurrentWidget(target)
         qtbot.wait(10)
-        for button in page.findChildren(QPushButton):
+        for button in target.findChildren(QAbstractButton):
             if (
                 button.isVisible()
                 and button.isEnabled()
                 and button.receivers(SIGNAL("clicked()")) == 0
             ):
-                unwired.append(f"{page.__class__.__name__}: {button.text()}")
+                unwired.append(f"{target.__class__.__name__}: {button.text()}")
     assert unwired == []
 
 

@@ -19,6 +19,7 @@ from ai.approval import approve_proposal
 from ai.models import ProviderDraft
 from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
+from engine.workflow import Workflow
 from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
 
@@ -95,6 +96,19 @@ class ReviewPage(QWidget):
             self.approved.emit()
         except WorkflowValidationError as error:
             QMessageBox.warning(self, "Approval error", str(error))
+
+    def show_workflow(self, workflow: Workflow | None) -> None:
+        """Show an opened saved workflow for read-only review, like the old window."""
+        self._proposal = None
+        self._goal_label.setText(f"Goal: {workflow.name}" if workflow else "No workflow loaded.")
+        self._steps_list.clear()
+        if workflow:
+            for index, step in enumerate(workflow.steps, start=1):
+                self._steps_list.addItem(
+                    f"{index}. {step.kind.value} - {step.name}: {step.message}"
+                )
+        else:
+            self._steps_list.addItems(self._empty_steps())
 
     def load_proposal(self, proposal: ProviderDraft | None) -> None:
         self._proposal = proposal

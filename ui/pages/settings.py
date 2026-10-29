@@ -114,7 +114,10 @@ class SettingsPage(QWidget):
         directory = QFileDialog.getExistingDirectory(self, "Choose authorized folder")
         if not directory:
             return
-        self._authorized_label.setText(f"Authorized folder: {directory}")
+        chosen = Path(directory)
+        if self._service is not None:
+            self._service.set_allowed_root(chosen)
+        self._authorized_label.setText(f"Authorized folder: {chosen}")
 
     def _configure_verifier(self) -> None:
         """Open the real acceptance-checker editor used by the old window."""
@@ -138,3 +141,5 @@ class SettingsPage(QWidget):
 
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service
+        if service is not None and service.allowed_root is not None:
+            self._authorized_label.setText(f"Authorized folder: {service.allowed_root}")

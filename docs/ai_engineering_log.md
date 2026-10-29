@@ -952,3 +952,29 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: tests/test_shell.py 16 passed (fails-first confirmed before implementing: 7 failed on missing controls/tokens); full suite `pytest -q` -> "340 passed, 2 skipped in 331.81s" (335+2 before; +5 = 4 verifier/placeholder rewrites rescoped plus sidebar/margins/wiring/type tests, 3 placeholder tests rewritten in place); `ruff check .` exit 0; `ruff format --check .` -> "111 files already formatted"; `app.py --smoke-test` exit 0; `app.py --smoke-test --shell` exit 0; screenshots via app.main's own construction path with md5-verified distinct files.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-29 - PHASE P1: truth-and-foundations slice (commit: see git log)
+- Task: P1.1 haystack runs with faulthandler, P1.2 button audit with click-behavior tests,
+  P1.3 prove the unwired-buttons guard fails, P1.4 authorized-folder persistence through the
+  controller service, P1.5 close the B3 blocked decision, P1.6 reproducible screenshot script.
+- AI contribution: docs/BUTTON_AUDIT.md (17 controls, handlers, effects, click tests);
+  docs/AUTONOMOUS_DECISIONS.md (AD-001..AD-004); WorkflowService.set_allowed_root/allowed_root;
+  SettingsPage authorized-folder wiring + shell set_service injection; ReviewPage.show_workflow
+  replacing the broken review_page.set_workflow call; 13 new tests in tests/test_shell.py
+  (9 mouseClick behavior tests, 4 authorized-folder tests); unwired-buttons test extended to
+  QAbstractButton over pages + sidebar; scripts/capture_shell_pages.py + scripts/capture_screenshots.ps1;
+  BLOCKED.md RESOLVED marker; WORKING_AGREEMENT observed-effect evidence rule.
+- Defect found: ui/shell.py:230 _open_workflow called review_page.set_workflow, which never
+  existed on ReviewPage; clicking Open raised AttributeError: 'ReviewPage' object has no
+  attribute 'set_workflow' (captured in the failing test run before the fix). Also ruff found
+  my own first attempt referencing Workflow in review.py without importing it (fixed), and the
+  ps1 array-concat failed as positional syntax in PowerShell 5.1 (rewritten with a pipeline).
+- Verification: python -X faulthandler -m pytest -q twice: '340 passed, 2 skipped in 106.25s'
+  (run1_exit=0) and '340 passed, 2 skipped in 113.62s' (run2_exit=0), no crash or hang; ghost
+  button proof: '1 failed in 0.35s' with AlertDialog listing HomePage: Ghost, then reverted
+  (git diff empty); after fixes tests/test_shell.py '27 passed in 8.41s' and post-format
+  '27 passed in 2.67s'; ruff check 'All checks passed!', format check '113 files already
+  formatted'; capture script printed 18 paths with distinct md5 and non-empty files (script
+  asserts both).
+- Outcome: PASSED
+- Human review:

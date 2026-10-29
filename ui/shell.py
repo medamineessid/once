@@ -157,6 +157,7 @@ class MainWindow(QMainWindow):
         self.home_page.set_service(self._service)
         self.activity_page.set_service(self._service)
         self.my_automations_page.set_service(self._service)
+        self.settings_page.set_service(self._service)
         self.settings_page.configure(
             app_data_dir=self._app_data_dir, verifier_config=self._verifier_config
         )
@@ -229,7 +230,7 @@ class MainWindow(QMainWindow):
     def _open_workflow(self, path: Path) -> None:
         workflow = self._service.load(path)
         self.workspace.setCurrentWidget(self.review_page)
-        self.review_page.set_workflow(workflow)
+        self.review_page.show_workflow(workflow)
 
     def _handle_task_entered(self, text: str) -> None:
         """Acknowledge a described task without pretending to build a workflow.

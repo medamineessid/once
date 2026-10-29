@@ -88,6 +88,7 @@ class WorkflowService:
             self._browser_actions = browser_actions
         self._history = history
         self._workflow_directory = workflow_directory
+        self._allowed_root: Path | None = None
         if workflow_directory is not None:
             workflow_directory.mkdir(parents=True, exist_ok=True)
         # Normal app exit closes every engine-launched browser. Hard crashes
@@ -103,6 +104,15 @@ class WorkflowService:
         shutdown = getattr(self._browser_actions, "shutdown", None)
         if callable(shutdown):
             shutdown()
+
+    def set_allowed_root(self, root: Path | None) -> None:
+        """Record the folder the user authorized Once to work in."""
+        self._allowed_root = None if root is None else Path(root)
+
+    @property
+    def allowed_root(self) -> Path | None:
+        """The authorized folder, or None when the user has not chosen one."""
+        return self._allowed_root
 
     @classmethod
     def for_app_data(cls, app_data_dir: Path) -> WorkflowService:

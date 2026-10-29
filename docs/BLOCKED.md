@@ -66,6 +66,8 @@ confined to `tests/test_shell.py`, which tests shell wiring only.
   shell stub handlers — those parts of B3 have no test collision and can proceed once
   this decision is made.
 
+RESOLVED: Option A (user-approved) on 2026-10-28 — the agent (previous session prompt) acted on it and recorded the work in docs/ai_engineering_log.md (entry 2026-10-28, B3); the three replaced tests are named in the 2026-10-27 entry above.
+
 ## What I did instead of deciding
 
 Committed this file and the completed B1/B2 work (docs/UX_BRIEF.md, journey queue in

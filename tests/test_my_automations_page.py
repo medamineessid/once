@@ -62,6 +62,16 @@ class FakeService:
         self.non_executable_workflows: set[str] = set()
         self.load_error: WorkflowValidationError | None = None
         self._first_run_started = Event()
+        # Real WorkflowService interface: the shell's Settings page reads the
+        # authorized root through the service, so the fake mirrors it.
+        self._allowed_root: Path | None = None
+
+    @property
+    def allowed_root(self) -> Path | None:
+        return self._allowed_root
+
+    def set_allowed_root(self, root: Path | None) -> None:
+        self._allowed_root = root
 
     def list_saved(self) -> tuple[Path, ...]:
         self.call_log.append(("list_saved", None))

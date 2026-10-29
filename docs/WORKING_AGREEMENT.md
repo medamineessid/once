@@ -17,6 +17,7 @@
 
 - Every report contains raw pasted terminal output for each check: git branch --show-current, git status --short, git log --oneline -5, the full pytest summary lines, ruff check, ruff format --check, and the log numstat line. Never paste a number you did not just obtain.
 - If a claim cannot be tied to pasted output, write "I cannot confirm this".
+- A control counts as WORKING only when a test clicks it and asserts an observable effect. Connection counting alone is not evidence: earlier dead buttons were connected to `pass` handlers and passed the unwired-button test.
 - Do not write "works", "validated" or "end to end" unless you ran the real entry point (app.py or app.py --shell) and pasted the result.
 - Quote file:line for every claim about code.
 - Screenshots are evidence only if produced through the real app.py code path; say which path, and say "captured, not reviewed".

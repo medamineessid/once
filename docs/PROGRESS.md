@@ -1,6 +1,7 @@
 # Once progress
 
 - Last completed step: PHASE A repair (branch slice/repair-main, merged and pushed to main at 1685475): A1 working agreement, A2 flaky suite crash root-caused and fixed (0ecbea0), A3 ruff clean, A4 verify.ps1 rewritten as PowerShell 5.1 with append-only log guard + failure-detection proof, A5 docs citations re-verified, A6 box-shadow removed + tests/test_styles.py, A7 CI workflow confirmed (last GitHub Actions run on main passed), A8 full verify.ps1 run, ff-merge, push. Launcher run-shell.bat merged to main earlier (39f1d2d).
+- Last completed step: PHASE P1 truth-and-foundations (branch slice/p1-foundations): P1.1 twice full suite with -X faulthandler (clean, no crash/hang); P1.2 docs/BUTTON_AUDIT.md + 9 new qtbot.mouseClick behavior tests for shell controls incl. a found-and-fixed crash defect (shell Open -> review_page.set_workflow never existed); P1.3 unwired-buttons test extended to QToolButton + sidebar and provably failing; P1.4 authorized-folder persisted through WorkflowService.set_allowed_root/allowed_root with tests; P1.5 BLOCKED.md marked RESOLVED: Option A (user-approved); P1.6 scripts/capture_screenshots.ps1 capturing 6 pages x 3 sizes (18 distinct non-empty PNGs in docs/screenshots/latest/).
 - Last completed step (PHASE B, branch slice/layout-foundation): B1 UX brief (docs/UX_BRIEF.md) and B2 PHASE C journey queue written; B3 done after the user approved BLOCKED.md option A (2026-10-28): four non-functional Settings groups removed and replaced by a real "Configure checker" entry wired to the existing VerifierConfigDialog, the three placeholder-proving tests in tests/test_shell.py rewritten to assert the honest state, duplicate Home "My automations" button removed, sidebar reduced to 4 nav buttons + brand + one footer label, SPACING_*/TYPE_*/FONT_STACK tokens in ui/styles drive the whole shell stylesheet, demo double-run fixed (page only emits the signal; the shell runs the demo once), ShellPages.CREATE state makes the sidebar reflect the create flow, 7 new layout/honest-controls tests, screenshots through the app.py --shell path in docs/screenshots/layout-foundation/.
 - Last commit: see git log (this commit adds the PHASE B docs: UX brief, journey queue, B3 blocked decision).
 - Verified this session (PHASE 0): 
@@ -37,6 +38,14 @@
 - [x] B3: slice/layout-foundation — layout rules, unwired controls removed per approved option A (see docs/BLOCKED.md), sidebar footer, spacing/type tokens in ui/styles, layout tests, screenshots in docs/screenshots/layout-foundation/ — DONE (commit: see git log, 2026-10-28)
 
 **Safety rule for every journey below (unchanged):** `ui/` never mutates the file system — pages call controller services only (AGENTS.md S8); no new approval path, no policy/validator changes (working agreement hard rules 1-3).
+
+### PHASE P1: TRUTH AND FOUNDATIONS (branch slice/p1-foundations) - DONE
+- [x] P1.1 two faulthandler suite runs, teardown-bug hunt - DONE (340 passed, 2 skipped; run1_exit=0, run2_exit=0)
+- [x] P1.2 docs/BUTTON_AUDIT.md + mouseClick behavior tests - DONE (27 passed in tests/test_shell.py)
+- [x] P1.3 unwired-buttons test proven failing; extended to QToolButton + sidebar - DONE
+- [x] P1.4 Settings authorized-folder persistence - DONE
+- [x] P1.5 BLOCKED.md RESOLVED + log names replaced tests - DONE
+- [x] P1.6 screenshot capture script - DONE (18 distinct captures)
 
 ### PHASE C: USER JOURNEYS (continue only after the user says "continue"; slice by slice)
 - [ ] J1 Try a demonstration: Home's demo button runs the existing demo through the controller service, shows progress and result, appears in Activity — TODO
