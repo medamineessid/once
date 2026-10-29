@@ -978,3 +978,9 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   asserts both).
 - Outcome: PASSED
 - Human review:
+## 2026-10-30 — Amendments slice: queue reorder, honesty corrections (commit: slice/j2-create-automation)
+- Task: apply the 2026-10-29 user amendments — reorder journeys (J2 first), hide controls whose handlers do nothing until their journey wires them, and correct the P1 bookkeeping.
+- AI contribution: PROGRESS.md queue reorder + wording fixes; AUTONOMOUS_DECISIONS.md AD-005/AD-006 and the AD-001 persistence addendum.
+- Defect found: the P1 log entry claimed "13 new tests in tests/test_shell.py" but `git diff eae542d e638e5e -- tests/` shows 11 added test functions and 0 removed/rewritten (the counting error is detailed in AD-005); earlier "persisted" wording overstated the authorized folder's lifetime — it is session-only in both windows. Also: an earlier heredoc edit failed on line `journeys[line.split()[2]]` (grabbed `]`, not the journey id) and was fixed to `[3]` before any write — no partial state was saved because the assert fired before write_text in the first attempt.
+- Verification: `git diff eae542d e638e5e -- tests/ | grep -E '^[+-](def test_)'` (11 +/- grep output pasted in session report; 0 `-def test_` lines); python edits with asserts on every anchor; Automated check pending in the gate.
+- Outcome: PENDING GATE
