@@ -1,10 +1,10 @@
 """Settings page — application configuration only.
 
 Per the UX brief, unfinished features are hidden, not faked: Settings shows
-the authorized-folder choice and the acceptance-checker configuration. The
-recording group, the Gemini group, the coding-agent buttons, and the empty
-Advanced group were removed because none of them had real behaviour behind
-them. Recording lives in the create flow once that journey exists.
+the authorized-folder choice and the acceptance-checker configuration,
+edited inline (no blocking dialogs). Recording, Gemini, coding-agent, and
+Advanced placeholders were removed because none of them had real behaviour
+behind them.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGroupBox,
     QLabel,
-    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -25,8 +24,17 @@ from PySide6.QtWidgets import (
 
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig
+from ui.components.banner import Banner
+from ui.components.verifier_panel import VerifierEditorPanel
+from ui.strings import (
+    SETTINGS_CONFIG_SAVED_BODY,
+    SETTINGS_CONFIG_SAVED_TITLE,
+    SETTINGS_NO_DATA_DIR_BODY,
+    SETTINGS_NO_DATA_DIR_TITLE,
+    SETTINGS_SUBTITLE,
+    SETTINGS_TITLE,
+)
 from ui.styles import SPACING_MD, SPACING_SM, SPACING_XL
-from ui.verifier_dialog import VerifierConfigDialog
 
 
 class SettingsPage(QWidget):
@@ -49,6 +57,7 @@ class SettingsPage(QWidget):
         """Receive the data folder the verifier configuration is stored in."""
         self._app_data_dir = app_data_dir
         self._verifier_config = verifier_config
+        self._verifier_panel.reconfigure(app_data_dir, verifier_config)
 
     def _init_ui(self) -> None:
         scroll_area = QScrollArea(self)
@@ -62,12 +71,16 @@ class SettingsPage(QWidget):
         self._scroll_layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
         self._scroll_layout.setSpacing(SPACING_MD)
         self._scroll_layout.setAlignment(Qt.AlignTop)
-        self._title_label = QLabel("Settings", self)
+
+        self._title_label = QLabel(SETTINGS_TITLE, self)
         self._title_label.setObjectName("pageTitle")
         self._scroll_layout.addWidget(self._title_label)
-        self._subtitle_label = QLabel("Configure how Once works for you.", self)
+        self._subtitle_label = QLabel(SETTINGS_SUBTITLE, self)
         self._subtitle_label.setObjectName("pageSubtitle")
         self._scroll_layout.addWidget(self._subtitle_label)
+
+        self._banner = Banner(self)
+        self._scroll_layout.addWidget(self._banner)
         self._scroll_layout.addSpacing(SPACING_MD)
 
         self._authorized_group = QGroupBox("Authorized folders", self)
@@ -97,6 +110,9 @@ class SettingsPage(QWidget):
         self._verifier_label.setWordWrap(True)
         self._verifier_label.setObjectName("verifierIntroLabel")
         verifier_layout.addWidget(self._verifier_label)
+        self._verifier_panel = VerifierEditorPanel(None, parent=self._verifier_group)
+        self._verifier_panel.saved.connect(self._on_verifier_saved)
+        verifier_layout.addWidget(self._verifier_panel)
         self._configure_verifier_button = QPushButton("Configure checker…", self._verifier_group)
         self._configure_verifier_button.setObjectName("secondaryActionButton")
         self._configure_verifier_button.clicked.connect(self._configure_verifier)
@@ -120,24 +136,25 @@ class SettingsPage(QWidget):
         self._authorized_label.setText(f"Authorized folder: {chosen}")
 
     def _configure_verifier(self) -> None:
-        """Open the real acceptance-checker editor used by the old window."""
+        """Show or hide the inline checker editor; explain a missing data folder."""
         if self._app_data_dir is None:
-            QMessageBox.information(
-                self,
-                "Not available yet",
-                "Once could not find its data folder on this machine, so the"
-                " checker cannot be configured here yet.",
+            self._banner.show_message(
+                "warning", SETTINGS_NO_DATA_DIR_TITLE, SETTINGS_NO_DATA_DIR_BODY
             )
             return
-        dialog = VerifierConfigDialog(
-            self._app_data_dir,
-            current=self._verifier_config,
-            parent=self,
+        opening = not self._verifier_panel.isVisible()
+        self._verifier_panel.setVisible(opening)
+        if opening:
+            self._verifier_panel.focus_first_field()
+
+    def _on_verifier_saved(self, config: VerifierConfig) -> None:
+        """Record the saved checker configuration and tell the shell."""
+        self._verifier_config = config
+        self._banner.show_message(
+            "success", SETTINGS_CONFIG_SAVED_TITLE, SETTINGS_CONFIG_SAVED_BODY
         )
-        dialog.exec()
-        if dialog.saved is not None:
-            self._verifier_config = dialog.saved
-            self.verifier_configured.emit()
+        self.verifier_configured.emit()
+        self._verifier_panel.hide()
 
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service
