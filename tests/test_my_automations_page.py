@@ -1,4 +1,4 @@
-"""My automations page wiring tests (UI migration slice 3)."""
+"""My automations page wiring tests (P2 replaces blocking modals inline)."""
 
 from __future__ import annotations
 
@@ -8,12 +8,21 @@ from threading import Event
 
 import pytest
 from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from engine.errors import OnceError, WorkflowValidationError
 from engine.replay import ReplayPreview
-from engine.workflow import StepKind, Workflow, WorkflowRun, WorkflowStatus, WorkflowStep
+from engine.workflow import (
+    StepKind,
+    Workflow,
+    WorkflowRun,
+    WorkflowStatus,
+    WorkflowStep,
+)
+from ui.components.cards import Chip
 from ui.pages.my_automations import MyAutomationsPage
+from ui.strings import MY_NOT_RUN, MY_RUN_CONFIRM, MY_RUN_RUNNING
 
 
 @pytest.fixture
@@ -128,26 +137,10 @@ def make_page(qtbot, service: FakeService) -> MyAutomationsPage:
     return page
 
 
-def confirm_no(monkeypatch) -> list[tuple[str, str]]:
-    seen = []
-
-    def fake_question(parent, title, text, buttons=None, default=None):
-        seen.append((title, text))
-        return QMessageBox.StandardButton.No
-
-    monkeypatch.setattr(QMessageBox, "question", staticmethod(fake_question))
-    return seen
-
-
-def confirm_yes(monkeypatch) -> list[tuple[str, str]]:
-    seen = []
-
-    def fake_question(parent, title, text, buttons=None, default=None):
-        seen.append((title, text))
-        return QMessageBox.StandardButton.Yes
-
-    monkeypatch.setattr(QMessageBox, "question", staticmethod(fake_question))
-    return seen
+def click_run(page) -> None:
+    """The Run control is an inline confirm: click to arm, click to confirm."""
+    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
 
 
 def test_page_lists_saved_automations(qtbot):
@@ -166,6 +159,42 @@ def test_empty_state_shows_placeholder(qtbot):
 
     assert page._workflow_list.count() == 0
     assert "No saved automations" in page._details_label.text()
+
+
+# --- Saved rows (P2) ----------------------------------------------------------------
+
+
+def test_rows_show_automation_name_and_actually_ran_status(qtbot):
+    """Row widgets show the friendly stem plus the real last-run shape."""
+    service = FakeService(two_saved_workflows())
+    page = make_page(qtbot, service)
+
+    def row_at(index: int):
+        item = page._workflow_list.item(index)
+        return page._workflow_list.itemWidget(item)
+
+    first = row_at(0)
+    assert first._name_label.text() == "alpha-workflow"
+    assert first.caption_text == MY_NOT_RUN
+    assert first.findChildren(Chip) == []  # nothing to show before any run
+
+    failed = WorkflowRun(
+        run_id="run-latest",
+        workflow_id="alpha-workflow",
+        status=WorkflowStatus.FAILED,
+        results=(),
+        started_at=datetime.now(UTC),
+        finished_at=datetime.now(UTC),
+    )
+    service.history = lambda: (failed,)  # newest first, as the controller returns
+    page.refresh()
+
+    refreshed = row_at(0)
+    assert "Failed" in refreshed.caption_text
+    chips = refreshed.findChildren(Chip)
+    assert len(chips) == 1
+    assert chips[0].text() == "Failed"
+    assert chips[0].property("chipKind") == "fail"
 
 
 def test_refresh_picks_up_newly_saved_automation(qtbot):
@@ -235,30 +264,22 @@ def test_preview_shows_steps_and_never_calls_run(qtbot):
     assert len(service.preview_calls()) == 2
 
 
-def test_run_without_confirmation_calls_nothing(qtbot, monkeypatch):
-    service = FakeService(two_saved_workflows())
-    page = make_page(qtbot, service)
-    page._workflow_list.setCurrentRow(0)
-    seen = confirm_no(monkeypatch)
-
-    page._run_selected()
-
-    assert len(seen) == 1
-    assert service.run_calls() == []
-    assert page._run_button.isEnabled() is True
+# --- InlineConfirm run gate (swaps for the old QMessageBox.question tests) ----------
 
 
 def test_selection_load_error_shows_inline_no_modal(qtbot, monkeypatch):
+    """Same-or-more as before: no modal can appear because the page no longer
+    touches QMessageBox at all; the failure stays inline."""
     service = FakeService(two_saved_workflows())
     service.load_error = WorkflowValidationError("File is not a valid workflow.")
     page = make_page(qtbot, service)
     popped: list[bool] = []
 
-    def fake_warning(parent, title, text, buttons=None, default=None):
+    def fail_loudly(*args, **kwargs):
         popped.append(True)
-        return QMessageBox.StandardButton.Ok
 
-    monkeypatch.setattr(QMessageBox, "warning", staticmethod(fake_warning))
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(fail_loudly))
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(fail_loudly))
 
     page._workflow_list.setCurrentRow(0)
 
@@ -266,49 +287,65 @@ def test_selection_load_error_shows_inline_no_modal(qtbot, monkeypatch):
     assert "File is not a valid workflow." in page._details_label.text()
 
 
-def test_load_error_is_surfaced_and_runs_nothing(qtbot, monkeypatch):
+def test_run_arm_only_click_starts_nothing(qtbot):
+    """Swap test (2026-10-30) for test_run_without_confirmation_calls_nothing:
+    the guard is now the real InlineConfirm control instead of a monkeypatched
+    modal; one click arms and must not start anything."""
     service = FakeService(two_saved_workflows())
-    service.load_error = WorkflowValidationError("File is not a valid workflow.")
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
-    confirm_yes(monkeypatch)
-    warnings: list[tuple[str, str]] = []
 
-    def fake_warning(parent, title, text):
-        warnings.append((title, text))
+    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
 
-    monkeypatch.setattr(QMessageBox, "warning", staticmethod(fake_warning))
-
-    page._run_selected()
-
-    assert warnings == [("Workflow error", "File is not a valid workflow.")]
+    assert page._run_button.is_armed() is True
+    assert page._run_button.text() == MY_RUN_CONFIRM
     assert service.run_calls() == []
     assert page._run_button.isEnabled() is True
 
 
-def test_run_with_confirmation_calls_run_once_with_loaded_workflow(qtbot, monkeypatch):
+def test_load_error_is_surfaced_and_runs_nothing(qtbot):
+    """Swap test (2026-10-30) for the old warning-message-box variant: the
+    load failure appears on the page banner, and nothing runs."""
+    service = FakeService(two_saved_workflows())
+    service.load_error = WorkflowValidationError("File is not a valid workflow.")
+    page = make_page(qtbot, service)
+    page._workflow_list.setCurrentRow(0)
+
+    click_run(page)
+
+    assert page._banner.isVisible()
+    assert "File is not a valid workflow." in page._banner.body_text
+    assert "File is not a valid workflow." in page._details_label.text()
+    assert service.run_calls() == []
+    assert page._run_button.isEnabled() is True
+
+
+def test_run_with_confirmation_calls_run_once_with_loaded_workflow(qtbot):
+    """Swap test (2026-10-30): two real clicks of InlineConfirm now do what
+    the monkeypatched Yes-answer did."""
     service = FakeService(two_saved_workflows())
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
-    confirm_yes(monkeypatch)
     assert page._run_button.isEnabled() is True
 
-    page._run_selected()
+    click_run(page)
     assert page._run_button.isEnabled() is False
+    assert page._run_button.text() == MY_RUN_RUNNING
     service.release.set()
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
 
     assert page._run_button.isEnabled() is True
+    assert page._run_button.text() == "Run"
     assert service.run_calls() == [service.workflows[Path("alpha-workflow.json")]]
 
 
-def test_run_button_stays_disabled_until_run_finishes(qtbot, monkeypatch):
+def test_run_button_stays_disabled_until_run_finishes(qtbot):
+    """Swap test (2026-10-30): same guarantee, driven through inline clicks."""
     service = FakeService(two_saved_workflows())
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
-    confirm_yes(monkeypatch)
 
-    page._run_selected()
+    click_run(page)
     assert page._preview_button.isEnabled() is False
     assert page._open_button.isEnabled() is False
     service.release.set()
@@ -317,38 +354,31 @@ def test_run_button_stays_disabled_until_run_finishes(qtbot, monkeypatch):
     assert page._open_button.isEnabled() is True
 
 
-def test_failing_run_shows_error(qtbot, monkeypatch):
+def test_failing_run_shows_banner_error(qtbot):
+    """Swap test (2026-10-30) for the old QMessageBox.warning variant."""
     service = FakeService(two_saved_workflows())
     service.run_error = OnceError("Controlled failure injection from the test.")
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
-    confirm_yes(monkeypatch)
-    warnings: list[tuple[str, str]] = []
 
-    def fake_warning(parent, title, text):
-        warnings.append((title, text))
-
-    monkeypatch.setattr(QMessageBox, "warning", staticmethod(fake_warning))
-
-    page._run_selected()
+    click_run(page)
     service.release.set()
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
 
+    assert page._banner.isVisible()
+    assert "Controlled failure injection from the test." in page._banner.body_text
     assert "Controlled failure injection from the test." in page._details_label.text()
-    assert warnings == [("Workflow error", "Controlled failure injection from the test.")]
     assert page._run_button.isEnabled() is True
 
 
-def test_run_shows_finished_run_status(qtbot, monkeypatch):
-
+def test_run_shows_finished_run_status(qtbot):
     # A service whose run completes immediately exercises climb-down code paths.
     service = FakeService(two_saved_workflows())
     service.release.set()
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
-    confirm_yes(monkeypatch)
 
-    page._run_selected()
+    click_run(page)
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
 
     assert "SUCCEEDED" in page._details_label.text()

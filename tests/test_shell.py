@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QAbstractButton,
     QApplication,
     QLabel,
-    QMessageBox,
     QPushButton,
     QToolButton,
 )
@@ -74,13 +73,12 @@ def test_shell_injects_the_service_into_the_home_page(qtbot, window):
     assert window.home_page._service is window._service
 
 
-def test_create_automation_button_emits_typed_task(qtbot, window, monkeypatch):
-    notices: list[str] = []
-    monkeypatch.setattr(
-        QMessageBox,
-        "information",
-        lambda parent, title, text, *args, **kwargs: notices.append(text),
-    )
+def test_create_automation_button_emits_typed_task_and_banners_honestly(qtbot, window):
+    """Swap test (2026-10-30): the blocking QMessageBox.information became a
+    page banner. Same trigger, stronger assertion: a real visible banner on
+    the create page quotes the typed task and says what was and was not done.
+    Replaces: test_create_automation_button_emits_typed_task.
+    """
     window._show_create_automation()
     page = window.create_automation_page
     page._description_input.setPlainText("Open invoices folder and read PDFs")
@@ -90,17 +88,14 @@ def test_create_automation_button_emits_typed_task(qtbot, window, monkeypatch):
     qtbot.mouseClick(page._create_button, Qt.MouseButton.LeftButton)
 
     assert received == ["Open invoices folder and read PDFs"]
-    assert len(notices) == 1
-    assert "cannot turn this description into an automation yet" in notices[0]
+    assert page._banner.isVisible()
+    assert "cannot turn a typed description into an automation yet" in page._banner.body_text
+    assert "Open invoices folder and read PDFs" in page._banner.body_text
 
 
-def test_create_automation_button_ignores_blank_input(qtbot, window, monkeypatch):
-    notices: list[str] = []
-    monkeypatch.setattr(
-        QMessageBox,
-        "information",
-        lambda parent, title, text, *args, **kwargs: notices.append(text),
-    )
+def test_create_automation_button_ignores_blank_input(qtbot, window):
+    """Swap test (2026-10-30), same-or-more: blank input emits nothing and
+    never surfaces a banner. Replaces the earlier monkeypatched-modal variant."""
     window._show_create_automation()
     page = window.create_automation_page
     page._description_input.setPlainText("   ")
@@ -110,7 +105,7 @@ def test_create_automation_button_ignores_blank_input(qtbot, window, monkeypatch
     qtbot.mouseClick(page._create_button, Qt.MouseButton.LeftButton)
 
     assert received == []
-    assert notices == []
+    assert page._banner.isHidden()
 
 
 def test_sidebar_active_state_after_sidebar_click(qtbot, window):
@@ -146,41 +141,13 @@ def test_settings_page_keeps_no_placeholder_controls(qtbot, window):
         assert not hasattr(settings, removed), f"placeholder still present: {removed}"
 
 
-def test_settings_verifier_button_saves_and_signals(qtbot, window, monkeypatch, tmp_path):
-    """The verifier entry point uses the real editor dialog and reports the save."""
-    settings = window.settings_page
-    saved_flags: list[bool] = []
-    seen_dirs: list[object] = []
-
-    class FakeVerifierDialog:
-        def __init__(self, app_data_dir, current=None, parent=None):
-            seen_dirs.append(app_data_dir)
-            self.saved = None
-
-        def exec(self):
-            self.saved = True
-            return 1
-
-    monkeypatch.setattr("ui.pages.settings.VerifierConfigDialog", FakeVerifierDialog)
-    settings.verifier_configured.connect(lambda: saved_flags.append(True))
-
-    settings.configure(app_data_dir=tmp_path)
-    settings._configure_verifier()
-
-    assert seen_dirs == [tmp_path]
-    assert saved_flags == [True]
-
-
-def test_settings_verifier_button_without_data_dir_does_not_crash(qtbot, window, monkeypatch):
-    """Without a data folder Once explains itself instead of failing later."""
-    settings = window.settings_page
-    notices: list[str] = []
-    monkeypatch.setattr(
-        QMessageBox, "information", lambda parent, title, text, *a, **k: notices.append(text)
-    )
-    settings.configure(app_data_dir=None)
-    settings._configure_verifier()
-    assert len(notices) == 1
+# The old dialog-based tests (test_settings_verifier_button_saves_and_signals,
+# test_settings_verifier_button_without_data_dir_does_not_crash) were swapped on
+# 2026-10-30 for
+# * tests/test_p2_shell.py::test_verifier_configuration_saves_through_the_inline_panel
+#   (real save through save_verifier_config + persisted round-trip), and
+# * tests/test_p2_shell.py::test_verifier_configuration_without_data_folder_uses_banner
+# Both assert the same-or-more outcomes the modal tests asserted. See commit message.
 
 
 def test_settings_authorized_folder_persists_through_service(qtbot, window, monkeypatch, tmp_path):
@@ -282,6 +249,10 @@ def test_home_demo_button_runs_the_demo_exactly_once(qtbot, tmp_path):
 
     qtbot.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: len(service.history()) == 1, timeout=10_000)
+    # Wait for the demo thread to fully finish before teardown: destroying a
+    # running QThread aborts the process under the offscreen platform.
+    qtbot.waitUntil(lambda: window.status_footer.state == "Ready", timeout=10_000)
+    qtbot.waitUntil(lambda: window._demo_thread is None, timeout=10_000)
 
     runs = service.history()
     assert len(runs) == 1
