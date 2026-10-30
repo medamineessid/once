@@ -746,6 +746,23 @@ class WorkflowService:
         """Load one validated workflow through the storage boundary."""
         return load_workflow(path)
 
+    def workflow_name(self, workflow_id: str) -> str | None:
+        """Human name for a saved workflow id, or None when not found.
+
+        Read-only: used by the activity and home pages so rows can show the
+        name the user saved instead of a technical id. An unreadable or
+        missing file degrades to the id; it never raises or blocks the list.
+        """
+        if self._workflow_directory is None:
+            return None
+        candidate = self._workflow_directory / f"{workflow_id}.json"
+        if not candidate.is_file():
+            return None
+        try:
+            return load_workflow(candidate).name
+        except WorkflowValidationError, OSError:
+            return None
+
     def history(self) -> tuple[WorkflowRun, ...]:
         """Return persisted executions, newest first."""
         if self._history is None:

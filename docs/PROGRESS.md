@@ -28,9 +28,9 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 |---|---|---|---|
 | P0.1 | Paste branch/status/log/verify output; repair failures | DONE | verify#1 failed only the append-only guard (CRLF/LF blob); repaired by 85a5893; verify#2 ALL CHECKS PASSED |
 | P0.2 | Commit untracked spec files if any; merge slice/j2-create-automation | DONE | specs missing → AD-008; branch ff-merged + pushed |
-| P0.3 | Read digest docs; fix stale ledger entries | IN PROGRESS | ledger rewritten this commit (this file); docs read: WORKING_AGREEMENT, UX_BRIEF, PROGRESS, AUTONOMOUS_DECISIONS, BUTTON_AUDIT, ui_migration_plan, AGENTS (in prompt) |
-| P1 | docs/design/visual_editor.md + docs/UX_AUDIT.md | IN PROGRESS | written this slice; evidence with file:line |
-| P2 | Design system + shell refresh (slice/p2-design-system) | TODO | blocks: none |
+| P0.3 | Read digest docs; fix stale ledger entries | DONE | ledger rewritten this commit (this file); docs read: WORKING_AGREEMENT, UX_BRIEF, PROGRESS, AUTONOMOUS_DECISIONS, BUTTON_AUDIT, ui_migration_plan, AGENTS (in prompt) |
+| P1 | docs/design/visual_editor.md + docs/UX_AUDIT.md | DONE | 5c17e42 on slice/p1-editor-discovery, ff-merged + pushed |
+| P2 | Design system + shell refresh (slice/p2-design-system) | DONE | components + page template + rewrite; verify ALL CHECKS PASSED, pytest 386 passed/2 skipped in 140.25s |
 | P3 | Canvas read-only (slice/p3-canvas) | TODO | pure layout + golden tests |
 | P4 | Editing (slice/p4-editing) | TODO | controller editor ops + undo + layout record |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |

@@ -227,3 +227,32 @@ Format per item: id, date, question, options, choice, reason.
 - Reason: the prompt's pre-decided errors rule overrides the current pattern;
   replacing rather than suppressing keeps evidence real (no handler behind a hidden
   modal). Swapped tests are enumerated in the P2 commit message.
+
+## AD-014 — 2026-10-30 — Theme selectors stay inside the styles audit's widget map
+
+- Question: the verifier panel styles its arguments field with
+  `QPlainTextEdit#inputBase`, but `tests/test_styles.py`'s unknown-property audit
+  is the anchor test and its `_SELECTOR_CLASSES` map does not list QPlainTextEdit
+  (test_styles.py must stay green unmodified under the working agreement).
+- Choice: declare the rule once as `QWidget#inputBase` (focus variant
+  `QWidget#inputBase:focus`) in ui/styles/__init__.py. Qt type selectors match
+  subclasses, so the same rule styles the panel's QLineEdit/QTextEdit/QPlainTextEdit
+  inputs; no third class name is introduced into the template.
+- Reason: widening the audit's map per-slice would let the stylesheet outgrow the
+  one test that proves Qt actually parses every rule; keeping the map small forces
+  objectName-based classes and one audited widget per name.
+
+## AD-015 — 2026-10-30 — Demo-thread lifetime is part of the test contract
+
+- Question: after a demo run test clicks the demo button, the run completes but
+  the worker QThread may still be tearing down when the window fixture closes.
+  Under the offscreen platform the process aborts (Windows exit -1073740791,
+  0xC0000409) because Qt destroys a running QThread owned by the window.
+- Choice: any test that starts a shell demo waits, before teardown, for both the
+  footer to return to Ready and `window._demo_thread is None` (the waits the
+  in-repo P2 demo tests already use); the test-side change is a same-or-more
+  swap of `test_home_demo_button_runs_the_demo_exactly_once` and is logged in the
+  P2 commit. Real users are covered by the shell's closeEvent quit+wait (2000 ms).
+- Reason: policy/exit-code failures must never depend on thread scheduling; the
+  deterministic wait makes the teardown crash structurally impossible instead of
+  timing-luck.
