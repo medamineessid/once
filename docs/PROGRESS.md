@@ -32,7 +32,8 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | P2 | Design system + shell refresh (slice/p2-design-system) | DONE | components + page template + rewrite; verify ALL CHECKS PASSED, pytest 386 passed/2 skipped in 140.25s |
 | P3 | Canvas read-only (slice/p3-canvas) | DONE | ui/editor/layout.py pure goldens + ui/editor/canvas.py read-only view; integrated on ReviewPage; added close-cancel/join task, screenshot refresh, swap ledger |
 | P4a | Qt-free editing (slice/p4-editor) | DONE | bb9c07b; coverage completed on slice/p4a-coverage |
-| P4b | Layout record storage | TODO | corrupt-record fallback |
+| P4b | Layout record storage | DONE | slice/p4b-layouts; SQLite migration, strict records, corrupt fallback |
+| P4c | Editor page and acceptance flow | TODO | |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |

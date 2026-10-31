@@ -1052,3 +1052,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   Ruff check and format check both passed.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-31 — P4b: editor layout record storage   (commit: pending)
+- Task: Persist node positions and notes outside workflow JSON through the
+  existing SQLite schema mechanism, remove orphaned entries, and fall back to
+  automatic layout with a visible warning when records are corrupt.
+- AI contribution: added `storage/layouts.py`, the `workflow_layouts` migration
+  in `storage/database.py`, controller service wiring, and focused persistence
+  tests.
+- Defect found: the first integration run caught an undefined app-data
+  connection variable; `for_app_data` now creates one connection and shares it
+  with history and layout storage.
+- Verification: `scripts/verify.ps1` printed `430 passed, 2 skipped in 119.84s
+  (0:01:59)`, `All checks passed!`, `142 files already formatted`, both smoke
+  tests PASS, engineering-log append-only PASS, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:

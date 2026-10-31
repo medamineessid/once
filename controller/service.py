@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import sqlite3
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -43,6 +44,7 @@ from storage.history import (
     ProposalVerificationRecord,
     WorktreeRecord,
 )
+from storage.layouts import LayoutLoadResult, load_layout, save_layout
 from storage.workflows import load_workflow, save_workflow
 
 
@@ -58,6 +60,7 @@ class WorkflowService:
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        layout_connection: sqlite3.Connection | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
@@ -87,6 +90,7 @@ class WorkflowService:
         else:
             self._browser_actions = browser_actions
         self._history = history
+        self._layout_connection = layout_connection
         self._workflow_directory = workflow_directory
         self._allowed_root: Path | None = None
         if workflow_directory is not None:
@@ -119,8 +123,13 @@ class WorkflowService:
         """Create a service backed by the application's local data directory."""
         workflow_directory = app_data_dir / "workflows"
         workflow_directory.mkdir(parents=True, exist_ok=True)
-        history = ExecutionHistory(connect(app_data_dir / "once.db"))
-        return cls(history=history, workflow_directory=workflow_directory)
+        connection = connect(app_data_dir / "once.db")
+        history = ExecutionHistory(connection)
+        return cls(
+            history=history,
+            workflow_directory=workflow_directory,
+            layout_connection=connection,
+        )
 
     @staticmethod
     def demo_workflow() -> Workflow:
@@ -185,6 +194,33 @@ class WorkflowService:
         if not isinstance(proposal, ApprovedProposal):
             raise WorkflowValidationError("Only an explicitly approved proposal can be saved.")
         return self.save(proposal.workflow)
+
+    def save_layout(
+        self,
+        workflow_id: str,
+        node_positions: dict[str, tuple[float, float]],
+        notes: dict[str, str],
+        step_ids: set[str] | frozenset[str] | None = None,
+    ) -> None:
+        """Persist editor metadata without adding it to the workflow definition."""
+        if self._layout_connection is None:
+            raise WorkflowValidationError("Layout storage is not configured.")
+        try:
+            save_layout(
+                self._layout_connection,
+                workflow_id,
+                node_positions,
+                notes,
+                step_ids=step_ids,
+            )
+        except ValueError as error:
+            raise WorkflowValidationError(str(error)) from error
+
+    def load_layout(self, workflow_id: str) -> LayoutLoadResult:
+        """Load editor metadata and preserve a visible corrupt-record warning."""
+        if self._layout_connection is None:
+            return LayoutLoadResult(None, None)
+        return load_layout(self._layout_connection, workflow_id)
 
     def run_approved(
         self,

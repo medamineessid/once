@@ -115,6 +115,15 @@ def connect(path: Path) -> sqlite3.Connection:
         );
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS workflow_layouts (
+            workflow_id TEXT PRIMARY KEY,
+            layout TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
     columns = {
         row["name"] for row in connection.execute("PRAGMA table_info(workflow_step_results)")
     }
