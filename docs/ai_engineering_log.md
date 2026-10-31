@@ -1038,3 +1038,17 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   tests PASS, engineering-log append-only PASS, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-31 — P4a coverage completion   (commit: pending)
+- Task: Complete the P4a done-criteria tests without changing editor or engine
+  behavior.
+- AI contribution: added per-operation undo/redo identity tests, seeded linear
+  graph invariant tests, schema 1–3 editor regression-corpus tests, and a
+  controller/editor import architecture test.
+- Defect found: the first new test placement accidentally retained the broader
+  original assertions inside the parameterized test; moving them back restored
+  the intended per-operation scope.
+- Verification: focused `tests/test_controller_editor.py` printed `18 passed`;
+  Ruff check and format check both passed.
+- Outcome: PASSED
+- Human review:
