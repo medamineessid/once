@@ -118,6 +118,11 @@ class WorkflowService:
         """The authorized folder, or None when the user has not chosen one."""
         return self._allowed_root
 
+    @property
+    def layout_storage_configured(self) -> bool:
+        """Whether editor metadata has a configured SQLite connection."""
+        return self._layout_connection is not None
+
     @classmethod
     def for_app_data(cls, app_data_dir: Path) -> WorkflowService:
         """Create a service backed by the application's local data directory."""

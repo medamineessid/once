@@ -31,12 +31,14 @@ class CreateAutomationPage(QWidget):
     """Beginner-friendly screen for describing a task to automate."""
 
     task_entered = Signal(str)
+    editor_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._banner: Banner | None = None
         self._description_input: QTextEdit | None = None
         self._create_button: QPushButton | None = None
+        self._scratch_button: QPushButton | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -80,6 +82,10 @@ class CreateAutomationPage(QWidget):
         actions_container_layout.setSpacing(SPACING_SM)
         actions_container_layout.addLayout(actions_row)
         layout.addWidget(actions_container)
+        self._scratch_button = QPushButton("Create from scratch", self)
+        self._scratch_button.setObjectName("secondaryActionButton")
+        self._scratch_button.clicked.connect(self.editor_requested.emit)
+        layout.addWidget(self._scratch_button)
 
     def show_not_available(self, task_text: str) -> None:
         """Answer a typed description honestly on the page banner."""

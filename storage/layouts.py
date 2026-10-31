@@ -13,7 +13,7 @@ _SCHEMA_VERSION = 1
 _MAX_NOTE_LENGTH = 500
 _ROOT_KEYS = frozenset({"schema_version", "node_positions", "notes", "updated_at"})
 _POSITION_KEYS = frozenset({"x", "y"})
-_CORRUPT_WARNING = "Saved layout data could not be read; automatic layout is being used."
+CORRUPT_LAYOUT_WARNING = "Saved layout data could not be read; automatic layout is being used."
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ def load_layout(connection: sqlite3.Connection, workflow_id: str) -> LayoutLoadR
     try:
         record = _decode(json.loads(row["layout"] if isinstance(row, sqlite3.Row) else row[0]))
     except TypeError, ValueError, json.JSONDecodeError:
-        return LayoutLoadResult(None, _CORRUPT_WARNING)
+        return LayoutLoadResult(None, CORRUPT_LAYOUT_WARNING)
     return LayoutLoadResult(record, None)
 
 

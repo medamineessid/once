@@ -39,6 +39,7 @@ from ui.components.spacer import Spacer
 from ui.pages import (
     ActivityPage,
     CreateAutomationPage,
+    EditorPage,
     HomePage,
     MyAutomationsPage,
     ReviewPage,
@@ -67,6 +68,7 @@ class ShellPages:
     SETTINGS = 3
     REVIEW = 4
     CREATE = 5  # stacked page without a sidebar entry; sidebar shows nothing checked
+    EDITOR = 6
 
     @classmethod
     def all(cls):
@@ -194,16 +196,19 @@ class MainWindow(QMainWindow):
         self.settings_page = SettingsPage(self)
         self.review_page = ReviewPage(self)
         self.create_automation_page = CreateAutomationPage(self)
+        self.editor_page = EditorPage(self)
         self.workspace.addWidget(self.home_page)
         self.workspace.addWidget(self.my_automations_page)
         self.workspace.addWidget(self.activity_page)
         self.workspace.addWidget(self.settings_page)
         self.workspace.addWidget(self.review_page)
         self.workspace.addWidget(self.create_automation_page)
+        self.workspace.addWidget(self.editor_page)
         self.home_page.set_service(self._service)
         self.activity_page.set_service(self._service)
         self.my_automations_page.set_service(self._service)
         self.settings_page.set_service(self._service)
+        self.editor_page.set_service(self._service)
         self.settings_page.configure(
             app_data_dir=self._app_data_dir, verifier_config=self._verifier_config
         )
@@ -242,6 +247,9 @@ class MainWindow(QMainWindow):
         self.my_automations_page.created_automation.connect(self._show_create_automation)
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)
+        self.create_automation_page.editor_requested.connect(self._show_editor)
+        self.editor_page.saved.connect(self._editor_saved)
+        self.editor_page.cancelled.connect(self._show_create_automation)
         self.review_page.cancelled.connect(self._on_review_cancelled)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
@@ -289,6 +297,16 @@ class MainWindow(QMainWindow):
     def _show_create_automation(self) -> None:
         """Enter the create flow through the typed page state, like every page."""
         self._show_page(ShellPages.CREATE)
+
+    def _show_editor(self) -> None:
+        """Open a fresh definition in the controller-backed editor."""
+        self.editor_page.start_new()
+        self._show_page(ShellPages.EDITOR)
+
+    def _editor_saved(self) -> None:
+        """Return to the saved automation list after a successful save."""
+        self.my_automations_page.refresh()
+        self._show_page_automations()
 
     def _run_demo_from_home(self) -> None:
         """Start exactly one demo run off the GUI thread."""

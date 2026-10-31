@@ -1068,3 +1068,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   tests PASS, engineering-log append-only PASS, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-31 — P4c: first editor page vertical slice   (commit: pending)
+- Task: Replace the create-flow dead end with a controller-backed editor that
+  can create a linear automation, add a built-in REPORT step, save it, reopen
+  it, run it, and show the result in Activity.
+- AI contribution: added `ui/pages/editor.py`, connected the create-flow
+  scratch entry point and shell navigation, and added the real Qt acceptance
+  test.
+- Defect found: the first acceptance test did not preserve the selected row
+  after returning from the read-only review page; the test now reselects the
+  row, matching the page's refresh behavior.
+- Verification: `scripts/verify.ps1` printed `431 passed, 2 skipped in 120.45s
+  (0:02:00)`, `All checks passed!`, `144 files already formatted`, both smoke
+  tests PASS, engineering-log append-only PASS, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
