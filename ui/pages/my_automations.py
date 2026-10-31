@@ -352,7 +352,8 @@ class MyAutomationsPage(QWidget):
             return
         saved_paths = tuple(self._service.list_saved())
         for path in saved_paths:
-            item = QListWidgetItem(path.name)
+            display_name = self._service.workflow_name(path.stem) or path.stem
+            item = QListWidgetItem(display_name)
             item.setData(Qt.UserRole, path)
             run = self._last_run_for(path.stem)
             status_text = None
@@ -361,7 +362,7 @@ class MyAutomationsPage(QWidget):
                 status_value = getattr(getattr(run, "status", None), "value", "Unknown")
                 status_text, chip_kind = status_display(status_value)
             row = AutomationRow(
-                path.stem,
+                display_name,
                 status_text,
                 chip_kind,
                 when_text=human_timestamp(getattr(run, "finished_at", None)) if run else "",

@@ -807,7 +807,7 @@ class WorkflowService:
             return None
         try:
             return load_workflow(candidate).name
-        except WorkflowValidationError, OSError:
+        except (WorkflowValidationError, OSError):
             return None
 
     def history(self) -> tuple[WorkflowRun, ...]:
