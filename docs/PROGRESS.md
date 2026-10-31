@@ -1,18 +1,17 @@
 # Once progress
 
-**Active session piece:** 2026-10-29 production request — visual workflow editor,
+**Active session piece:** 2026-10-31 production request — visual workflow editor,
 full shell refresh, MVP moves to P9 (prompt queue P0–P9 in session prompt). The
 spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 (AD-008); work proceeds from the session prompt.
 
-- Current branch: `slice/p1-editor-discovery` (fork of main at 85a5893).
-- main = origin/main = 85a5893 ("fix(docs): normalize ai_engineering_log.md line
-  endings to LF") — the slice/j2-create-automation branch (2 commits, plus the LF
-  repair) was ff-merged and pushed on 2026-10-29 after a full
-  `scripts/verify.ps1` run: "pytest -q … 352 passed, 2 skipped in 170.03s",
-  "ruff check . All checks passed!", "ruff format --check . 114 files already
-  formatted", both smoke tests PASS, "engineering log append-only PASS",
-  "ALL CHECKS PASSED" (pasted in the P0 report).
+- Current branch: `slice/p4-editor` (fork of main at d40f741).
+- main = origin/main = d40f741 ("docs: preserve agent handoff prompt") — the
+  prompt handoff was saved verbatim, ff-merged and pushed on 2026-10-31.
+- P4a verification on `slice/p4-editor`: "412 passed, 2 skipped in 116.61s",
+  `ruff check .` "All checks passed!", `ruff format --check .` "140 files
+  already formatted", both smoke tests PASS, and `scripts/verify.ps1`
+  "ALL CHECKS PASSED".
 - Append-only-guard repair detail: the amendments commit stored
   docs/ai_engineering_log.md as a CRLF blob (main is LF), so the numstat guard read
   "994 added, 980 deleted" while the ignore-CR diff was exactly "14 added,
@@ -32,7 +31,8 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | P1 | docs/design/visual_editor.md + docs/UX_AUDIT.md | DONE | 5c17e42 on slice/p1-editor-discovery, ff-merged + pushed |
 | P2 | Design system + shell refresh (slice/p2-design-system) | DONE | components + page template + rewrite; verify ALL CHECKS PASSED, pytest 386 passed/2 skipped in 140.25s |
 | P3 | Canvas read-only (slice/p3-canvas) | DONE | ui/editor/layout.py pure goldens + ui/editor/canvas.py read-only view; integrated on ReviewPage; added close-cancel/join task, screenshot refresh, swap ledger |
-| P4 | Editing (slice/p4-editing) | TODO | controller editor ops + undo + layout record |
+| P4a | Qt-free editing (slice/p4-editor) | DONE | bb9c07b; atomic editor ops, undo/redo, save/load round trip |
+| P4b | Layout record storage | TODO | corrupt-record fallback |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |

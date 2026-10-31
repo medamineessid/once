@@ -1024,3 +1024,17 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: 3 consecutive faulthandler runs of test_close_during_run.py -> "3 passed", EXIT=0 (1.98s/4.35s/3.55s); capture_screenshots.ps1 exit 0, 18 distinct non-empty captures, INDEX.md written status CAPTURED, NOT REVIEWED; editor subsets -> 17 passed then 59 passed incl. shell/page integration; final verify.ps1 -> ALL CHECKS PASSED (pytest exit=0); swap ledger in the P3 phase report (5 removed/renamed total, all same-or-more with replacements named).
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-31 — P4a: Qt-free workflow editor session   (commit: bb9c07b)
+- Task: Add atomic controller operations for editing immutable workflow definitions,
+  including insertion, deletion, duplication, reordering, notes, node positions,
+  undo/redo, and save/load through the existing service boundary.
+- AI contribution: added `controller/editor.py`, `WorkflowService.open_editor`,
+  and focused controller editor tests with seeded operations and round-trip checks.
+- Defect found: the first complete verification run found only a formatting failure
+  in the new editor module; `ruff format` fixed it before the passing rerun.
+- Verification: `scripts/verify.ps1` printed `412 passed, 2 skipped in 116.61s
+  (0:01:56)`, `All checks passed!`, `140 files already formatted`, both smoke
+  tests PASS, engineering-log append-only PASS, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:

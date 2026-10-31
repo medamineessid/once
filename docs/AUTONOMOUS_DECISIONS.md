@@ -256,3 +256,15 @@ Format per item: id, date, question, options, choice, reason.
 - Reason: policy/exit-code failures must never depend on thread scheduling; the
   deterministic wait makes the teardown crash structurally impossible instead of
   timing-luck.
+
+## AD-016 — 2026-10-31 — Editor metadata stays outside definition history
+
+- Question: how should P4a handle notes and node positions before the P4b
+  persistent layout record exists?
+- Choice: keep notes and positions in the Qt-free editor session as separate
+  in-memory metadata; definition undo/redo never changes them, and deleting a
+  step removes its orphaned metadata.
+- Reason: the prompt explicitly keeps layout records out of workflow JSON and
+  says undo/redo reverses definition edits only. This provides real controller
+  behavior now without changing the validated workflow format or pretending that
+  layout persistence exists before P4b.
