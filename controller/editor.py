@@ -8,13 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from engine.errors import WorkflowValidationError
-from engine.workflow import (
-    PostconditionKind,
-    StepKind,
-    Workflow,
-    WorkflowRunner,
-    WorkflowStep,
-)
+from engine.workflow import StepKind, Workflow, WorkflowRunner, WorkflowStep
 
 if TYPE_CHECKING:
     from controller.service import WorkflowService
@@ -86,7 +80,6 @@ class WorkflowEditorSession:
             raise WorkflowValidationError(f"Unknown step fields: {names}.")
         if "step_id" in changes:
             raise WorkflowValidationError("Step IDs cannot be changed in the editor.")
-        self._validate_step_changes(changes)
         index = self._step_index(step_id)
         step = replace(self.workflow().steps[index], **changes)
         steps = (
@@ -219,36 +212,6 @@ class WorkflowEditorSession:
         del self._undo[:-_MAX_HISTORY]
         self._redo.clear()
         self._workflow = workflow
-
-    @staticmethod
-    def _validate_step_changes(changes: dict[str, Any]) -> None:
-        for field in ("name", "message"):
-            if field in changes and not isinstance(changes[field], str):
-                raise WorkflowValidationError(f"Step {field} must be text.")
-        if "kind" in changes and not isinstance(changes["kind"], StepKind):
-            raise WorkflowValidationError("Step kind is not recognised.")
-        if (
-            "target" in changes
-            and changes["target"] is not None
-            and not isinstance(changes["target"], str)
-        ):
-            raise WorkflowValidationError("Step target must be text.")
-        if "max_attempts" in changes and (
-            isinstance(changes["max_attempts"], bool)
-            or not isinstance(changes["max_attempts"], int)
-        ):
-            raise WorkflowValidationError("Step max_attempts must be an integer.")
-        if (
-            "postcondition" in changes
-            and changes["postcondition"] is not None
-            and not isinstance(changes["postcondition"], PostconditionKind)
-        ):
-            raise WorkflowValidationError("Step postcondition is not recognised.")
-        if "timeout_seconds" in changes and (
-            isinstance(changes["timeout_seconds"], bool)
-            or not isinstance(changes["timeout_seconds"], (int, float))
-        ):
-            raise WorkflowValidationError("Step timeout_seconds must be a number.")
 
     def _step_index(self, step_id: str) -> int:
         for index, step in enumerate(self.workflow().steps):

@@ -1084,3 +1084,15 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   tests PASS, engineering-log append-only PASS, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-31 — P4a validation-source correction   (commit: pending)
+- Task: Ensure controller editor mutations rely on the existing engine validator
+  rather than duplicating workflow-field validation.
+- AI contribution: removed the controller-side field-type guard from
+  `controller/editor.py`; `_apply` now remains the single validation boundary.
+- Defect found: the prior P4a implementation had introduced a parallel
+  `_validate_step_changes` helper, contrary to the repository requirement.
+- Verification: focused editor and shell acceptance tests printed `19 passed`;
+  Ruff check and format check passed.
+- Outcome: PASSED
+- Human review:
