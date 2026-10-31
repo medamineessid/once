@@ -43,7 +43,7 @@ from ui.strings import (
     MY_TITLE,
 )
 from ui.styles import SPACING_LG, SPACING_SM, SPACING_XL
-from ui.workers import WorkflowWorker
+from ui.workers import WorkflowWorker, cancel_and_join
 
 _ROW_HEIGHT = 56
 
@@ -302,6 +302,14 @@ class MyAutomationsPage(QWidget):
     def _quit_run_thread(self) -> None:
         if self._thread is not None:
             self._thread.quit()
+
+    def shutdown_worker(self) -> None:
+        """Cancel and join the running automation thread for window close."""
+        if self._thread is None:
+            return
+        cancel_and_join(self._thread, self._worker)
+        self._worker = None
+        self._thread = None
 
     def _on_run_progress(self, step_result: object) -> None:
         evidence = (

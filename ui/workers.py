@@ -2,20 +2,53 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from pathlib import Path
 from threading import Event
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from controller.service import WorkflowService
 from engine.agent_change import ApprovedChange, ChangeReview
 from engine.errors import OnceError
 from engine.workflow import Workflow
 
+logger = logging.getLogger(__name__)
+
+
+def cancel_and_join(thread: QThread | None, worker: WorkflowWorker | None) -> bool:
+    """Cooperatively cancel the worker, then join the thread with a bound.
+
+    Closing a window during a demo or an automation run must (1) ask the
+    engine to stop at the next step boundary through the worker's cancel
+    flag, (2) quit the thread's event loop, and (3) join it within a fixed
+    bound. Returns True when the thread finished inside the bound and can
+    be destroyed safely. On timeout the thread is detached from its parent:
+    destroying a still-running QThread aborts the process, so the window
+    close must never leave it parented while busy (AD-015 rationale).
+    """
+    if thread is None:
+        return True
+    if worker is not None:
+        worker.cancel()
+    thread.quit()
+    if thread.wait(WorkflowWorker.THREAD_JOIN_TIMEOUT_MS):
+        return True
+    logger.warning(
+        "Workflow thread still busy after %s ms; detaching it so window "
+        "destruction cannot kill a running QThread.",
+        WorkflowWorker.THREAD_JOIN_TIMEOUT_MS,
+    )
+    thread.setParent(None)
+    return False
+
 
 class WorkflowWorker(QObject):
     """Run one workflow off the Qt GUI thread with cooperative cancellation."""
+
+    #: Upper bound for joining a running worker thread on window close.
+    THREAD_JOIN_TIMEOUT_MS = 5000
 
     progress = Signal(object)
     finished = Signal(object)

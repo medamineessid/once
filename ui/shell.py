@@ -57,7 +57,7 @@ from ui.strings import (
     SIDEBAR_SETTINGS,
 )
 from ui.styles import SPACING_LG, SPACING_MD, apply_theme
-from ui.workers import WorkflowWorker
+from ui.workers import WorkflowWorker, cancel_and_join
 
 
 class ShellPages:
@@ -367,11 +367,17 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         if self._recording_service is not None and self._recording_service.recording:
             self._recording_service.stop()
-        if self._demo_thread is not None:
-            self._demo_thread.quit()
-            self._demo_thread.wait(2000)
+        self.cancel_run_thread()
+        self.my_automations_page.shutdown_worker()
         self._service.close()
         super().closeEvent(event)
+
+    def cancel_run_thread(self) -> None:
+        """Cooperatively cancel and join the demo thread (bounded)."""
+        if self._demo_thread is None:
+            return
+        cancel_and_join(self._demo_thread, self._demo_worker)
+        self._on_demo_thread_finished()
 
 
 # ensure tests can access internals without relying on private attrs
