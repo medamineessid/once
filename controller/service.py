@@ -174,6 +174,12 @@ class WorkflowService:
         save_workflow(workflow, destination)
         return destination
 
+    def open_editor(self, workflow: Workflow):
+        """Open a Qt-free editor session for one validated workflow."""
+        from controller.editor import WorkflowEditorSession
+
+        return WorkflowEditorSession(workflow)
+
     def save_approved(self, proposal: ApprovedProposal) -> Path:
         """Save only a proposal that passed the explicit approval gate."""
         if not isinstance(proposal, ApprovedProposal):
