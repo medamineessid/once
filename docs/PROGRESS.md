@@ -31,7 +31,7 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | P0.3 | Read digest docs; fix stale ledger entries | DONE | ledger rewritten this commit (this file); docs read: WORKING_AGREEMENT, UX_BRIEF, PROGRESS, AUTONOMOUS_DECISIONS, BUTTON_AUDIT, ui_migration_plan, AGENTS (in prompt) |
 | P1 | docs/design/visual_editor.md + docs/UX_AUDIT.md | DONE | 5c17e42 on slice/p1-editor-discovery, ff-merged + pushed |
 | P2 | Design system + shell refresh (slice/p2-design-system) | DONE | components + page template + rewrite; verify ALL CHECKS PASSED, pytest 386 passed/2 skipped in 140.25s |
-| P3 | Canvas read-only (slice/p3-canvas) | TODO | pure layout + golden tests |
+| P3 | Canvas read-only (slice/p3-canvas) | DONE | ui/editor/layout.py pure goldens + ui/editor/canvas.py read-only view; integrated on ReviewPage; added close-cancel/join task, screenshot refresh, swap ledger |
 | P4 | Editing (slice/p4-editing) | TODO | controller editor ops + undo + layout record |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |

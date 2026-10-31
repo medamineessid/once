@@ -20,6 +20,7 @@ from ai.models import ProviderDraft
 from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
+from ui.editor.canvas import CanvasView
 from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
 
@@ -53,6 +54,9 @@ class ReviewPage(QWidget):
         self._steps_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._steps_list.addItems(self._empty_steps())
         layout.addWidget(self._steps_list, alignment=Qt.AlignHCenter)
+        self._canvas = CanvasView(self)
+        self._canvas.setMinimumSize(640, 220)
+        layout.addWidget(self._canvas)
         layout.addSpacing(SPACING_MD)
         self._actions_container = QFrame(self)
         actions_layout = QVBoxLayout(self._actions_container)
@@ -106,6 +110,9 @@ class ReviewPage(QWidget):
         self._proposal = None
         self._goal_label.setText(f"Goal: {workflow.name}" if workflow else "No workflow loaded.")
         self._steps_list.clear()
+        # The canvas is read-only for now (P3): the chain renders from the pure
+        # auto-layout plan; editing arrives with the editor page.
+        self._canvas.set_workflow(workflow)
         if workflow:
             for index, step in enumerate(workflow.steps, start=1):
                 self._steps_list.addItem(
