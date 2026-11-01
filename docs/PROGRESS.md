@@ -46,7 +46,7 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | A2b | Inspector editing forms (solo-mode lane) | DONE | slice/a2b-inspector-forms d819a98: validator-backed name/message/attempts/target/wait-timeout/postcondition fields, controller-mediated atomic Apply, inline validation errors, 3 new tests; full verify 457 passed/2 skipped |
 | A2c | Undo, redo, save, and unsaved state (solo-mode lane) | DONE | slice/a2c-undo-save 9685c67: controller discard, Ctrl+Z/Ctrl+Y/Ctrl+S outside text fields, Save/Discard/Stay bar; 3 new tests; full verify 460 passed/2 skipped |
 | A2c-polish | Screenshot-driven UI polish | DONE | slice/a2c-undo-save 59f7605: visible editor action styles, cleared scratch banner, taller Home demo card; focused 33 passed; full verify 462 passed/2 skipped on rerun (one prior full-suite review test failure passed isolated and on rerun) |
-| A2d | Interactive canvas navigation and layout persistence | DONE | slice/a2c-undo-save: bounded zoom, fit-to-screen, minimap, draggable nodes, saved positions through controller/storage; focused 35 passed; full verify 465 passed/2 skipped |
+| A2d | Interactive canvas navigation and layout persistence | DONE | slice/a2c-undo-save d5d1cb4 (includes 1d3ccd1): bounded 25%-200% zoom, hand-pan, fit-to-screen, minimap, draggable nodes, saved positions through controller/storage; focused 35 passed; full verify 465 passed/2 skipped |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |

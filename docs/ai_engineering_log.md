@@ -1243,3 +1243,16 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   both smoke tests PASS, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-01 — A2d: enable canvas panning   (commit: d5d1cb4)
+- Task: complete the A2d interaction contract by enabling hand-pan on the
+  QGraphicsView canvas.
+- AI contribution: enabled ScrollHandDrag and added a regression assertion.
+- Defect found: the initial A2d implementation had zoom and scroll support but
+  left QGraphicsView drag mode at its default, so direct canvas panning was not
+  available.
+- Verification: focused canvas tests printed `9 passed`; the final
+  `scripts/verify.ps1` printed `465 passed, 2 skipped`, Ruff and formatting
+  passed, both smoke tests passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
