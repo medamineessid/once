@@ -18,6 +18,8 @@ point.
 | Show live step state and evidence | Working | `ui/editor/canvas.py`, `ui/editor/inspector.py` | `tests/test_editor_page.py::test_editor_shows_step_result_and_evidence_in_inspector` |
 | Cancel safely during a run | Working | `ui/workers.py`, `ui/shell.py` | `tests/test_close_during_run.py` |
 | Require approval for mutating desktop steps | Working | `engine/desktop.py`, `ui/pages/editor.py` | `tests/test_editor_page.py::test_editor_shows_existing_desktop_approval_gate` |
+| First-time journey through `app.py` | Pending | `app.py`, `ui/shell.py` | Needs one end-to-end entry-point acceptance test |
+| Editor acceptance through the real entry point | Pending | `app.py`, `ui/pages/editor.py` | Existing editor tests construct the shell directly |
 | Branching / decision nodes | Parked | `docs/PARKED.md` PARKED-1 | Intentionally out of MVP scope |
 | Packaged executable | Working | `once.spec`, `dist/Once/Once.exe` | PyInstaller build completed; isolated `Once.exe --smoke-test` exited 0 and created `once.db` |
 | Default shell window | Pending | `app.py` | Switch only after this checklist has no MVP-scope Missing rows |
