@@ -53,7 +53,7 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | A2h | Separate manual and recording routes | DONE | Build opens the editor directly; Record opens a dedicated recording screen with back action and review handoff; 469 passed/2 skipped |
 | P5a | Recording to reviewable editor draft | DONE | Stop recording builds a safe observation proposal, Review shows its nodes, existing approval gate saves it, and approved workflow opens in editor; full verify 471 passed/2 skipped |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
-| P6 | Run + review (slice/p6-run-review) | IN PROGRESS | editor run now uses WorkflowWorker, requires saved definitions, locks edits while running, and refreshes Activity; mutating-step approval panel remains |
+| P6 | Run + review (slice/p6-run-review) | IN PROGRESS | editor run uses WorkflowWorker, requires saved definitions, locks edits while running, refreshes Activity, and now shows the existing desktop approval gate for mutating steps; live node evidence remains |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |
 | P8 | Hardening (slice/p8-hardening) | TODO | |
 | P9 | Parity, default switch, release (slice/p9-release) | TODO | gate conditions in prompt |

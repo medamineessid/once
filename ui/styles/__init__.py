@@ -320,6 +320,22 @@ _STYLESHEET_TEMPLATE = Template("""
         padding: 6px;
         border: 1px solid #ECECEC;
     }
+    QFrame#approvalPanel {
+        background: ${TINT_ACTION};
+        border: 1px solid #F3C98B;
+        border-radius: 10px;
+    }
+    QLabel#approvalTitle {
+        color: ${TEXT_STRONG};
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 600;
+        font-family: $FONT_STACK;
+    }
+    QLabel#approvalDetails {
+        color: ${TEXT_BODY};
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-family: $FONT_STACK;
+    }
     QFrame#settingsWidget {
         background: #FFFFFF;
         border-radius: 12px;

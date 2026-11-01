@@ -16,6 +16,22 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: IN PROGRESS
 - Human review:
 
+## 2026-11-01 — P6: Mutating-step approval panel   (commit: pending)
+- Task: Prevent editor runs from bypassing the existing desktop approval policy
+  and make the approval decision visible before execution.
+- AI contribution: added the inline approval panel, reused
+  `approve_desktop_workflow`, and extended `WorkflowWorker` to execute only the
+  resulting `DesktopApproval`.
+- Defect found: the first approval test used invalid target JSON; the validator
+  correctly rejected it, and the fixture was corrected to the repository's
+  nested window/element target shape.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests\test_editor_page.py
+  tests\test_close_during_run.py -q` printed `14 passed in 6.84s`; Ruff check
+  printed `All checks passed!` and format check printed `5 files already
+  formatted`.
+- Outcome: IN PROGRESS
+- Human review:
+
 
 ## 2026-10-21 — Step 0: Pre-flight, evidence, decisions   (commit: n/a — git repo not yet initialised; Step 1 runs `git init`)
 

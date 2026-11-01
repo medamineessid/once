@@ -11,6 +11,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from controller.service import WorkflowService
 from engine.agent_change import ApprovedChange, ChangeReview
+from engine.desktop import DesktopApproval
 from engine.errors import OnceError
 from engine.workflow import Workflow
 
@@ -60,12 +61,14 @@ class WorkflowWorker(QObject):
         workflow: Workflow,
         *,
         replay: bool = False,
+        desktop_approval: DesktopApproval | None = None,
         allowed_root: Path | None = None,
     ) -> None:
         super().__init__()
         self._service = service
         self._workflow = workflow
         self._replay = replay
+        self._desktop_approval = desktop_approval
         self._allowed_root = allowed_root
         self._cancel_requested = Event()
 
@@ -77,7 +80,14 @@ class WorkflowWorker(QObject):
     def run(self) -> None:
         """Execute the controller operation and publish its outcome."""
         try:
-            if self._replay:
+            if self._desktop_approval is not None:
+                result = self._service.run_desktop_approved(
+                    self._desktop_approval,
+                    allowed_root=self._allowed_root,
+                    cancel_check=self._cancel_requested.is_set,
+                    progress_callback=self.progress.emit,
+                )
+            elif self._replay:
                 result = self._service.run_replay(
                     self._workflow,
                     allowed_root=self._allowed_root,

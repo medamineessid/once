@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QApplication,
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -22,6 +23,11 @@ from PySide6.QtWidgets import (
 
 from controller.editor import WorkflowEditorSession
 from controller.service import WorkflowService
+from engine.desktop import (
+    approve_desktop_workflow,
+    mutating_kind_names,
+    requires_desktop_approval,
+)
 from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
 from ui.components.banner import Banner
@@ -40,7 +46,7 @@ from ui.strings import (
     EDITOR_UNSAVED_BODY,
     EDITOR_UNSAVED_TITLE,
 )
-from ui.styles import SPACING_LG, SPACING_XL
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
 
 class EditorPage(QWidget):
@@ -92,6 +98,29 @@ class EditorPage(QWidget):
         # operation when the user presses Enter or leaves the field (A1).
         self._name_input.editingFinished.connect(self._commit_name)
         layout.addWidget(self._name_input)
+        self._approval_panel = QFrame(self)
+        self._approval_panel.setObjectName("approvalPanel")
+        approval_layout = QVBoxLayout(self._approval_panel)
+        approval_layout.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
+        self._approval_title = QLabel("This automation needs your approval", self._approval_panel)
+        self._approval_title.setObjectName("approvalTitle")
+        self._approval_details = QLabel(self._approval_panel)
+        self._approval_details.setWordWrap(True)
+        self._approval_details.setObjectName("approvalDetails")
+        approval_actions = QHBoxLayout()
+        self._approve_run_button = QPushButton("Approve and run", self._approval_panel)
+        self._approve_run_button.setObjectName("primaryActionButton")
+        self._approve_run_button.clicked.connect(self._approve_and_run)
+        self._cancel_approval_button = QPushButton("Not now", self._approval_panel)
+        self._cancel_approval_button.setObjectName("secondaryActionButton")
+        self._cancel_approval_button.clicked.connect(self._approval_panel.hide)
+        approval_actions.addWidget(self._approve_run_button)
+        approval_actions.addWidget(self._cancel_approval_button)
+        approval_layout.addWidget(self._approval_title)
+        approval_layout.addWidget(self._approval_details)
+        approval_layout.addLayout(approval_actions)
+        layout.addWidget(self._approval_panel)
+        self._approval_panel.hide()
         self._canvas = CanvasView(self)
         self._canvas.setMinimumHeight(220)
         self._canvas.installEventFilter(self)
@@ -262,7 +291,30 @@ class EditorPage(QWidget):
                 "info", EDITOR_RUN_SAVE_FIRST_TITLE, EDITOR_RUN_SAVE_FIRST_BODY
             )
             return
-        self.run_requested.emit(self._session.workflow())
+        workflow = self._session.workflow()
+        if requires_desktop_approval(workflow):
+            kinds = ", ".join(mutating_kind_names(workflow))
+            self._approval_details.setText(
+                f"This will control your computer: {kinds}. "
+                "Review the steps before allowing them to run."
+            )
+            self._approval_panel.show()
+            return
+        self.run_requested.emit(workflow)
+
+    def _approve_and_run(self) -> None:
+        if self._session is None:
+            return
+        try:
+            approval = approve_desktop_workflow(self._session.workflow())
+        except WorkflowValidationError as error:
+            self._banner.show_message("error", "Approval could not be completed", str(error))
+            return
+        self._approval_panel.hide()
+        self.run_requested.emit(approval)
+
+    def show_run_message(self, severity: str, title: str, body: str) -> None:
+        self._banner.show_message(severity, title, body)
 
     def set_running(self, running: bool) -> None:
         """Lock definition controls while the saved definition is executing."""

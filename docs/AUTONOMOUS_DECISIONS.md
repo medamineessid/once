@@ -14,6 +14,18 @@ Format per item: id, date, question, options, choice, reason.
   silent saving is an unexpected filesystem change. This preserves the
   existing saved-workflow and approval boundaries.
 
+## AD-032 — 2026-11-01 — Mutating steps in the editor
+
+- Question: How should a saved editor automation containing desktop-mutating
+  steps reach execution?
+- Options: (a) run it through the ordinary workflow path; (b) add a second UI
+  approval implementation; (c) show the mutating kinds and call the existing
+  desktop approval gate.
+- Choice: (c).
+- Reason: ordinary execution would bypass the policy boundary, while a second
+  approval implementation could drift from engine policy. The editor now uses
+  `approve_desktop_workflow` and only emits its resulting `DesktopApproval`.
+
 ## AD-001 — 2026-10-29 — Where should the authorized folder live?
 
 - Question: P1.4 requires the chosen authorized folder to "persist through the

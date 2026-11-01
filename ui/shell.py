@@ -24,6 +24,7 @@ from ai.provider import deterministic_recording_provider
 from controller.recording import RecordingService
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig
+from engine.desktop import DesktopApproval
 from engine.workflow import Workflow
 from recorder.drafts import build_raw_draft
 from ui.components.banner import Banner
@@ -395,10 +396,16 @@ class MainWindow(QMainWindow):
         if self._editor_thread is not None:
             return
         self.editor_page.set_running(True)
-        self.editor_page._banner.show_message("info", EDITOR_RUN, EDITOR_RUN_STARTED)
+        self.editor_page.show_run_message("info", EDITOR_RUN, EDITOR_RUN_STARTED)
         self.status_footer.set_state(FOOTER_RUNNING)
         self._editor_thread = QThread(self)
-        self._editor_worker = WorkflowWorker(self._service, workflow)
+        approval = workflow if isinstance(workflow, DesktopApproval) else None
+        plain_workflow = approval.workflow if approval is not None else workflow
+        self._editor_worker = WorkflowWorker(
+            self._service,
+            plain_workflow,
+            desktop_approval=approval,
+        )
         self._editor_worker.moveToThread(self._editor_thread)
         self._editor_thread.started.connect(self._editor_worker.run)
         queued = Qt.ConnectionType.QueuedConnection
@@ -423,9 +430,9 @@ class MainWindow(QMainWindow):
         self.status_footer.set_state(FOOTER_READY)
         status = getattr(getattr(run, "status", None), "value", "UNKNOWN")
         if status == "SUCCEEDED":
-            self.editor_page._banner.show_message("success", EDITOR_RUN, EDITOR_RUN_SUCCEEDED)
+            self.editor_page.show_run_message("success", EDITOR_RUN, EDITOR_RUN_SUCCEEDED)
         else:
-            self.editor_page._banner.show_message(
+            self.editor_page.show_run_message(
                 "warning", EDITOR_RUN, f"{EDITOR_RUN_FAILED} Status: {status}."
             )
         self.activity_page.refresh()
@@ -433,7 +440,7 @@ class MainWindow(QMainWindow):
 
     def _on_editor_failed(self, message: str) -> None:
         self.status_footer.set_state(FOOTER_ATTENTION)
-        self.editor_page._banner.show_message("error", EDITOR_RUN, f"{EDITOR_RUN_FAILED} {message}")
+        self.editor_page.show_run_message("error", EDITOR_RUN, f"{EDITOR_RUN_FAILED} {message}")
         self.activity_page.refresh()
 
     def _open_workflow(self, path: Path) -> None:

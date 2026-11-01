@@ -11,6 +11,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 
 from controller.service import WorkflowService
+from engine.workflow import StepKind, Workflow, WorkflowStep
 from ui.shell import MainWindow, ShellPages
 
 
@@ -144,6 +145,33 @@ def test_saved_editor_definition_runs_and_refreshes_activity(qtbot, tmp_path) ->
     assert len(window._service.history()) == 1
     window._show_page_activity()
     assert window.activity_page._history_list.count() == 1
+
+
+def test_editor_shows_existing_desktop_approval_gate(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    workflow = Workflow(
+        "desktop-workflow",
+        "Desktop task",
+        (
+            WorkflowStep(
+                "step-1",
+                "Type a value",
+                StepKind.TYPE_TEXT,
+                "Type a value",
+                target=(
+                    '{"window":{"title":"Notepad"},"element":{"class_name":"Edit"},"text":"value"}'
+                ),
+            ),
+        ),
+    )
+    window.editor_page.open_workflow(workflow)
+    window._show_page(ShellPages.EDITOR)
+
+    qtbot.mouseClick(window.editor_page._run_button, Qt.MouseButton.LeftButton)
+
+    assert window.editor_page._approval_panel.isVisible()
+    assert "TYPE_TEXT" in window.editor_page._approval_details.text()
+    assert window._editor_thread is None
 
 
 def test_empty_editor_add_step_button_creates_an_editable_node(qtbot, tmp_path) -> None:
