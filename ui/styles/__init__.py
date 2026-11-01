@@ -211,10 +211,10 @@ _STYLESHEET_TEMPLATE = Template("""
     QToolButton#sidebarActivityButton:checked,
     QToolButton#sidebarSettingsButton:checked,
     QToolButton#sidebarCreateButton:checked {
-        background: #FFFFFF;
-        border-left: 3px solid $ACCENT;
-        color: #1D1D1D;
-        font-weight: 500;
+        background: $ACCENT_SOFT;
+        border-left: none;
+        color: $ACCENT_TEXT;
+        font-weight: 600;
     }
     QLabel#homeTitle {
         font-size: ${TYPE_HOME_TITLE_PX}px;

@@ -16,6 +16,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: IN PROGRESS
 - Human review:
 
+## 2026-11-01 — P6: Mutating-step approval panel complete   (commit: d085937)
+- Task: Ship the editor approval gate without bypassing the existing desktop
+  policy boundary.
+- AI contribution: completed and committed the inline approval panel and
+  `DesktopApproval` worker path.
+- Defect found: the full suite had one transient review-UI restart failure;
+  its focused rerun passed, and the next full verification passed.
+- Verification: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  scripts\verify.ps1` printed `475 passed, 2 skipped`, `All checks passed!`,
+  `151 files already formatted`, both smoke tests PASS, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-11-01 — P6: Mutating-step approval panel   (commit: pending)
 - Task: Prevent editor runs from bypassing the existing desktop approval policy
   and make the approval decision visible before execution.
