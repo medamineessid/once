@@ -54,6 +54,7 @@ from ui.strings import (
     DEMO_FINISHED_BODY,
     DEMO_FINISHED_TITLE,
     DEMO_STOPPED_TITLE,
+    RECORDING_SAVED_NEXT,
     RUN_CANCELLED_MESSAGE,
     SIDEBAR_ACTIVITY,
     SIDEBAR_AUTOMATIONS,
@@ -245,14 +246,15 @@ class MainWindow(QMainWindow):
         self.sidebar.activityClicked.connect(self._show_page_activity)
         self.sidebar.settingsClicked.connect(self._show_page_settings)
         self._install_page_shortcuts()
-        self.home_page.created_automation.connect(self._show_create_automation)
-        self.home_page.record_requested.connect(self._show_create_automation)
+        self.home_page.manual_requested.connect(self._show_editor)
+        self.home_page.record_requested.connect(self._show_recording)
         self.my_automations_page.created_automation.connect(self._show_create_automation)
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)
         self.create_automation_page.editor_requested.connect(self._show_editor)
         self.create_automation_page.record_requested.connect(self._start_recording)
         self.create_automation_page.stop_record_requested.connect(self._stop_recording)
+        self.create_automation_page.cancelled.connect(self._show_page_home)
         self.editor_page.saved.connect(self._editor_saved)
         self.editor_page.cancelled.connect(self._show_create_automation)
         self.review_page.cancelled.connect(self._on_review_cancelled)
@@ -301,6 +303,12 @@ class MainWindow(QMainWindow):
 
     def _show_create_automation(self) -> None:
         """Enter the create flow through the typed page state, like every page."""
+        self.create_automation_page.show_creation_mode()
+        self._show_page(ShellPages.CREATE)
+
+    def _show_recording(self) -> None:
+        """Enter the dedicated recording flow."""
+        self.create_automation_page.show_recording_mode()
         self._show_page(ShellPages.CREATE)
 
     def _show_editor(self) -> None:
@@ -406,7 +414,10 @@ class MainWindow(QMainWindow):
             return
         self.create_automation_page.set_recording_state(
             False,
-            f"{CREATE_RECORDING_SAVED} ({len(recording.events)} events captured).",
+            (
+                f"{CREATE_RECORDING_SAVED} ({len(recording.events)} events captured). "
+                f"{RECORDING_SAVED_NEXT}"
+            ),
         )
 
     def _on_review_cancelled(self) -> None:

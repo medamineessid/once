@@ -1302,3 +1302,17 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-01 — A2h: Separate manual and recording routes   (commit: pending)
+- Task: make Home's two creation choices lead to distinct, functional
+  destinations instead of the same intermediate page.
+- AI contribution: routed manual creation directly to the editor, added a
+  dedicated recording mode with a back action and review handoff, and added
+  click-through tests for both destinations.
+- Defect found: the two Home cards had different labels but identical routing,
+  so the interface did not communicate or deliver two different workflows.
+- Verification: focused shell tests printed `29 passed`; `scripts/verify.ps1`
+  printed `469 passed, 2 skipped`, Ruff and formatting passed, both smoke
+  tests passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:

@@ -32,9 +32,9 @@ _RECENT_RUN_COUNT = 5  # rows the welcome screen shows; the full feed lives on A
 
 
 class HomePage(QWidget):
-    """Welcome screen with the demonstration, the create entry, and recent runs."""
+    """Welcome screen with two distinct, working automation entry points."""
 
-    created_automation = Signal()
+    manual_requested = Signal()
     record_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
@@ -55,9 +55,6 @@ class HomePage(QWidget):
         self._title_label = self._header.title_label
         self._subtitle_label = self._header.description_label
         layout.addWidget(self._header)
-        self._create_automation_button = self._header.primary_button
-        if self._create_automation_button is not None:
-            self._header.action_requested.connect(self._create_automation)
 
         cards_row = QHBoxLayout()
         cards_row.setSpacing(SPACING_SM)
@@ -68,7 +65,8 @@ class HomePage(QWidget):
             parent=self,
         )
         create_card.action_button.setObjectName("primaryActionButton")
-        create_card.action_requested.connect(self._create_automation)
+        self._create_automation_button = create_card.action_button
+        create_card.action_requested.connect(self.manual_requested.emit)
         cards_row.addWidget(create_card)
         record_card = Card(
             HOME_CARD_RECORD_TITLE,
@@ -121,9 +119,6 @@ class HomePage(QWidget):
             status_value = getattr(getattr(run, "status", None), "value", "Unknown")
             rows.append((name, status_value, human_timestamp(getattr(run, "finished_at", None))))
         return tuple(rows)
-
-    def _create_automation(self) -> None:
-        self.created_automation.emit()
 
     def _refresh_activity(self) -> None:
         runs = self._recent_rows()

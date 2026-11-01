@@ -420,3 +420,15 @@ Format per item: id, date, question, options, choice, reason.
   made Recent activity look like user work. The two remaining choices map to
   real reachable flows and reduce first-time-user ambiguity without changing
   execution or approval behavior.
+
+## AD-029 — 2026-11-01 — Separate creation routes
+
+- Question: should Build it yourself and Start with a recording share the same
+  create screen?
+- Choice: no. Build it yourself opens the visual editor directly; recording
+  opens a dedicated recording screen with its own title, controls, review
+  message, and back action.
+- Reason: both routes already had different capabilities, but converging them
+  made the buttons misleading and forced users to rediscover their intent.
+  Separate destinations make each action observable without adding a second
+  execution or approval path.

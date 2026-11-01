@@ -36,6 +36,12 @@ HOME_CARD_RECORD_BODY = (
 HOME_CARD_RECORD_ACTION = "Start with a recording"
 HOME_RECENT_LIST_TITLE = "Your recent runs"
 HOME_RECENT_EMPTY = "No runs yet. Save an automation, then run it from My automations."
+RECORDING_PAGE_TITLE = "Record a task"
+RECORDING_PAGE_SUBTITLE = (
+    "Show Once the task once. Recording stays on this PC and becomes a draft for review."
+)
+RECORDING_BACK = "Back to choices"
+RECORDING_SAVED_NEXT = "Next: review the recording before turning it into steps."
 HOME_RUN_SUCCEEDED = "Succeeded"
 HOME_RUN_FAILED = "Failed"
 HOME_RUN_CANCELLED = "Cancelled"

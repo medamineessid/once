@@ -291,7 +291,7 @@ def test_sidebar_click_home_returns_to_home(qtbot, window):
     assert window.sidebar.is_on(ShellPages.HOME)
 
 
-def test_home_build_button_clicks_into_create_flow(qtbot, window):
+def test_home_build_button_opens_manual_editor(qtbot, window):
     build_button = next(
         button
         for button in window.home_page.findChildren(QPushButton)
@@ -299,7 +299,19 @@ def test_home_build_button_clicks_into_create_flow(qtbot, window):
     )
     qtbot.mouseClick(build_button, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
-    assert window.workspace.currentWidget() is window.create_automation_page
+    assert window.workspace.currentWidget() is window.editor_page
+
+
+def test_home_record_button_opens_recording_flow(qtbot, window):
+    record_button = window.home_page._record_button
+    qtbot.mouseClick(record_button, Qt.MouseButton.LeftButton)
+    qtbot.wait(50)
+    page = window.create_automation_page
+    assert window.workspace.currentWidget() is page
+    assert page._title_label.text() == "Record a task"
+    assert page._description_input.isHidden()
+    assert page._record_button.isVisible()
+    assert page._back_button.isVisible()
 
 
 def test_demo_runner_remains_available_for_diagnostics(qtbot, tmp_path):
