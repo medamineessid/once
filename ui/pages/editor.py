@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from typing import override
 from uuid import uuid4
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
+    QApplication,
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -23,9 +28,14 @@ from ui.components.banner import Banner
 from ui.editor.canvas import CanvasView
 from ui.editor.inspector import InspectorPanel
 from ui.strings import (
+    EDITOR_DISCARD,
     EDITOR_EDIT_ERROR_TITLE,
     EDITOR_RENAME_EMPTY_MESSAGE,
     EDITOR_RENAME_ERROR_TITLE,
+    EDITOR_SAVE,
+    EDITOR_STAY,
+    EDITOR_UNSAVED_BODY,
+    EDITOR_UNSAVED_TITLE,
 )
 from ui.styles import SPACING_LG, SPACING_XL
 
@@ -51,7 +61,24 @@ class EditorPage(QWidget):
         layout.addWidget(self._title)
         self._banner = Banner(self)
         layout.addWidget(self._banner)
+        self._dirty_panel = QWidget(self)
+        dirty_layout = QHBoxLayout(self._dirty_panel)
+        dirty_layout.setContentsMargins(0, 0, 0, 0)
+        dirty_layout.addWidget(QLabel(f"{EDITOR_UNSAVED_TITLE}: {EDITOR_UNSAVED_BODY}"))
+        dirty_layout.addStretch(1)
+        dirty_save = QPushButton(EDITOR_SAVE, self._dirty_panel)
+        dirty_discard = QPushButton(EDITOR_DISCARD, self._dirty_panel)
+        dirty_stay = QPushButton(EDITOR_STAY, self._dirty_panel)
+        dirty_layout.addWidget(dirty_save)
+        dirty_layout.addWidget(dirty_discard)
+        dirty_layout.addWidget(dirty_stay)
+        dirty_save.clicked.connect(self._save)
+        dirty_discard.clicked.connect(self._discard)
+        dirty_stay.clicked.connect(self._stay)
+        layout.addWidget(self._dirty_panel)
+        self._dirty_panel.hide()
         self._name_input = QLineEdit(self)
+        self._name_input.installEventFilter(self)
         self._name_input.setPlaceholderText("Automation name")
         self._name_input.setText("New automation")
         # The name is edited inline and committed as ONE undoable controller
@@ -60,10 +87,12 @@ class EditorPage(QWidget):
         layout.addWidget(self._name_input)
         self._canvas = CanvasView(self)
         self._canvas.setMinimumHeight(220)
+        self._canvas.installEventFilter(self)
         self._canvas.node_selected.connect(self._on_node_selected)
         self._canvas.step_activated.connect(self._focus_inspector)
         self._canvas.setMinimumHeight(220)
         self._inspector = InspectorPanel(self)
+        self._inspector.installEventFilter(self)
         self._inspector.changes_applied.connect(self._apply_inspector_changes)
         canvas_and_inspector = QHBoxLayout()
         canvas_and_inspector.addWidget(self._canvas, 1)
@@ -146,6 +175,30 @@ class EditorPage(QWidget):
             self._sync_name_input()
             self._refresh()
 
+    @override
+    def eventFilter(self, watched: QWidget, event: QEvent) -> bool:
+        if (
+            event.type() is QEvent.Type.KeyPress
+            and isinstance(event, QKeyEvent)
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+            and not isinstance(watched, (QLineEdit, QComboBox, QAbstractSpinBox))
+        ):
+            handlers = {
+                Qt.Key.Key_Z: self._undo,
+                Qt.Key.Key_Y: self._redo,
+                Qt.Key.Key_S: self._save,
+            }
+            handler = handlers.get(event.key())
+            if handler is not None:
+                handler()
+                return True
+        return super().eventFilter(watched, event)
+
+    @staticmethod
+    def _text_input_has_focus() -> bool:
+        focused = QApplication.focusWidget()
+        return isinstance(focused, (QLineEdit, QComboBox, QAbstractSpinBox))
+
     def _sync_name_input(self) -> None:
         if self._session is not None:
             self._name_input.setText(self._session.workflow().name)
@@ -166,7 +219,19 @@ class EditorPage(QWidget):
         except (OSError, WorkflowValidationError) as error:
             self._banner.show_message("error", "Could not save automation", str(error))
             return
+        self._dirty_panel.hide()
         self.saved.emit()
+
+    def _discard(self) -> None:
+        if self._session is None:
+            return
+        self._session.discard()
+        self._banner.clear()
+        self._refresh()
+        self._dirty_panel.hide()
+
+    def _stay(self) -> None:
+        self._dirty_panel.hide()
 
     def _refresh(self) -> None:
         if self._session is None:
@@ -177,9 +242,12 @@ class EditorPage(QWidget):
             self._steps_list.addItem(f"{index}. {step.name} — {step.message}")
         self._canvas.set_workflow(workflow)
         self._show_inspector_for(self._canvas.selected_id, workflow)
+        for field_name in self._inspector.field_names:
+            self._inspector.field(field_name).installEventFilter(self)
         self._undo_button.setEnabled(self._session.can_undo)
         self._redo_button.setEnabled(self._session.can_redo)
         self._sync_name_input()
+        self._dirty_panel.setVisible(self._session.is_dirty())
 
     # --------------------------------------------------------- inspector (A2a)
 

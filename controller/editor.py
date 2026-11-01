@@ -192,6 +192,14 @@ class WorkflowEditorSession:
         self._undo.append(current)
         self._workflow = self._redo.pop()
 
+    def discard(self) -> None:
+        """Restore the last opened or saved definition and clear its history."""
+        if self._original is None:
+            raise WorkflowValidationError("No workflow is open.")
+        self._workflow = self._original
+        self._undo.clear()
+        self._redo.clear()
+
     def save(self, service: WorkflowService, path: Path | None = None) -> Path:
         """Save through the controller service and mark the definition clean."""
         saved_path = service.save(self.workflow(), path)

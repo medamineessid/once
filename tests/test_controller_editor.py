@@ -50,6 +50,19 @@ def test_editor_operations_are_atomic_and_undoable() -> None:
     assert session.workflow().name == "Renamed"
 
 
+def test_discard_restores_last_saved_definition_and_clears_history() -> None:
+    session = WorkflowEditorSession(_workflow())
+    session.rename_workflow("Changed")
+    session.add_step_after("first")
+
+    session.discard()
+
+    assert session.workflow() == _workflow()
+    assert not session.is_dirty()
+    assert not session.can_undo
+    assert not session.can_redo
+
+
 @pytest.mark.parametrize(
     "edit",
     [

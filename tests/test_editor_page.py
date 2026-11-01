@@ -103,3 +103,49 @@ def test_clearing_the_name_keeps_previous_name_and_warns_inline(qtbot, tmp_path)
     assert name_input.text() == "My test automation"
     assert window.editor_page._banner.isVisible()
     assert "needs a name" in window.editor_page._banner.body_text
+
+
+def test_unsaved_bar_can_stay_then_discard_definition_changes(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    _create_and_rename(window, qtbot, "Unsaved automation")
+
+    assert window.editor_page._dirty_panel.isVisible()
+    stay = next(
+        button
+        for button in window.editor_page._dirty_panel.findChildren(
+            type(window.editor_page._save_button)
+        )
+        if button.text() == "Stay"
+    )
+    qtbot.mouseClick(stay, Qt.MouseButton.LeftButton)
+    assert not window.editor_page._dirty_panel.isVisible()
+
+    qtbot.mouseClick(window.editor_page._add_button, Qt.MouseButton.LeftButton)
+    assert window.editor_page._dirty_panel.isVisible()
+    discard = next(
+        button
+        for button in window.editor_page._dirty_panel.findChildren(
+            type(window.editor_page._save_button)
+        )
+        if button.text() == "Discard"
+    )
+    qtbot.mouseClick(discard, Qt.MouseButton.LeftButton)
+
+    assert window.editor_page._session.workflow().name == "New automation"
+    assert len(window.editor_page._session.workflow().steps) == 0
+    assert not window.editor_page._dirty_panel.isVisible()
+
+
+def test_editor_shortcuts_undo_outside_text_fields_but_not_inside_them(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    _create_and_rename(window, qtbot, "Shortcut automation")
+    assert window.editor_page._session.workflow().name == "Shortcut automation"
+
+    name_input = window.editor_page._name_input
+    name_input.setFocus()
+    qtbot.keyClick(name_input, Qt.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert window.editor_page._session.workflow().name == "Shortcut automation"
+
+    window.editor_page._canvas.setFocus()
+    qtbot.keyClick(window.editor_page._canvas, Qt.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert window.editor_page._session.workflow().name == "New automation"
