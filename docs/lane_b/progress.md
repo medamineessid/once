@@ -2,9 +2,17 @@
 
 > Handoff note (updated after every commit) — most recent at the top.
 
-## 2026-11-01 — session 1 (this file is the handoff; read this first)
+## Handoff (2026-11-01) — after B6
 
-- Done: verified clone (main == origin/main at afc342e, verify.ps1 ALL CHECKS PASSED: `468 passed, 2 skipped in 112.43s`); installed the project's pinned requirements into this clone's `.venv` (Python 3.14.3 — no dependency changes, exact pins from requirements-dev.txt); saved the session prompt verbatim to docs/LANE_B_PROMPT.md (this branch b/docs-prompt); created the docs/lane_b/ ledger scaffold.
+- Done: B6 on branch b/b6-detach-exit — new tests/test_b6_cancel_detach_exit.py (2 tests: subprocess proves a cancel-ignoring worker through cancel_and_join's detach path exits cleanly; control test stays in-bound); fixed ui/workers.py cancel_and_join: the detach path now records (thread, worker) in a module-level `_detached_runs` registry and registers a one-time atexit hook granting a generous 30 s bounded join (DETACHED_RUN_EXIT_GRACE_MS) at interpreter exit, before PySide6 teardown destroys wrappers.
+- Evidence for the crash the fix removes (pre-fix, raw): child stdout `DETACH=True`, then exit code 3221226505 (0xC0000409 fail-fast). Also proven: merely retaining refs at module level does NOT fix it (same fail code) — the thread must finish before teardown; hence the exit-hook join. Focused result after fix: `2 passed in 7.85s`; neighbors `tests/test_close_during_run.py tests/test_workers.py` `6 passed in 2.47s`.
+- Residual limitation (logged, not hidden): a worker still running after the 30 s exit-grace join cannot be destroyed safely by PySide6 (removed ownership API); it may produce the same fail-fast at teardown — logged as warning; real engine runs honor cancel each step (≤60 s per step), so this is a pathological edge.
+- Next: B3 review page wiring (service injection hook + proposal.steps defect + Edit/Approve unhide with click tests); then B1 run-events contract, B2 approval panel, B5 activity evidence, B4 record a task, B7 (A2c DONE ⇒ precondition met; gate only on a clean rebase).
+- Uncommitted: this commit covers all of B6 + ledgers.
+
+## Handoff (2026-11-01) — session start
+
+- Done: verified clone (main == origin/main at afc342e, verify.ps1 ALL CHECKS PASSED: `468 passed, 2 skipped in 112.43s`); installed the project's pinned requirements into this clone's `.venv` (Python 3.14.3 — no dependency changes, exact pins from requirements-dev.txt); saved the session prompt verbatim to docs/LANE_B_PROMPT.md (`45706bc`, landed on main); created the docs/lane_b/ ledger scaffold.
 - Environment fix (local-only, no repo content changed): this clone was checked out with CRLF by the Windows git while WSL-side git had `core.autocrlf` unset, so `git status` showed all 161 files modified (31,570 +/- each, pure line-ending noise, proven with `git diff --ignore-cr-at-eol` and `git -c core.autocrlf=true status -sb` => clean). Fix: `git config core.autocrlf true` in this clone only (mirrors the Windows checkout; per-blob content unchanged). See decisions.md B-001.
 - Next: read docs (AGENT_PROMPT, WORKING_AGREEMENT, UX_BRIEF, BUTTON_AUDIT, design/visual_editor.md, PROGRESS.md), then the QUEUE in order: B6 (cancel_and_join detach-path subprocess test), B3 (review page wiring), B1 (run-events contract), B2 (approval panel), B5 (activity evidence), B4 (record a task), B7 (only if Lane A A2c is DONE).
 - Uncommitted: nothing after this commit.
