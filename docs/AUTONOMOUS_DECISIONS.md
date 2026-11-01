@@ -321,3 +321,20 @@ Format per item: id, date, question, options, choice, reason.
 - Reason: obeying the strings rule for new UI text requires touching the lane's
   strings module; no existing string was changed, so no page outside the A1
   exception changes behavior.
+
+## AD-021 — 2026-11-01 — A2a test corrections and lane exceptions
+
+- Question: during A2a, three of my own brand-new tests and one helper needed
+  corrections (hex-case comparison of the ACCENT token because Qt returns
+  lowercase `#2563eb`; `qtbot.waitUntil` for focus delivery instead of a
+  synchronous assert; a JSON-string target fixture instead of a dict, which
+  the engine's validator rejects; asserting focus lands *inside* the
+  QScrollArea panel rather than on the panel widget itself). Also: the
+  screenshot script had to change (lane = scripts/ capture).
+- Choice: fix the tests in place (same or stronger assertions), extend
+  scripts/capture_shell_pages.py + capture_screenshots.ps1 as the session
+  prompt explicitly requires ("extended to the editor page").
+- Reason: no pre-existing test was deleted, skipped, weakened or replaced —
+  all four corrections are to tests written earlier in this same session,
+  and each keeps or strengthens the observable assertion; the capture
+  extension is an explicit instruction of the queue, not a lane drift.

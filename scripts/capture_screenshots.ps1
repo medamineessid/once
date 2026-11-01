@@ -22,7 +22,7 @@ if ($LASTEXITCODE -ne 0) { throw "capture driver failed with exit code $LASTEXIT
 $files = Get-ChildItem -LiteralPath $outDir -Filter "*.png" |
     Where-Object { $_.Name -match '^(1280x800|1366x768|1920x1080)-' }
 
-if ($files.Count -ne 18) { throw "expected 18 captures (6 pages x 3 sizes), found $($files.Count)" }
+if ($files.Count -ne 21) { throw "expected 21 captures (7 pages x 3 sizes), found $($files.Count)" }
 
 foreach ($file in $files) {
     if ($file.Length -le 0) { throw "empty capture: $($file.FullName)" }
