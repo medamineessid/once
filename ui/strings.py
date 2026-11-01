@@ -60,6 +60,12 @@ MY_NOT_RUN = "Not run yet"
 MY_BANNER_ERROR_TITLE = "Automation problem"
 MY_RUN_HINT_TITLE = "Pick an automation first"
 MY_RUN_HINT_BODY = "Select an automation in the list, then press Run."
+MY_SAVED_PREFIX = "Saved"
+MY_UNREADABLE_TITLE = "Files need attention"
+MY_UNREADABLE_BODY = (
+    "Some files in this folder could not be read as automations. "
+    "They are listed by file name and cannot be opened."
+)
 
 # --- Activity ----------------------------------------------------------------
 ACTIVITY_TITLE = "Activity"
@@ -103,3 +109,7 @@ CREATE_NOT_AVAILABLE_BODY = (
     " building automations arrives with the visual editor."
 )
 RUN_CANCELLED_MESSAGE = "The run was cancelled before it finished."
+
+# --- Editor -----------------------------------------------------------------
+EDITOR_RENAME_ERROR_TITLE = "Name not applied"
+EDITOR_RENAME_EMPTY_MESSAGE = "An automation needs a name. The previous name was kept."

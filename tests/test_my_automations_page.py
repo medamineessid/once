@@ -69,6 +69,7 @@ class FakeService:
         self.release = Event()  # set to unblock a started run_workflow
         self.run_error: OnceError | None = None
         self.non_executable_workflows: set[str] = set()
+        self.unreadable_ids: set[str] = set()
         self.load_error: WorkflowValidationError | None = None
         self._first_run_started = Event()
         # Real WorkflowService interface: the shell's Settings page reads the
@@ -91,6 +92,18 @@ class FakeService:
         if self.load_error is not None:
             raise self.load_error
         return self.workflows[path]
+
+    def workflow_name(self, workflow_id: str) -> str | None:
+        """Mirror WorkflowService.workflow_name: readable workflows by name."""
+        self.call_log.append(("workflow_name", workflow_id))
+        if workflow_id in self.unreadable_ids:
+            return None
+        workflow = self.workflows.get(Path(f"{workflow_id}.json"))
+        if workflow is None:
+            for path, candidate in self.workflows.items():
+                if path.stem == workflow_id:
+                    return candidate.name
+        return None if workflow is None else workflow.name
 
     def preview_replay(self, workflow: Workflow) -> ReplayPreview:
         self.call_log.append(("preview", workflow))
@@ -165,7 +178,12 @@ def test_empty_state_shows_placeholder(qtbot):
 
 
 def test_rows_show_automation_name_and_actually_ran_status(qtbot):
-    """Row widgets show the friendly stem plus the real last-run shape."""
+    """Row widgets show the saved automation name plus the real last-run shape.
+
+    Replacement (A1, logged as AD-017): the row title is the user-chosen
+    name from the definition ('Alpha workflow'), which asserts more than
+    the old file stem ('alpha-workflow').
+    """
     service = FakeService(two_saved_workflows())
     page = make_page(qtbot, service)
 
@@ -174,7 +192,7 @@ def test_rows_show_automation_name_and_actually_ran_status(qtbot):
         return page._workflow_list.itemWidget(item)
 
     first = row_at(0)
-    assert first._name_label.text() == "alpha-workflow"
+    assert first._name_label.text() == "Alpha workflow"
     assert first.caption_text == MY_NOT_RUN
     assert first.findChildren(Chip) == []  # nothing to show before any run
 
@@ -195,6 +213,41 @@ def test_rows_show_automation_name_and_actually_ran_status(qtbot):
     assert len(chips) == 1
     assert chips[0].text() == "Failed"
     assert chips[0].property("chipKind") == "fail"
+
+
+def test_rows_lead_the_caption_with_the_saved_date(qtbot, tmp_path) -> None:
+    """The saved-on date separates rows that share the same automation name."""
+    alpha_path = tmp_path / "alpha-workflow.json"
+    beta_path = tmp_path / "beta-workflow.json"
+    alpha_path.write_text("{}", encoding="utf-8")
+    beta_path.write_text("{}", encoding="utf-8")
+    service = FakeService(
+        {
+            alpha_path: make_workflow("alpha-workflow", "Alpha workflow"),
+            beta_path: make_workflow("beta-workflow", "Alpha workflow"),
+        }
+    )
+    page = make_page(qtbot, service)
+
+    first = page._workflow_list.itemWidget(page._workflow_list.item(0))
+    assert first._name_label.text() == "Alpha workflow"
+    assert first.caption_text.startswith("Saved 20")
+
+
+def test_unreadable_file_shows_file_name_and_warning_never_crashes(qtbot) -> None:
+    """A saved file that cannot be read profits from no special treatment:
+    it stays listed under its own file name, a plain-language warning
+    appears, and nothing raises (A1 safety requirement)."""
+    service = FakeService(two_saved_workflows())
+    service.unreadable_ids = {"alpha-workflow"}
+    page = make_page(qtbot, service)
+
+    first = page._workflow_list.itemWidget(page._workflow_list.item(0))
+    second = page._workflow_list.itemWidget(page._workflow_list.item(1))
+    assert first._name_label.text() == "alpha-workflow.json"
+    assert second._name_label.text() == "Beta workflow"
+    assert page._banner.isVisible()
+    assert "could not be read" in page._banner.body_text
 
 
 def test_refresh_picks_up_newly_saved_automation(qtbot):

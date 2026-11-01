@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QThread, Signal
@@ -39,13 +40,25 @@ from ui.strings import (
     MY_RUN_HINT_BODY,
     MY_RUN_HINT_TITLE,
     MY_RUN_RUNNING,
+    MY_SAVED_PREFIX,
     MY_SUBTITLE,
     MY_TITLE,
+    MY_UNREADABLE_BODY,
+    MY_UNREADABLE_TITLE,
 )
 from ui.styles import SPACING_LG, SPACING_SM, SPACING_XL
 from ui.workers import WorkflowWorker, cancel_and_join
 
 _ROW_HEIGHT = 56
+
+
+def _saved_on_text(path: Path) -> str:
+    """Local last-modified date of a saved automation file, or empty."""
+    try:
+        stamp = path.stat().st_mtime
+    except OSError:
+        return ""
+    return datetime.fromtimestamp(stamp).strftime("%Y-%m-%d")
 
 
 class AutomationRow(QWidget):
@@ -57,6 +70,7 @@ class AutomationRow(QWidget):
         status_text: str | None,
         chip_kind: str,
         when_text: str = "",
+        saved_on: str = "",
         parent=None,
     ):
         super().__init__(parent)
@@ -77,12 +91,16 @@ class AutomationRow(QWidget):
         if chip is not None:
             top.addWidget(chip)
         row.addLayout(top)
+        caption_parts: list[str] = []
+        if saved_on:
+            caption_parts.append(f"{MY_SAVED_PREFIX} {saved_on}")
         if status_text is None:
-            caption_text = MY_NOT_RUN
+            caption_parts.append(MY_NOT_RUN)
         elif when_text:
-            caption_text = f"{MY_LAST_RUN_PREFIX} · {status_text} · {when_text}"
+            caption_parts.append(f"{MY_LAST_RUN_PREFIX} · {status_text} · {when_text}")
         else:
-            caption_text = f"{MY_LAST_RUN_PREFIX} · {status_text}"
+            caption_parts.append(f"{MY_LAST_RUN_PREFIX} · {status_text}")
+        caption_text = " · ".join(caption_parts)
         self._caption = QLabel(caption_text, self)
         self._caption.setObjectName("rowCaption")
         row.addWidget(self._caption)
@@ -351,7 +369,11 @@ class MyAutomationsPage(QWidget):
             self._details_label.setText(MY_EMPTY)
             return
         saved_paths = tuple(self._service.list_saved())
+        unreadable = 0
         for path in saved_paths:
+            saved_name = self._service.workflow_name(path.stem)
+            if saved_name is None:
+                unreadable += 1
             item = QListWidgetItem(path.name)
             item.setData(Qt.UserRole, path)
             run = self._last_run_for(path.stem)
@@ -361,10 +383,11 @@ class MyAutomationsPage(QWidget):
                 status_value = getattr(getattr(run, "status", None), "value", "Unknown")
                 status_text, chip_kind = status_display(status_value)
             row = AutomationRow(
-                path.stem,
+                saved_name or path.name,
                 status_text,
                 chip_kind,
                 when_text=human_timestamp(getattr(run, "finished_at", None)) if run else "",
+                saved_on=_saved_on_text(path),
                 parent=self._workflow_list,
             )
             hint = row.sizeHint()
@@ -372,6 +395,8 @@ class MyAutomationsPage(QWidget):
             item.setSizeHint(hint)
             self._workflow_list.addItem(item)
             self._workflow_list.setItemWidget(item, row)
+        if unreadable:
+            self._banner.show_message("warning", MY_UNREADABLE_TITLE, MY_UNREADABLE_BODY)
         if not saved_paths:
             self._details_label.setText(MY_EMPTY)
             return
