@@ -96,6 +96,29 @@ def test_close_during_automation_run_cancels_and_joins_thread(qtbot, tmp_path, m
     assert window.isVisible() is False
 
 
+def test_close_after_cancel_request_is_safe(qtbot, tmp_path, monkeypatch):
+    service = WorkflowService.for_app_data(tmp_path / "appdata")
+    service.save(_saved_workflow())
+    window = MainWindow(service=service)
+    qtbot.addWidget(window)
+    window.show()
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+    monkeypatch.setattr(service, "run_workflow", slow_run_factory([]))
+
+    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: page._thread is not None, timeout=5000)
+    page._worker.cancel()
+    page._worker.cancel()
+    window.close()
+
+    assert page._thread is None
+    assert page._worker is None
+
+
 def test_close_with_no_run_is_harmless(qtbot, tmp_path):
     """Close without any run must not touch threads or fail."""
     window = MainWindow(service=WorkflowService.for_app_data(tmp_path / "appdata"))

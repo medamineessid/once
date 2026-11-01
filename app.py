@@ -23,6 +23,7 @@ from ui.shell import MainWindow as ShellMainWindow
 
 SMOKE_TEST_FLAG = "--smoke-test"
 SHELL_FLAG = "--shell"
+CLASSIC_FLAG = "--classic"
 
 
 def setup_logging(app_data_dir: Path) -> Path:
@@ -63,7 +64,10 @@ def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     smoke_test = SMOKE_TEST_FLAG in args
     use_shell = SHELL_FLAG in args
-    qt_args = [sys.argv[0], *(arg for arg in args if arg not in (SMOKE_TEST_FLAG, SHELL_FLAG))]
+    qt_args = [
+        sys.argv[0],
+        *(arg for arg in args if arg not in (SMOKE_TEST_FLAG, SHELL_FLAG, CLASSIC_FLAG)),
+    ]
 
     app = build_application(qt_args)
     app_data_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Once"
@@ -75,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         service = WorkflowService.for_app_data(app_data_dir)
         recording_service = RecordingService(app_data_dir / "recordings")
         verifier_config, verifier_note = _load_verifier_setup(app_data_dir)
-        window_cls = ShellMainWindow if use_shell else MainWindow
+        window_cls = ShellMainWindow if use_shell and CLASSIC_FLAG not in args else MainWindow
         window = window_cls(
             service,
             recording_service,

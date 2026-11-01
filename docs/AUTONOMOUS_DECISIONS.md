@@ -59,6 +59,15 @@ Format per item: id, date, question, options, choice, reason.
   AI proposal, so showing it as a proposal would be misleading. The route now
   uses the same editor service path as the Home build flow.
 
+## AD-036 — 2026-11-01 — Classic entry-point escape hatch
+
+- Question: How can the legacy window remain available while the shell release
+  gate is evaluated?
+- Choice: add `--classic` without changing the current default yet; keep
+  `--shell` explicit until MVP checklist, acceptance, and packaging gates pass.
+- Reason: this is reversible and preserves the current shipped behavior while
+  making the eventual default switch explicit and testable.
+
 ## AD-001 — 2026-10-29 — Where should the authorized folder live?
 
 - Question: P1.4 requires the chosen authorized folder to "persist through the

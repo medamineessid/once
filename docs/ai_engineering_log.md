@@ -16,6 +16,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: IN PROGRESS
 - Human review:
 
+## 2026-11-01 — P8/P9: Hardening baseline and release checklist   (commit: pending)
+- Task: Add concrete hardening coverage and document the release gate without
+  switching the default window prematurely.
+- AI contribution: added rejection tests for oversized workflows and text,
+  repeated-cancellation close coverage, the `--classic` entry-point escape
+  hatch, and `docs/MVP_CHECKLIST.md`.
+- Defect found: the first long-name assertion used the wrong validator message;
+  it was corrected to the actual plain-language error.
+- Verification: focused hardening and entry tests printed `23 passed, 1
+  skipped`; Ruff printed `All checks passed!`.
+- Outcome: IN PROGRESS
+- Human review:
+
 ## 2026-11-01 — P6: Saved review route complete   (commit: f7b5878)
 - Task: Make saved review editing functional without changing proposal
   approval semantics.
