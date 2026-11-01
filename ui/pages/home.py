@@ -67,6 +67,7 @@ class HomePage(QWidget):
             HOME_CARD_DEMO_ACTION,
             parent=self,
         )
+        demo_card.setMinimumHeight(190)
         self._demo_button = demo_card.action_button
         self._demo_button.setObjectName("primaryActionButton")
         demo_card.action_requested.connect(self._run_demo)

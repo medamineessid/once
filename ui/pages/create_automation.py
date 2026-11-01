@@ -84,7 +84,7 @@ class CreateAutomationPage(QWidget):
         layout.addWidget(actions_container)
         self._scratch_button = QPushButton("Create from scratch", self)
         self._scratch_button.setObjectName("secondaryActionButton")
-        self._scratch_button.clicked.connect(self.editor_requested.emit)
+        self._scratch_button.clicked.connect(self._open_scratch_editor)
         layout.addWidget(self._scratch_button)
 
     def show_not_available(self, task_text: str) -> None:
@@ -102,6 +102,11 @@ class CreateAutomationPage(QWidget):
         text = self._description_input.toPlainText().strip() if self._description_input else ""
         if text:
             self.task_entered.emit(text)
+
+    def _open_scratch_editor(self) -> None:
+        if self._banner is not None:
+            self._banner.clear()
+        self.editor_requested.emit()
 
     def clear(self) -> None:
         if self._description_input:

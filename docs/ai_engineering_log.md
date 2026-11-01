@@ -2,6 +2,7 @@
 
 Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 
+
 ## 2026-10-21 — Step 0: Pre-flight, evidence, decisions   (commit: n/a — git repo not yet initialised; Step 1 runs `git init`)
 
 - Task: Establish a verified, pinned toolchain decision record without writing application code: detect environment, look up current facts (Python support status, PySide6 + dev-tool versions/compatibility, Microsoft naming docs, `st_birthtime` availability), choose the Python version, record everything in `docs/decisions.md`.
@@ -10,6 +11,23 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: ran locally — `py -0p` (3 interpreters listed), `python --version` (3.14.3), `git --version` (2.55.0.windows.4), `cmd //c ver` (10.0.26300.9550), `st_birthtime` presence check on 3.14.3 and 3.13.5 (True/True), `pip index versions` for pytest/pytest-cov/pytest-qt/ruff/pyinstaller/send2trash (latest: 9.1.1 / 7.1.0 / 4.5.0 / 0.17.1 / 6.22.3 / 2.1.0), `pip install --dry-run send2trash==2.1.0` on 3.14 → "Would install Send2Trash-2.1.0" exit 0. Fetched and cited: devguide.python.org/versions, pypi.org/project/PySide6 (6.12.0, Requires-Python >=3.10,<3.16, win_amd64 abi3 wheel present), learn.microsoft.com naming-a-file (reserved chars/names incl. superscript variants), pypi.org/pypi/send2trash/2.1.0/json (classifiers to 3.14). NOT verified: send2trash 2.1.0 release date (search snippet only), ruff `target-version = "py314"` support (checked at Step 1).
 - Outcome: PASSED
 - Human review: 
+
+## 2026-11-01 — A2c: screenshot-polish   (commit: pending)
+- Task: correct screenshot-observed shell presentation defects without changing
+  editor or workflow semantics.
+- AI contribution: styled editor action buttons with existing design tokens,
+  cleared the stale scratch-editor banner, increased the Home demo card height,
+  and added regression tests.
+- Defect found: the first full-suite verification had one review UI
+  FileNotFoundError while waiting for a merged test repository; the isolated
+  test and the complete review UI module passed, and the subsequent full gate
+  passed.
+- Verification: focused UI tests printed `33 passed`; `scripts/capture_screenshots.ps1`
+  exited 0; `scripts/verify.ps1` printed `462 passed, 2 skipped`,
+  `All checks passed!`, `150 files already formatted`, both smoke tests PASS,
+  and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
 
 ## 2026-10-22 — Draft editing and history detail inspection   (commit: 53e4ce0)
 - Task: Improve the workflow editor and execution-history surface without

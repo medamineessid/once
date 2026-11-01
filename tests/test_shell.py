@@ -55,6 +55,7 @@ def test_home_page_shows_welcome_and_empty_activity(qtbot, window):
     assert "Once" in title
     assert "personal assistant" in subtitle
     assert home._activity_empty.isVisible() is True
+    assert home._demo_button.parentWidget().minimumHeight() >= 180
 
 
 def test_create_automation_page_has_description_input(qtbot, window):
@@ -105,6 +106,17 @@ def test_create_automation_button_ignores_blank_input(qtbot, window):
     qtbot.mouseClick(page._create_button, Qt.MouseButton.LeftButton)
 
     assert received == []
+    assert page._banner.isHidden()
+
+
+def test_create_from_scratch_clears_description_unavailable_banner(qtbot, window):
+    window._show_create_automation()
+    page = window.create_automation_page
+    page.show_not_available("Open invoices")
+    assert page._banner.isVisible()
+
+    qtbot.mouseClick(page._scratch_button, Qt.MouseButton.LeftButton)
+
     assert page._banner.isHidden()
 
 

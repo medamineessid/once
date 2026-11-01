@@ -41,6 +41,7 @@ class Card(QFrame):
         self._body = QLabel(body, self)
         self._body.setObjectName("cardBody")
         self._body.setWordWrap(True)
+        self._body.setMinimumHeight(54)
         self._action = QPushButton(action_label, self)
         self._action.setObjectName("secondaryActionButton")
         self._action.clicked.connect(self.action_requested.emit)

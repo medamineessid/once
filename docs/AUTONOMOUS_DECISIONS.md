@@ -363,3 +363,14 @@ Format per item: id, date, question, options, choice, reason.
   keeps ownership of its own shortcuts. The three actions are reversible or
   use the already-tested save path; no modal confirmation or new persistence
   semantics are introduced.
+
+## AD-024 — 2026-11-01 — Screenshot-polish scope
+
+- Question: how should visible defects found in the captured shell screenshots
+  be corrected without changing workflow semantics?
+- Choice: use existing style tokens/object names for editor actions, clear the
+  stale informational banner when entering scratch editing, and reserve enough
+  height for the Home demonstration card body.
+- Reason: these are presentation-only corrections with observable regression
+  tests. They do not alter validators, approval behavior, persistence, or
+  filesystem operations.

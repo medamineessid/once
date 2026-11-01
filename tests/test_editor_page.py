@@ -105,6 +105,16 @@ def test_clearing_the_name_keeps_previous_name_and_warns_inline(qtbot, tmp_path)
     assert "needs a name" in window.editor_page._banner.body_text
 
 
+def test_editor_actions_have_visible_button_styles(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    window._show_editor()
+
+    assert window.editor_page._add_button.objectName() == "secondaryActionButton"
+    assert window.editor_page._undo_button.objectName() == "secondaryActionButton"
+    assert window.editor_page._redo_button.objectName() == "secondaryActionButton"
+    assert window.editor_page._save_button.objectName() == "primaryActionButton"
+
+
 def test_unsaved_bar_can_stay_then_discard_definition_changes(qtbot, tmp_path) -> None:
     window = _make_window(qtbot, tmp_path)
     _create_and_rename(window, qtbot, "Unsaved automation")
