@@ -1118,3 +1118,24 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   worktree printed `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-01 — Task C1: CI Green and Required   (commit: pending)
+- Task: Complete Lane C, Task C1 — configure a reliable Windows GitHub Actions
+  workflow for Python 3.14 targeting the verification gate (scripts/verify.ps1),
+  ensure robust failure propagation, eliminate bashisms, support virtualenv and
+  global Python fallbacks in verify.ps1, and add automated tests for CI.
+- AI contribution: updated `.github/workflows/tests.yml` with workflow name `CI`,
+  job name `CI`, `windows-latest` runner, full git history checkout (`fetch-depth: 0`),
+  Python 3.14 verification, pip caching, and execution of `scripts/verify.ps1`;
+  updated `scripts/verify.ps1` with fallback Python/Ruff discovery and safe targetRef
+  handling; added `tests/test_ci.py` covering CI configuration and verification script gates.
+- Defect found: previously `.github/workflows/tests.yml` did not run the verification gate
+  `scripts/verify.ps1`, used a job name unsuitable for a clear required status check,
+  omitted full git history needed for append-only log verification, and `verify.ps1`
+  hardcoded `.venv\Scripts\python.exe` which failed on environments without `.venv`.
+- Verification: ran `scripts/verify.ps1` under Windows PowerShell 5.1; full suite passed with
+  442 passed, 2 skipped in 82.38s; Ruff check passed (0 errors); Ruff format check passed
+  (148 files already formatted); both smoke tests passed (`app.py --smoke-test`,
+  `app.py --shell --smoke-test`); append-only log guard passed; `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:

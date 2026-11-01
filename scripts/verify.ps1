@@ -7,16 +7,45 @@ $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location -LiteralPath $root
 
-$Python   = Join-Path $root '.venv\Scripts\python.exe'
-$RuffExe  = Join-Path $root '.venv\Scripts\ruff.exe'
+$defaultVenvPython = Join-Path $root '.venv\Scripts\python.exe'
+$defaultVenvRuff   = Join-Path $root '.venv\Scripts\ruff.exe'
 
-if (-not (Test-Path -LiteralPath $Python)) {
-    Write-Output "FAIL: Virtual environment not found at $Python"
+$Python = $null
+if (Test-Path -LiteralPath $defaultVenvPython) {
+    $Python = $defaultVenvPython
+} elseif ($env:VIRTUAL_ENV -and (Test-Path -LiteralPath (Join-Path $env:VIRTUAL_ENV 'Scripts\python.exe'))) {
+    $Python = Join-Path $env:VIRTUAL_ENV 'Scripts\python.exe'
+} elseif (Get-Command python.exe -ErrorAction SilentlyContinue) {
+    $Python = (Get-Command python.exe).Source
+} elseif (Get-Command python -ErrorAction SilentlyContinue) {
+    $Python = (Get-Command python).Source
+}
+
+if (-not $Python) {
+    Write-Output "FAIL: Virtual environment or Python executable not found"
     Write-Output "Create it first (py -3.14 -m venv .venv), then: pip install -r requirements-dev.txt"
     exit 1
 }
-if (-not (Test-Path -LiteralPath $RuffExe)) {
-    Write-Output "FAIL: ruff.exe not found at $RuffExe"
+
+$RuffExe = $null
+$UseRuffModule = $false
+if (Test-Path -LiteralPath $defaultVenvRuff) {
+    $RuffExe = $defaultVenvRuff
+} elseif ($env:VIRTUAL_ENV -and (Test-Path -LiteralPath (Join-Path $env:VIRTUAL_ENV 'Scripts\ruff.exe'))) {
+    $RuffExe = Join-Path $env:VIRTUAL_ENV 'Scripts\ruff.exe'
+} elseif (Get-Command ruff.exe -ErrorAction SilentlyContinue) {
+    $RuffExe = (Get-Command ruff.exe).Source
+} elseif (Get-Command ruff -ErrorAction SilentlyContinue) {
+    $RuffExe = (Get-Command ruff).Source
+} else {
+    & $Python -m ruff --version >$null 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $UseRuffModule = $true
+    }
+}
+
+if ((-not $RuffExe) -and (-not $UseRuffModule)) {
+    Write-Output "FAIL: ruff.exe not found at $defaultVenvRuff and 'ruff' module not available in $Python"
     Write-Output "Install the dev requirements: pip install -r requirements-dev.txt"
     exit 1
 }
@@ -37,11 +66,16 @@ function Invoke-Check {
         [int]$ForcedExitCode = -1
     )
     Write-Output "=== $Name ==="
-    & $Command
-    if ($ForcedExitCode -ge 0) {
-        $code = $ForcedExitCode
-    } else {
-        $code = $LASTEXITCODE
+    try {
+        & $Command
+        if ($ForcedExitCode -ge 0) {
+            $code = $ForcedExitCode
+        } else {
+            $code = $LASTEXITCODE
+        }
+    } catch {
+        Write-Output "ERROR: Check '$Name' threw an exception: $_"
+        $code = 1
     }
     if ($code -eq 0) {
         Write-Output "PASS: $Name"
@@ -73,7 +107,15 @@ function Invoke-Check {
 # --- the engineering log must stay append-only -------------------------------
 # Rule 7 of the working agreement: git diff --numstat origin/main...HEAD --
 # docs/ai_engineering_log.md must show 0 deletions.
-$logNumstat = git diff --numstat origin/main...HEAD -- docs/ai_engineering_log.md 2>&1
+$targetRef = 'origin/main'
+& git rev-parse --verify origin/main >$null 2>&1
+if ($LASTEXITCODE -ne 0) {
+    & git rev-parse --verify main >$null 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $targetRef = 'main'
+    }
+}
+$logNumstat = git diff --numstat "$targetRef...HEAD" -- docs/ai_engineering_log.md 2>&1
 $logCommandFailed = ($LASTEXITCODE -ne 0)
 $logDeleted = 0
 $logChanged = $false
@@ -93,9 +135,9 @@ if ($logCommandFailed) {
 } else {
     $logCode = 0
 }
-$logNote = 'git diff --numstat origin/main...HEAD -- docs/ai_engineering_log.md'
+$logNote = "git diff --numstat $targetRef...HEAD -- docs/ai_engineering_log.md"
 if ($logCommandFailed) {
-    $logNote = 'git diff failed; cannot judge the log'
+    $logNote = "git diff failed; cannot judge the log against $targetRef"
 } elseif (-not $logChanged) {
     $logNote = 'no change to the engineering log in this range'
 } else {
@@ -105,8 +147,13 @@ if ($logCommandFailed) {
 Invoke-Check -Name 'git branch --show-current' -Informational -Command { git branch --show-current }
 Invoke-Check -Name 'git status --short'        -Informational -Command { git status --short }
 Invoke-Check -Name 'pytest -q'                 -Command { & $Python -m pytest -q }
-Invoke-Check -Name 'ruff check .'              -Command { & $RuffExe check . }
-Invoke-Check -Name 'ruff format --check .'     -Command { & $RuffExe format --check . }
+if ($UseRuffModule) {
+    Invoke-Check -Name 'ruff check .'          -Command { & $Python -m ruff check . }
+    Invoke-Check -Name 'ruff format --check .' -Command { & $Python -m ruff format --check . }
+} else {
+    Invoke-Check -Name 'ruff check .'          -Command { & $RuffExe check . }
+    Invoke-Check -Name 'ruff format --check .' -Command { & $RuffExe format --check . }
+}
 Invoke-Check -Name 'app.py --smoke-test'       -Command { & $Python app.py --smoke-test }
 Invoke-Check -Name 'app.py --shell --smoke-test' -Command { & $Python app.py --shell --smoke-test }
 Invoke-Check -Name 'engineering log append-only' -ForcedExitCode $logCode -Command {
