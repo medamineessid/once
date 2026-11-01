@@ -32,7 +32,7 @@ from ui.editor.layout import (
     NodeSlot,
     auto_layout,
 )
-from ui.styles import ACCENT, ACCENT_TEXT, BORDER, BORDER_STRONG, SURFACE
+from ui.styles import ACCENT, ACCENT_TEXT, BORDER, BORDER_STRONG, SURFACE, TEXT_STRONG
 
 MARGIN = 40.0
 _ARROW_LEN = 9.0
@@ -55,25 +55,29 @@ def _arrow_polygon() -> QPolygonF:
 class NodeCard(QGraphicsPathItem):
     """One rounded card with a child title and subtitle."""
 
-    def __init__(self, slot: NodeSlot, title: str, subtitle: str) -> None:
+    def __init__(
+        self, slot: NodeSlot, title: str, subtitle: str, *, terminal: bool = False
+    ) -> None:
         super().__init__()
         self.slot = slot
-        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        self.terminal = terminal
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, not terminal)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         path = QPainterPath()
         path.addRoundedRect(QRectF(0.0, 0.0, slot.w, slot.h), 10.0, 10.0)
         self.setPos(slot.x, slot.y)
-        self.setPen(QPen(QColor(BORDER), _NORMAL_PEN_WIDTH))
-        self.setBrush(QBrush(QColor(SURFACE)))
+        self.setPen(QPen(QColor(BORDER_STRONG if terminal else BORDER), _NORMAL_PEN_WIDTH))
+        self.setBrush(QBrush(QColor("#F2F4F7" if terminal else SURFACE)))
         self.setPath(path)
 
         title_item = QGraphicsTextItem(self)
-        title_item.setDefaultTextColor(QColor(BORDER_STRONG))
+        title_item.setDefaultTextColor(QColor(TEXT_STRONG if terminal else BORDER_STRONG))
         title_font = QFont()
         title_font.setPointSize(10)
         title_font.setBold(True)
         title_item.setFont(title_font)
         title_item.setPlainText(title)
+        title_item.setTextWidth(slot.w - 24.0)
         title_item.setPos(12.0, 10.0)
 
         subtitle_item = QGraphicsTextItem(self)
@@ -160,7 +164,12 @@ class CanvasView(QGraphicsView):
         bounds = QRectF()
         for slot_id, slot in plan.slots.items():
             title, subtitle = titles.get(slot_id, (slot_id, ""))
-            card = NodeCard(slot, title, subtitle)
+            card = NodeCard(
+                slot,
+                title,
+                subtitle,
+                terminal=slot_id in (START_ID, FINISH_ID),
+            )
             self._scene.addItem(card)
             self.nodes[slot_id] = card
             bounds = bounds.united(QRectF(slot.x, slot.y, slot.w, slot.h))
@@ -196,7 +205,10 @@ class CanvasView(QGraphicsView):
 
         self._scene.setSceneRect(bounds.adjusted(-MARGIN, -MARGIN, MARGIN, MARGIN))
         for card in self.nodes.values():
-            card.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+            card.setFlag(
+                QGraphicsItem.GraphicsItemFlag.ItemIsMovable,
+                not card.terminal,
+            )
         self.fit_to_screen()
         # Selection survives a rebuild (any edit) when the member still exists.
         self._selected_id = previous if previous in self.nodes else None
@@ -312,6 +324,10 @@ class CanvasView(QGraphicsView):
             ):
                 return member_id
         return None
+
+    def is_terminal(self, node_id: str | None) -> bool:
+        """Return whether a selected member is a fixed Start/Finish terminal."""
+        return node_id in (START_ID, FINISH_ID)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt name
         if event.button() == Qt.MouseButton.LeftButton:

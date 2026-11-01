@@ -145,7 +145,20 @@ class InspectorPanel(QScrollArea):
         step_count = len(workflow.steps)
         self._summary_label.setText(
             f"{workflow.name} \u2014 {step_count} step{'s' if step_count != 1 else ''}."
-            " Select a step on the canvas to see its details."
+            + (
+                " Click Add step below to create your first step."
+                if step_count == 0
+                else " Select a step on the canvas to see its details."
+            )
+        )
+
+    def show_terminal(self, terminal: str) -> None:
+        """Explain that Start and Finish are fixed canvas markers."""
+        self.show()
+        self._clear_fields()
+        self._apply_button.hide()
+        self._summary_label.setText(
+            f"{terminal} is a fixed marker. It is not an editable automation step."
         )
 
     def _clear_fields(self) -> None:

@@ -385,3 +385,14 @@ Format per item: id, date, question, options, choice, reason.
 - Reason: these interactions are reversible presentation changes and are
   covered by focused Qt tests. Layout metadata remains separate from the
   immutable workflow definition and never changes execution order or policy.
+
+## AD-026 — 2026-11-01 — Empty editor and terminal behavior
+
+- Question: what should happen when a user clicks the two rectangles in a new
+  automation before any real step exists?
+- Choice: keep Start and Finish as fixed, non-editable markers; explain that
+  clearly in the inspector; make Add step the primary action; and provide a
+  direct empty-state instruction.
+- Reason: terminals are not persisted workflow steps and must not pretend to
+  be editable. The user can now discover the real creation path without
+  changing the workflow model or validation rules.

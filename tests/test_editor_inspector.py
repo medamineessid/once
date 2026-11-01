@@ -182,6 +182,15 @@ def test_selecting_a_node_opens_a_summary_in_the_inspector(qtbot, app) -> None:
     assert "Read-only" not in summary or "changes your computer" in summary.lower()
 
 
+def test_terminals_explain_they_are_not_editable_steps(qtbot, app) -> None:
+    page = make_page(qtbot, new_session())
+
+    click_node(page._canvas, START_ID)
+
+    assert "fixed marker" in page._inspector.summary_text
+    assert not page._inspector.field_names
+
+
 def test_inspector_reports_mutating_steps_need_approval(qtbot, app) -> None:
     page = make_page(qtbot, new_session())
     assert StepKind.LAUNCH_APPLICATION in MUTATING_DESKTOP_KINDS

@@ -109,10 +109,23 @@ def test_editor_actions_have_visible_button_styles(qtbot, tmp_path) -> None:
     window = _make_window(qtbot, tmp_path)
     window._show_editor()
 
-    assert window.editor_page._add_button.objectName() == "secondaryActionButton"
+    assert window.editor_page._add_button.objectName() == "primaryActionButton"
     assert window.editor_page._undo_button.objectName() == "secondaryActionButton"
     assert window.editor_page._redo_button.objectName() == "secondaryActionButton"
     assert window.editor_page._save_button.objectName() == "primaryActionButton"
+
+
+def test_empty_editor_add_step_button_creates_an_editable_node(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    window._show_editor()
+
+    assert len(window.editor_page._session.workflow().steps) == 0
+    qtbot.mouseClick(window.editor_page._add_button, Qt.MouseButton.LeftButton)
+
+    assert len(window.editor_page._session.workflow().steps) == 1
+    assert "New step" in window.editor_page._steps_list.item(0).text()
+    window.editor_page._canvas.select_node("step-1")
+    assert "New step" in window.editor_page._inspector.summary_text
 
 
 def test_moved_node_is_saved_as_presentation_metadata(qtbot, tmp_path) -> None:

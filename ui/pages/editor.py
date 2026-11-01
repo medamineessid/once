@@ -67,8 +67,11 @@ class EditorPage(QWidget):
         dirty_layout.addWidget(QLabel(f"{EDITOR_UNSAVED_TITLE}: {EDITOR_UNSAVED_BODY}"))
         dirty_layout.addStretch(1)
         dirty_save = QPushButton(EDITOR_SAVE, self._dirty_panel)
+        dirty_save.setObjectName("primaryActionButton")
         dirty_discard = QPushButton(EDITOR_DISCARD, self._dirty_panel)
+        dirty_discard.setObjectName("secondaryActionButton")
         dirty_stay = QPushButton(EDITOR_STAY, self._dirty_panel)
+        dirty_stay.setObjectName("secondaryActionButton")
         dirty_layout.addWidget(dirty_save)
         dirty_layout.addWidget(dirty_discard)
         dirty_layout.addWidget(dirty_stay)
@@ -104,7 +107,7 @@ class EditorPage(QWidget):
         layout.addWidget(self._steps_list)
         actions = QHBoxLayout()
         self._add_button = QPushButton("Add step", self)
-        self._add_button.setObjectName("secondaryActionButton")
+        self._add_button.setObjectName("primaryActionButton")
         self._add_button.clicked.connect(self._add_step)
         self._undo_button = QPushButton("Undo", self)
         self._undo_button.setObjectName("secondaryActionButton")
@@ -275,6 +278,9 @@ class EditorPage(QWidget):
     def _on_node_selected(self, node_id: object) -> None:
         """Show the selected step's summary, or the automation summary."""
         if self._session is None:
+            return
+        if isinstance(node_id, str) and self._canvas.is_terminal(node_id):
+            self._inspector.show_terminal("Start" if node_id == "__start__" else "Finish")
             return
         self._show_inspector_for(node_id, self._session.workflow())
 

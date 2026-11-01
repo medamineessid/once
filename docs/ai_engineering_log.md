@@ -1256,3 +1256,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   passed, both smoke tests passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-01 — A2e: editor empty-state and terminal UX   (commit: pending)
+- Task: make the new-automation editor understandable and ensure terminal
+  clicks do not look like failed step editing.
+- AI contribution: distinguished fixed Start/Finish markers, added terminal
+  guidance, made Add step the primary action, improved empty-state copy and
+  terminal text contrast, and added click-through regression tests.
+- Defect found: the screenshot showed zero editable steps while presenting
+  Start/Finish as ordinary blank rectangles; the only creation control was
+  visually weak, so clicking the rectangles appeared broken.
+- Verification: focused tests printed `24 passed`; screenshot capture printed
+  21 distinct, non-empty PNGs; detector returned `[]`; `scripts/verify.ps1`
+  printed `467 passed, 2 skipped`, Ruff and formatting passed, both smoke
+  tests passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
