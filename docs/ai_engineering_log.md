@@ -12,8 +12,6 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review: 
 
-
-
 ## 2026-10-22 — Draft editing and history detail inspection   (commit: 53e4ce0)
 - Task: Improve the workflow editor and execution-history surface without
   moving workflow logic into the UI.
@@ -1314,5 +1312,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: focused shell tests printed `29 passed`; `scripts/verify.ps1`
   printed `469 passed, 2 skipped`, Ruff and formatting passed, both smoke
   tests passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-01 — P5a: Recording to reviewable editor draft   (commit: pending)
+- Task: connect a completed local recording to a reviewable proposal and an
+  approved editable workflow without bypassing validation or approval.
+- AI contribution: added deterministic observation-step analysis, fixed the
+  Review page proposal rendering, wired approval to the existing
+  `approve_proposal`/`save_approved` boundary, and opened the approved result
+  in the editor.
+- Defect found: the shell stopped and persisted recordings but left users on a
+  banner; Review expected a nonexistent `proposal.steps` field and was never
+  service-injected.
+- Verification: focused recording/review tests printed `42 passed`;
+  `scripts/verify.ps1` printed `471 passed, 2 skipped`, Ruff and formatting
+  passed, both smoke tests passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:

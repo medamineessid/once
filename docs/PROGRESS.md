@@ -51,6 +51,7 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | A2f | Recorder discoverability in create flow | DONE | slice/a2c-undo-save: real RecordingService start/stop controls, active/saved state, local persistence, truthful review-required message; focused 4 passed; full verify 468 passed/2 skipped |
 | A2g | Home first-run UX correction | DONE | removed demo card/redundant CTA/brand footer, added clear manual-vs-recording choices, hid diagnostic demo rows from Home; full verify 468 passed/2 skipped |
 | A2h | Separate manual and recording routes | DONE | Build opens the editor directly; Record opens a dedicated recording screen with back action and review handoff; 469 passed/2 skipped |
+| P5a | Recording to reviewable editor draft | DONE | Stop recording builds a safe observation proposal, Review shows its nodes, existing approval gate saves it, and approved workflow opens in editor; full verify 471 passed/2 skipped |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |

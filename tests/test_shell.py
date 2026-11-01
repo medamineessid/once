@@ -156,9 +156,32 @@ def test_create_page_records_a_task_through_the_real_service(qtbot, tmp_path):
 
     qtbot.mouseClick(page._stop_record_button, Qt.MouseButton.LeftButton)
     assert not recording_service.recording
-    assert page._record_button.isEnabled()
-    assert "Recording saved locally" in page._banner.body_text
+    assert window.workspace.currentWidget() is window.review_page
+    assert window.review_page._approve_button.isVisible()
+    assert window.review_page._steps_list.count() == 1
     assert recording_service.list_recordings()
+
+
+def test_recording_review_approval_opens_editable_draft(qtbot, tmp_path):
+    recording_service = RecordingService(
+        tmp_path / "recordings",
+        recorder_factory=FakeRecorder,
+    )
+    window = MainWindow(
+        service=WorkflowService(workflow_directory=tmp_path / "workflows"),
+        recording_service=recording_service,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    window._show_recording()
+
+    qtbot.mouseClick(window.create_automation_page._record_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.create_automation_page._stop_record_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.review_page._approve_button, Qt.MouseButton.LeftButton)
+
+    assert window.workspace.currentWidget() is window.editor_page
+    assert window.editor_page._steps_list.count() == 1
+    assert window.editor_page._name_input.text() == "Recorded task draft"
 
 
 def test_sidebar_active_state_after_sidebar_click(qtbot, window):

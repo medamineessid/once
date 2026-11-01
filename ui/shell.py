@@ -19,9 +19,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ai.models import AnalysisRequest, ProviderDraft
+from ai.provider import deterministic_recording_provider
 from controller.recording import RecordingService
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig
+from engine.workflow import Workflow
+from recorder.drafts import build_raw_draft
 from ui.components.banner import Banner
 from ui.components.footer import (
     FOOTER_ATTENTION,
@@ -213,6 +217,7 @@ class MainWindow(QMainWindow):
         self.my_automations_page.set_service(self._service)
         self.settings_page.set_service(self._service)
         self.editor_page.set_service(self._service)
+        self.review_page.set_service(self._service)
         self.settings_page.configure(
             app_data_dir=self._app_data_dir, verifier_config=self._verifier_config
         )
@@ -258,6 +263,7 @@ class MainWindow(QMainWindow):
         self.editor_page.saved.connect(self._editor_saved)
         self.editor_page.cancelled.connect(self._show_create_automation)
         self.review_page.cancelled.connect(self._on_review_cancelled)
+        self.review_page.approved.connect(self._open_approved_draft)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 
@@ -419,6 +425,21 @@ class MainWindow(QMainWindow):
                 f"{RECORDING_SAVED_NEXT}"
             ),
         )
+        draft = build_raw_draft(recording)
+        proposal = deterministic_recording_provider().analyze(AnalysisRequest(draft))
+        if not isinstance(proposal, ProviderDraft):
+            self.create_automation_page.show_not_available(
+                "The recording did not produce a reviewable draft."
+            )
+            return
+        self.review_page.load_proposal(proposal)
+        self._show_page(ShellPages.REVIEW)
+
+    def _open_approved_draft(self, workflow: Workflow) -> None:
+        if not isinstance(workflow, Workflow):
+            return
+        self.editor_page.open_workflow(workflow)
+        self._show_page(ShellPages.EDITOR)
 
     def _on_review_cancelled(self) -> None:
         self._show_page(ShellPages.HOME)

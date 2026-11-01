@@ -63,5 +63,41 @@ def deterministic_demo_provider() -> FakeAnalysisProvider:
                     ),
                 ),
             ),
-        )
+        ),
     )
+
+
+def deterministic_recording_provider() -> AnalysisProvider:
+    """Return a local provider that turns observations into safe report steps."""
+
+    class RecordingProvider:
+        def analyze(self, request: AnalysisRequest) -> ProviderDraft:
+            steps = tuple(
+                WorkflowStep(
+                    step_id=f"observation-{action.sequence}",
+                    name=f"Observation {index}",
+                    kind=StepKind.REPORT,
+                    message=action.description,
+                )
+                for index, action in enumerate(request.draft.actions, start=1)
+            )
+            workflow = Workflow(
+                workflow_id=f"recording-{request.draft.recording_id}",
+                name="Recorded task draft",
+                steps=steps
+                or (
+                    WorkflowStep(
+                        step_id="observation-empty",
+                        name="No actions captured",
+                        kind=StepKind.REPORT,
+                        message="No usable actions were captured. Record the task again.",
+                    ),
+                ),
+            )
+            WorkflowRunner.validate(workflow)
+            return ProviderDraft(
+                goal="Review the recorded observations and turn them into safe steps.",
+                workflow=workflow,
+            )
+
+    return RecordingProvider()

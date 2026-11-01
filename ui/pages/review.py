@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
-    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -27,7 +26,7 @@ from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 class ReviewPage(QWidget):
     """Clean review of a proposed workflow before approval."""
 
-    approved = Signal()
+    approved = Signal(object)
     cancelled = Signal()
 
     def __init__(self, parent: QWidget | None = None):
@@ -101,9 +100,9 @@ class ReviewPage(QWidget):
         try:
             approved = approve_proposal(self._proposal)
             self._service.save_approved(approved)
-            self.approved.emit()
+            self.approved.emit(approved.workflow)
         except WorkflowValidationError as error:
-            QMessageBox.warning(self, "Approval error", str(error))
+            self._goal_label.setText(f"Approval could not be completed: {error}")
 
     def show_workflow(self, workflow: Workflow | None) -> None:
         """Show an opened saved workflow for read-only review, like the old window."""
@@ -123,13 +122,18 @@ class ReviewPage(QWidget):
 
     def load_proposal(self, proposal: ProviderDraft | None) -> None:
         self._proposal = proposal
+        self._title_label.setText("Review recorded draft")
         self._goal_label.setText(f"Goal: {proposal.goal}" if proposal else "No proposal loaded.")
         self._steps_list.clear()
         if proposal:
-            for idx, step_text in enumerate(proposal.steps, start=1):
-                self._steps_list.addItem(f"{idx}. {step_text}")
+            self._canvas.set_workflow(proposal.workflow)
+            for idx, step in enumerate(proposal.workflow.steps, start=1):
+                self._steps_list.addItem(f"{idx}. {step.name}: {step.message}")
+            self._approve_button.show()
         else:
             self._steps_list.addItems(self._empty_steps())
+            self._canvas.set_workflow(None)
+            self._approve_button.hide()
 
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service

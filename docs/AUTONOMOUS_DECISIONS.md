@@ -432,3 +432,15 @@ Format per item: id, date, question, options, choice, reason.
   made the buttons misleading and forced users to rediscover their intent.
   Separate destinations make each action observable without adding a second
   execution or approval path.
+
+## AD-030 — 2026-11-01 — Recording draft handoff
+
+- Question: what should a completed local recording become before it can enter
+  the editor?
+- Choice: build a deterministic, provider-shaped proposal containing only
+  REPORT observation steps, show it in the existing Review page, require the
+  existing `approve_proposal` gate, then open the approved workflow in the
+  editor.
+- Reason: this gives the user a real reviewable node result without converting
+  raw clicks directly into executable desktop actions. The proposal remains
+  bounded, validated, offline, and explicitly approved before save/edit.
