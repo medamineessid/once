@@ -16,7 +16,11 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+from PySide6.QtCore import QThread
+from PySide6.QtWidgets import QApplication, QWidget
+
 from engine.workflow import StepKind, Workflow, WorkflowStep
+from ui.workers import WorkflowWorker, cancel_and_join
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -86,9 +90,7 @@ sys.exit(0)
 
 def test_detached_worker_ignoring_cancel_exits_cleanly(tmp_path: Path) -> None:
     script = tmp_path / "b6_stubborn_worker_exit.py"
-    script.write_text(
-        _CHILD_SCRIPT.replace("@REPO_ROOT@", REPO_ROOT.as_posix()), encoding="utf-8"
-    )
+    script.write_text(_CHILD_SCRIPT.replace("@REPO_ROOT@", REPO_ROOT.as_posix()), encoding="utf-8")
 
     env = dict(os.environ)
     env["QT_QPA_PLATFORM"] = "offscreen"
@@ -122,11 +124,8 @@ def test_detached_worker_ignoring_cancel_exits_cleanly(tmp_path: Path) -> None:
 
 def test_cancel_and_join_returns_true_when_thread_finishes_in_bound() -> None:
     """Control: a cooperative worker finishes inside the bound (no detach)."""
-    from PySide6.QtCore import QThread
-    from PySide6.QtWidgets import QApplication, QWidget
-    from ui.workers import WorkflowWorker, cancel_and_join
-
     app = QApplication.instance() or QApplication([])
+    assert app is not None
 
     quick_service = SimpleNamespace(
         run_workflow=lambda *args, **kwargs: SimpleNamespace(
@@ -136,9 +135,7 @@ def test_cancel_and_join_returns_true_when_thread_finishes_in_bound() -> None:
     stub_workflow = Workflow(
         workflow_id="b6-quick",
         name="Quick automation",
-        steps=(
-            WorkflowStep(step_id="s1", name="Note", kind=StepKind.REPORT, message="..."),
-        ),
+        steps=(WorkflowStep(step_id="s1", name="Note", kind=StepKind.REPORT, message="..."),),
     )
 
     widget = QWidget()
