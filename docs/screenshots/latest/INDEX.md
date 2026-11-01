@@ -6,7 +6,7 @@ Source: `scripts/capture_screenshots.ps1` (real shell through
 `scripts/capture_shell_pages.py`, `QT_QPA_PLATFORM=offscreen`, 2026-11-01,
 capture exit code 0, all distinct + non-empty). 21 PNGs = 7 pages x 3 sizes.
 The editor capture opens a fresh definition through the shell's own
-`_show_editor()` entry point (A2a slice).
+`_show_editor()` entry point (A2b slice).
 
 | File | Page | Size (bytes) |
 |---|---|---|

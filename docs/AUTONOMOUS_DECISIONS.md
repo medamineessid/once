@@ -338,3 +338,15 @@ Format per item: id, date, question, options, choice, reason.
   all four corrections are to tests written earlier in this same session,
   and each keeps or strengthens the observable assertion; the capture
   extension is an explicit instruction of the queue, not a lane drift.
+
+## AD-022 — 2026-11-01 — A2b inspector field scope
+
+- Question: which controls may the inspector expose without duplicating
+  workflow validation or inventing unsupported configuration?
+- Choice: expose name, message, and max attempts for every step; target for
+  every target-bearing kind; timeout only for WAIT_WINDOW and WAIT_PAGE; and
+  postcondition only for INSPECT_PATH and VERIFY_PATH_EXISTS.
+- Reason: these controls mirror the existing WorkflowStep fields and the
+  validator's per-kind target/postcondition rules in engine/workflow.py.
+  Apply emits values to WorkflowEditorSession.update_step, so invalid edits
+  remain atomic and are reported by the existing validator.

@@ -1168,3 +1168,25 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   scripts/capture_screenshots.ps1 exit 0, 21 distinct non-empty PNGs.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-01 — A2b: validator-backed inspector editing forms   (commit: d819a98)
+- Task: add an editor inspector form whose fields are limited to the existing
+  validator-backed step configuration, with controller-mediated Apply and
+  inline validation errors.
+- AI contribution: extended ui/editor/inspector.py with dynamic typed fields,
+  connected changes through EditorPage to WorkflowEditorSession.update_step,
+  added the edit error string, and added three focused tests for applying
+  fields, field scope, and invalid-edit atomicity.
+- Defect found: the first wiring connected the inspector signal before the
+  inspector was constructed; the focused test caught the AttributeError and
+  the connection was moved after construction. A test initially clicked an
+  already-selected node after refresh, which intentionally deselected it; the
+  test now asserts the refreshed inspector directly.
+- Verification: `pytest tests/test_editor_inspector.py -q` -> `15 passed in
+  1.35s`; adjacent editor/architecture tests -> `17 passed in 1.66s`;
+  `scripts/capture_screenshots.ps1` -> 21 distinct, non-empty PNGs, exit 0;
+  `scripts/verify.ps1` -> `457 passed, 2 skipped in 163.96s (0:02:43)`,
+  Ruff check passed, format check passed (150 files), both smoke tests passed,
+  and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
