@@ -32,6 +32,9 @@ from ui.strings import (
     EDITOR_EDIT_ERROR_TITLE,
     EDITOR_RENAME_EMPTY_MESSAGE,
     EDITOR_RENAME_ERROR_TITLE,
+    EDITOR_RUN,
+    EDITOR_RUN_SAVE_FIRST_BODY,
+    EDITOR_RUN_SAVE_FIRST_TITLE,
     EDITOR_SAVE,
     EDITOR_STAY,
     EDITOR_UNSAVED_BODY,
@@ -45,6 +48,7 @@ class EditorPage(QWidget):
 
     saved = Signal()
     cancelled = Signal()
+    run_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -121,11 +125,15 @@ class EditorPage(QWidget):
         self._cancel_button = QPushButton("Cancel", self)
         self._cancel_button.setObjectName("secondaryActionButton")
         self._cancel_button.clicked.connect(self.cancelled.emit)
+        self._run_button = QPushButton(EDITOR_RUN, self)
+        self._run_button.setObjectName("primaryActionButton")
+        self._run_button.clicked.connect(self._run)
         for button in (
             self._add_button,
             self._undo_button,
             self._redo_button,
             self._save_button,
+            self._run_button,
             self._cancel_button,
         ):
             actions.addWidget(button)
@@ -245,6 +253,29 @@ class EditorPage(QWidget):
             return
         self._dirty_panel.hide()
         self.saved.emit()
+
+    def _run(self) -> None:
+        if self._session is None:
+            return
+        if self._session.is_dirty():
+            self._banner.show_message(
+                "info", EDITOR_RUN_SAVE_FIRST_TITLE, EDITOR_RUN_SAVE_FIRST_BODY
+            )
+            return
+        self.run_requested.emit(self._session.workflow())
+
+    def set_running(self, running: bool) -> None:
+        """Lock definition controls while the saved definition is executing."""
+        for button in (
+            self._add_button,
+            self._undo_button,
+            self._redo_button,
+            self._save_button,
+            self._run_button,
+        ):
+            button.setEnabled(not running)
+        self._canvas.setEnabled(not running)
+        self._inspector.setEnabled(not running)
 
     def _discard(self) -> None:
         if self._session is None:

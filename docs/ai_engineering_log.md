@@ -2,6 +2,20 @@
 
 Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 
+## 2026-11-01 — P6: Editor run action   (commit: pending)
+- Task: Add a real saved-definition run action to the visual editor with inline
+  feedback, edit locking, and Activity refresh.
+- AI contribution: wired the editor action to the existing shell worker path and
+  added focused acceptance tests for save-first and successful execution.
+- Defect found: the first focused run exposed a missing shared-string import in
+  the shell handler; Ruff also identified import ordering. Both were corrected
+  before the passing rerun.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests/test_editor_page.py -q`
+  printed `10 passed`; Ruff check printed `All checks passed!` before the final
+  format pass; final full verification is pending.
+- Outcome: IN PROGRESS
+- Human review:
+
 
 ## 2026-10-21 — Step 0: Pre-flight, evidence, decisions   (commit: n/a — git repo not yet initialised; Step 1 runs `git init`)
 

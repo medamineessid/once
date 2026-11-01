@@ -2,6 +2,18 @@
 
 Format per item: id, date, question, options, choice, reason.
 
+## AD-031 — 2026-11-01 — Running from the editor
+
+- Question: How should the editor run action behave when the definition has
+  unsaved changes?
+- Options: (a) execute the unsaved in-memory definition; (b) silently save it;
+  (c) refuse with a clear save-first message.
+- Choice: (c), and run only through the existing `WorkflowWorker` and
+  `WorkflowService.run_workflow` path.
+- Reason: executing unsaved data would make the run irreproducible, while
+  silent saving is an unexpected filesystem change. This preserves the
+  existing saved-workflow and approval boundaries.
+
 ## AD-001 — 2026-10-29 — Where should the authorized folder live?
 
 - Question: P1.4 requires the chosen authorized folder to "persist through the

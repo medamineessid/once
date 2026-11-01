@@ -113,6 +113,37 @@ def test_editor_actions_have_visible_button_styles(qtbot, tmp_path) -> None:
     assert window.editor_page._undo_button.objectName() == "secondaryActionButton"
     assert window.editor_page._redo_button.objectName() == "secondaryActionButton"
     assert window.editor_page._save_button.objectName() == "primaryActionButton"
+    assert window.editor_page._run_button.objectName() == "primaryActionButton"
+
+
+def test_editor_run_requires_a_saved_definition(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    window._show_editor()
+    qtbot.mouseClick(window.editor_page._add_button, Qt.MouseButton.LeftButton)
+
+    qtbot.mouseClick(window.editor_page._run_button, Qt.MouseButton.LeftButton)
+
+    assert window.editor_page._banner.isVisible()
+    assert window.editor_page._banner.title_text == "Save before running"
+    assert window._editor_thread is None
+
+
+def test_saved_editor_definition_runs_and_refreshes_activity(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    _create_and_rename(window, qtbot, "Run from editor")
+    qtbot.mouseClick(window.editor_page._save_button, Qt.MouseButton.LeftButton)
+    saved_path = window._service.list_saved()[0]
+    workflow = window._service.load(saved_path)
+    window.editor_page.open_workflow(workflow)
+    window._show_page(ShellPages.EDITOR)
+
+    qtbot.mouseClick(window.editor_page._run_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: window._editor_thread is None, timeout=10_000)
+
+    assert "finished successfully" in window.editor_page._banner.body_text
+    assert len(window._service.history()) == 1
+    window._show_page_activity()
+    assert window.activity_page._history_list.count() == 1
 
 
 def test_empty_editor_add_step_button_creates_an_editable_node(qtbot, tmp_path) -> None:

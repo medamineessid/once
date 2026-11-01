@@ -58,6 +58,10 @@ from ui.strings import (
     DEMO_FINISHED_BODY,
     DEMO_FINISHED_TITLE,
     DEMO_STOPPED_TITLE,
+    EDITOR_RUN,
+    EDITOR_RUN_FAILED,
+    EDITOR_RUN_STARTED,
+    EDITOR_RUN_SUCCEEDED,
     RECORDING_SAVED_NEXT,
     RUN_CANCELLED_MESSAGE,
     SIDEBAR_ACTIVITY,
@@ -194,6 +198,8 @@ class MainWindow(QMainWindow):
         self._app_data_dir = app_data_dir
         self._demo_worker = None
         self._demo_thread: QThread | None = None
+        self._editor_worker: WorkflowWorker | None = None
+        self._editor_thread: QThread | None = None
         apply_theme(self)
         self.sidebar = Sidebar(self)
         self.status_footer = StatusFooter(self)
@@ -261,6 +267,7 @@ class MainWindow(QMainWindow):
         self.create_automation_page.stop_record_requested.connect(self._stop_recording)
         self.create_automation_page.cancelled.connect(self._show_page_home)
         self.editor_page.saved.connect(self._editor_saved)
+        self.editor_page.run_requested.connect(self._run_from_editor)
         self.editor_page.cancelled.connect(self._show_create_automation)
         self.review_page.cancelled.connect(self._on_review_cancelled)
         self.review_page.approved.connect(self._open_approved_draft)
@@ -383,6 +390,52 @@ class MainWindow(QMainWindow):
         self.home_page.refresh()
         self.activity_page.refresh()
 
+    def _run_from_editor(self, workflow: object) -> None:
+        """Run the saved editor definition through the standard worker path."""
+        if self._editor_thread is not None:
+            return
+        self.editor_page.set_running(True)
+        self.editor_page._banner.show_message("info", EDITOR_RUN, EDITOR_RUN_STARTED)
+        self.status_footer.set_state(FOOTER_RUNNING)
+        self._editor_thread = QThread(self)
+        self._editor_worker = WorkflowWorker(self._service, workflow)
+        self._editor_worker.moveToThread(self._editor_thread)
+        self._editor_thread.started.connect(self._editor_worker.run)
+        queued = Qt.ConnectionType.QueuedConnection
+        self._editor_worker.finished.connect(self._on_editor_finished, queued)
+        self._editor_worker.failed.connect(self._on_editor_failed, queued)
+        self._editor_worker.finished.connect(self._quit_editor_thread)
+        self._editor_worker.failed.connect(self._quit_editor_thread)
+        self._editor_thread.finished.connect(self._on_editor_thread_finished, queued)
+        self._editor_thread.finished.connect(self._editor_thread.deleteLater)
+        self._editor_thread.start()
+
+    def _quit_editor_thread(self) -> None:
+        if self._editor_thread is not None:
+            self._editor_thread.quit()
+
+    def _on_editor_thread_finished(self) -> None:
+        self.editor_page.set_running(False)
+        self._editor_worker = None
+        self._editor_thread = None
+
+    def _on_editor_finished(self, run: object) -> None:
+        self.status_footer.set_state(FOOTER_READY)
+        status = getattr(getattr(run, "status", None), "value", "UNKNOWN")
+        if status == "SUCCEEDED":
+            self.editor_page._banner.show_message("success", EDITOR_RUN, EDITOR_RUN_SUCCEEDED)
+        else:
+            self.editor_page._banner.show_message(
+                "warning", EDITOR_RUN, f"{EDITOR_RUN_FAILED} Status: {status}."
+            )
+        self.activity_page.refresh()
+        self.my_automations_page.refresh()
+
+    def _on_editor_failed(self, message: str) -> None:
+        self.status_footer.set_state(FOOTER_ATTENTION)
+        self.editor_page._banner.show_message("error", EDITOR_RUN, f"{EDITOR_RUN_FAILED} {message}")
+        self.activity_page.refresh()
+
     def _open_workflow(self, path: Path) -> None:
         workflow = self._service.load(path)
         self.workspace.setCurrentWidget(self.review_page)
@@ -449,6 +502,9 @@ class MainWindow(QMainWindow):
         if self._recording_service is not None and self._recording_service.recording:
             self._recording_service.stop()
         self.cancel_run_thread()
+        if self._editor_thread is not None:
+            cancel_and_join(self._editor_thread, self._editor_worker)
+            self._on_editor_thread_finished()
         self.my_automations_page.shutdown_worker()
         self._service.close()
         super().closeEvent(event)
