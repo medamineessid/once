@@ -110,6 +110,7 @@ def test_canvas_grab_renders_non_empty(qtbot, canvas):
 
 def test_canvas_zoom_is_bounded_and_fit_is_available(qtbot, canvas):
     canvas.set_workflow(canvas_workflow(2))
+    assert canvas.dragMode() is canvas.DragMode.ScrollHandDrag
     for _ in range(30):
         canvas.zoom_out()
     assert canvas._zoom == 0.25

@@ -112,6 +112,7 @@ class CanvasView(QGraphicsView):
         self.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.nodes: dict[str, NodeCard] = {}
         self.edge_items: list[tuple[QGraphicsPathItem, QGraphicsPolygonItem]] = []
