@@ -2,6 +2,15 @@
 
 > Handoff note (updated after every commit) — most recent at the top.
 
+## Handoff (2026-11-01) — B1 implemented on branch b/b1-run-events (about to commit)
+
+- controller/run_events.py: RunEventKind (7 kinds), frozen RunEvent (sequence, workflow/step ids, status, message, evidence, engine_run_id), RunEventStream (locked, closes after RUN_FINISHED — empty tuples afterwards), FakeRunEventSource for tests. Events derive ONLY from real engine results: skip/cancel classification keys off the engine's two canonical skip phrases; retries surface once with "(attempt N)" message and attempt evidence.
+- docs/contracts/run_events.md: field table, honesty rules, thread-safety rules, delivery order, test-double note.
+- ui/workers.py WorkflowWorker: additive run_event Signal + RunEventStream wiring (start before the run, per result, reconcile+finish, failure path emits RUN_FINISHED(FAILED)); queued-connection note in contract.
+- tests/test_b1_run_events.py: 9 tests — identity, success order (REAL runner), failure+skipped fill, cancellation via real cancel flag, retry with a fake flaky desktop provider through the REAL engine, post-finish silence, worker delivery order + worker failure, fake-source contract. Focused: `9 passed in 0.43s`; neighbors: `15 passed in 11.04s`.
+- Pending: verify.ps1 + fence + ff-merge.
+- Next: B2 approval panel (My automations run flow), then B5, B4, B7.
+
 ## Handoff (2026-11-01) — B3 LANDED on main (d58e42b)
 
 - B3 landed after verify.ps1 ALL CHECKS PASSED and an empty lane-fence check. Review page now flows through the single approval path with non-modal banners; Approve test-clicked with a real service (saved workflow asserted via list_saved/load); Edit stays hidden pending B7 shell wiring.

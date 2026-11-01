@@ -10,6 +10,7 @@ from threading import Event
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
+from controller.run_events import RunEvent, RunEventSource, RunEventStream
 from controller.service import WorkflowService
 from engine.agent_change import ApprovedChange, ChangeReview
 from engine.errors import OnceError
@@ -118,6 +119,9 @@ class WorkflowWorker(QObject):
     progress = Signal(object)
     finished = Signal(object)
     failed = Signal(str)
+    #: One typed ui.run_events contract event per engine observation, emitted
+    #: from the worker thread; connections must be queued (cross-thread).
+    run_event = Signal(object)
 
     def __init__(
         self,
@@ -133,6 +137,7 @@ class WorkflowWorker(QObject):
         self._replay = replay
         self._allowed_root = allowed_root
         self._cancel_requested = Event()
+        self._event_stream: RunEventSource | None = None
 
     def cancel(self) -> None:
         """Request cancellation before the next engine step starts."""
@@ -141,24 +146,38 @@ class WorkflowWorker(QObject):
     @Slot()
     def run(self) -> None:
         """Execute the controller operation and publish its outcome."""
+        events = RunEventStream(self._workflow)
+        self._event_stream = events
+        self._emit_run_events(events.start())
+
+        def on_step_result(step_result: object) -> None:
+            self._emit_run_events(events.observe_step(step_result))  # type: ignore[arg-type]
+            self.progress.emit(step_result)
+
         try:
             if self._replay:
                 result = self._service.run_replay(
                     self._workflow,
                     allowed_root=self._allowed_root,
                     cancel_check=self._cancel_requested.is_set,
-                    progress_callback=self.progress.emit,
+                    progress_callback=on_step_result,  # type: ignore[arg-type]
                 )
             else:
                 result = self._service.run_workflow(
                     self._workflow,
                     cancel_check=self._cancel_requested.is_set,
-                    progress_callback=self.progress.emit,
+                    progress_callback=on_step_result,  # type: ignore[arg-type]
                 )
         except (OnceError, OSError, sqlite3.Error) as error:
+            self._emit_run_events(events.observe_failure(str(error)))
             self.failed.emit(str(error))
         else:
+            self._emit_run_events(events.observe_run(result))
             self.finished.emit(result)
+
+    def _emit_run_events(self, events: tuple[RunEvent, ...]) -> None:
+        for event in events:
+            self.run_event.emit(event)
 
 
 class VerifyProposalWorker(QObject):
