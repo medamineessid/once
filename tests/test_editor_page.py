@@ -11,7 +11,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 
 from controller.service import WorkflowService
-from engine.workflow import StepKind, Workflow, WorkflowStep
+from engine.workflow import StepKind, StepResult, StepStatus, Workflow, WorkflowStep
 from ui.shell import MainWindow, ShellPages
 
 
@@ -172,6 +172,25 @@ def test_editor_shows_existing_desktop_approval_gate(qtbot, tmp_path) -> None:
     assert window.editor_page._approval_panel.isVisible()
     assert "TYPE_TEXT" in window.editor_page._approval_details.text()
     assert window._editor_thread is None
+
+
+def test_editor_shows_step_result_and_evidence_in_inspector(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    window._show_editor()
+    qtbot.mouseClick(window.editor_page._add_button, Qt.MouseButton.LeftButton)
+    window.editor_page._canvas.select_node("step-1")
+
+    result = StepResult(
+        "step-1",
+        StepStatus.SUCCEEDED,
+        "The report was created.",
+        ("rows=3", "redacted=true"),
+    )
+    window.editor_page.show_step_result(result)
+
+    assert window.editor_page._canvas.nodes["step-1"].status == "SUCCEEDED"
+    assert "Run status: SUCCEEDED" in window.editor_page._inspector.summary_text
+    assert "redacted=true" in window.editor_page._inspector.summary_text
 
 
 def test_empty_editor_add_step_button_creates_an_editable_node(qtbot, tmp_path) -> None:

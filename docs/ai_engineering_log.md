@@ -29,6 +29,21 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-11-01 — P6: Live step states and evidence   (commit: pending)
+- Task: Show observable execution results on the editor canvas and in the
+  selected-step inspector.
+- AI contribution: connected `WorkflowWorker.progress` to semantic canvas card
+  states and rendered result messages/evidence in the existing inspector.
+- Defect found: the first lint pass caught a long canvas status line; it was
+  split without changing behavior.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests\test_editor_page.py
+  tests\test_editor_canvas.py tests\test_editor_inspector.py -q` printed
+  `37 passed`; `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  scripts\verify.ps1` printed `476 passed, 2 skipped`, `All checks passed!`,
+  `151 files already formatted`, both smoke tests PASS, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-11-01 — P6: Mutating-step approval panel   (commit: pending)
 - Task: Prevent editor runs from bypassing the existing desktop approval policy
   and make the approval decision visible before execution.

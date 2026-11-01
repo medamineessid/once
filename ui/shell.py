@@ -409,6 +409,7 @@ class MainWindow(QMainWindow):
         self._editor_worker.moveToThread(self._editor_thread)
         self._editor_thread.started.connect(self._editor_worker.run)
         queued = Qt.ConnectionType.QueuedConnection
+        self._editor_worker.progress.connect(self._on_editor_progress, queued)
         self._editor_worker.finished.connect(self._on_editor_finished, queued)
         self._editor_worker.failed.connect(self._on_editor_failed, queued)
         self._editor_worker.finished.connect(self._quit_editor_thread)
@@ -416,6 +417,10 @@ class MainWindow(QMainWindow):
         self._editor_thread.finished.connect(self._on_editor_thread_finished, queued)
         self._editor_thread.finished.connect(self._editor_thread.deleteLater)
         self._editor_thread.start()
+
+    def _on_editor_progress(self, step_result: object) -> None:
+        """Forward one observable engine result to the editor surface."""
+        self.editor_page.show_step_result(step_result)
 
     def _quit_editor_thread(self) -> None:
         if self._editor_thread is not None:
@@ -428,6 +433,8 @@ class MainWindow(QMainWindow):
 
     def _on_editor_finished(self, run: object) -> None:
         self.status_footer.set_state(FOOTER_READY)
+        for result in getattr(run, "results", ()):
+            self.editor_page.show_step_result(result)
         status = getattr(getattr(run, "status", None), "value", "UNKNOWN")
         if status == "SUCCEEDED":
             self.editor_page.show_run_message("success", EDITOR_RUN, EDITOR_RUN_SUCCEEDED)

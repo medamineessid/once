@@ -60,6 +60,7 @@ class EditorPage(QWidget):
         super().__init__(parent)
         self._service: WorkflowService | None = None
         self._session: WorkflowEditorSession | None = None
+        self._step_results: dict[str, object] = {}
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -194,6 +195,7 @@ class EditorPage(QWidget):
         self._refresh()
 
     def start_new(self) -> None:
+        self._step_results.clear()
         self._session = WorkflowEditorSession(
             Workflow(f"automation-{uuid4().hex}", "New automation", ())
         )
@@ -204,6 +206,7 @@ class EditorPage(QWidget):
     def open_workflow(self, workflow: Workflow) -> None:
         """Open an existing workflow and restore its presentation metadata."""
         self._session = WorkflowEditorSession(workflow)
+        self._step_results.clear()
         if self._service is not None and self._service.layout_storage_configured:
             loaded = self._service.load_layout(workflow.workflow_id)
             if loaded.record is not None:
@@ -292,6 +295,8 @@ class EditorPage(QWidget):
             )
             return
         workflow = self._session.workflow()
+        self._step_results.clear()
+        self._canvas.clear_step_statuses()
         if requires_desktop_approval(workflow):
             kinds = ", ".join(mutating_kind_names(workflow))
             self._approval_details.setText(
@@ -315,6 +320,17 @@ class EditorPage(QWidget):
 
     def show_run_message(self, severity: str, title: str, body: str) -> None:
         self._banner.show_message(severity, title, body)
+
+    def show_step_result(self, result: object) -> None:
+        """Render one worker progress result on the canvas and inspector."""
+        step_id = getattr(result, "step_id", None)
+        if not isinstance(step_id, str) or self._session is None:
+            return
+        status = getattr(getattr(result, "status", None), "value", "UNKNOWN")
+        self._step_results[step_id] = result
+        self._canvas.set_step_status(step_id, status)
+        if self._canvas.selected_id == step_id:
+            self._show_inspector_for(step_id, self._session.workflow())
 
     def set_running(self, running: bool) -> None:
         """Lock definition controls while the saved definition is executing."""
@@ -402,4 +418,4 @@ class EditorPage(QWidget):
         if step is None:
             self._inspector.show_automation(workflow)
         else:
-            self._inspector.show_step(step)
+            self._inspector.show_step(step, self._step_results.get(step.step_id))

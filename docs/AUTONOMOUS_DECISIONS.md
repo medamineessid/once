@@ -26,6 +26,18 @@ Format per item: id, date, question, options, choice, reason.
   approval implementation could drift from engine policy. The editor now uses
   `approve_desktop_workflow` and only emits its resulting `DesktopApproval`.
 
+## AD-033 — 2026-11-01 — Live run feedback
+
+- Question: Where should execution state and evidence appear while an editor run
+  is active?
+- Options: (a) only Activity after completion; (b) a separate run window; (c)
+  update the existing canvas cards and selected-step inspector from worker
+  progress.
+- Choice: (c).
+- Reason: the canvas is the user's working model, and the worker already emits
+  immutable `StepResult` values. Reusing that signal keeps feedback local,
+  observable, and free of a second execution state model.
+
 ## AD-001 — 2026-10-29 — Where should the authorized folder live?
 
 - Question: P1.4 requires the chosen authorized folder to "persist through the
