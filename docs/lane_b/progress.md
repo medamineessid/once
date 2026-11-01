@@ -2,6 +2,10 @@
 
 > Handoff note (updated after every commit) — most recent at the top.
 
+## Handoff (2026-11-01) — B3 LANDED on main (d58e42b)
+
+- B3 landed after verify.ps1 ALL CHECKS PASSED and an empty lane-fence check. Review page now flows through the single approval path with non-modal banners; Approve test-clicked with a real service (saved workflow asserted via list_saved/load); Edit stays hidden pending B7 shell wiring.
+
 ## Handoff (2026-11-01) — B3 implementation on branch b/b3-review-wiring (about to commit)
 
 - B3 done in code: ui/pages/review.py now (1) renders proposals through THE existing approval path — `preview_proposal` for the steps list (fixes the review.py:129 `proposal.steps` AttributeError, parity with old-window _show_preview), `approve_proposal` + `service.save_approved` on click; (2) Approve becomes visible ONLY with a service injected AND a valid proposal loaded (Edit stays hidden — needs the shell hand-off, recorded for B7); (3) errors are non-modal banners (blocking QMessageBox.warning removed); (4) invalid drafts keep approval hidden with a plain-language banner.
