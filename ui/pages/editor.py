@@ -48,6 +48,7 @@ class EditorPage(QWidget):
         self._name_input = QLineEdit(self)
         self._name_input.setPlaceholderText("Automation name")
         self._name_input.setText("New automation")
+        self._name_input.textChanged.connect(self._on_name_changed)
         layout.addWidget(self._name_input)
         self._canvas = CanvasView(self)
         self._canvas.setMinimumHeight(220)
@@ -78,6 +79,13 @@ class EditorPage(QWidget):
 
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service
+
+    def _on_name_changed(self, text: str) -> None:
+        if self._session is not None and text.strip():
+            try:
+                self._session.rename_workflow(text.strip())
+            except Exception:
+                pass
 
     def start_new(self) -> None:
         self._session = WorkflowEditorSession(
