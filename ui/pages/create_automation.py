@@ -22,6 +22,10 @@ from ui.strings import (
     CREATE_NOT_AVAILABLE_TITLE,
     CREATE_PLACEHOLDER,
     CREATE_QUESTION,
+    CREATE_RECORD_BODY,
+    CREATE_RECORD_START,
+    CREATE_RECORD_STOP,
+    CREATE_RECORD_TITLE,
     CREATE_TITLE,
 )
 from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
@@ -32,6 +36,8 @@ class CreateAutomationPage(QWidget):
 
     task_entered = Signal(str)
     editor_requested = Signal()
+    record_requested = Signal()
+    stop_record_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -39,6 +45,8 @@ class CreateAutomationPage(QWidget):
         self._description_input: QTextEdit | None = None
         self._create_button: QPushButton | None = None
         self._scratch_button: QPushButton | None = None
+        self._record_button: QPushButton | None = None
+        self._stop_record_button: QPushButton | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -86,6 +94,38 @@ class CreateAutomationPage(QWidget):
         self._scratch_button.setObjectName("secondaryActionButton")
         self._scratch_button.clicked.connect(self._open_scratch_editor)
         layout.addWidget(self._scratch_button)
+        self._record_card = QFrame(self)
+        self._record_card.setObjectName("recordCard")
+        record_layout = QVBoxLayout(self._record_card)
+        record_layout.setContentsMargins(SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD)
+        record_title = QLabel(CREATE_RECORD_TITLE, self._record_card)
+        record_title.setObjectName("cardTitle")
+        record_body = QLabel(CREATE_RECORD_BODY, self._record_card)
+        record_body.setObjectName("cardBody")
+        record_body.setWordWrap(True)
+        record_layout.addWidget(record_title)
+        record_layout.addWidget(record_body)
+        record_actions = QHBoxLayout()
+        self._record_button = QPushButton(CREATE_RECORD_START, self._record_card)
+        self._record_button.setObjectName("primaryActionButton")
+        self._record_button.clicked.connect(self.record_requested.emit)
+        self._stop_record_button = QPushButton(CREATE_RECORD_STOP, self._record_card)
+        self._stop_record_button.setObjectName("secondaryActionButton")
+        self._stop_record_button.clicked.connect(self.stop_record_requested.emit)
+        self._stop_record_button.hide()
+        record_actions.addWidget(self._record_button)
+        record_actions.addWidget(self._stop_record_button)
+        record_layout.addLayout(record_actions)
+        layout.addWidget(self._record_card)
+
+    def set_recording_state(self, active: bool, message: str | None = None) -> None:
+        """Reflect the real recorder lifecycle without implying draft execution."""
+        if self._record_button is not None:
+            self._record_button.setEnabled(not active)
+        if self._stop_record_button is not None:
+            self._stop_record_button.setVisible(active)
+        if message and self._banner is not None:
+            self._banner.show_message("info" if active else "success", CREATE_RECORD_TITLE, message)
 
     def show_not_available(self, task_text: str) -> None:
         """Answer a typed description honestly on the page banner."""

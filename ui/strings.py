@@ -108,6 +108,14 @@ CREATE_NOT_AVAILABLE_BODY = (
     " Nothing was created. You can open a saved automation on My automations;"
     " building automations arrives with the visual editor."
 )
+CREATE_RECORD_TITLE = "Record a task"
+CREATE_RECORD_BODY = "Show Once what to do. Recording saves a redacted local event log for review."
+CREATE_RECORD_START = "Start recording"
+CREATE_RECORD_STOP = "Stop recording"
+CREATE_RECORDING_ACTIVE = "Recording is active. Perform the task, then choose Stop recording."
+CREATE_RECORDING_SAVED = (
+    "Recording saved locally. It still needs review before it can become runnable steps."
+)
 RUN_CANCELLED_MESSAGE = "The run was cancelled before it finished."
 
 # --- Editor -----------------------------------------------------------------

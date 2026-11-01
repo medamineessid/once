@@ -1272,3 +1272,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   tests passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-01 — A2f: recorder discoverability in create flow   (commit: pending)
+- Task: expose the existing local recorder from the first-time create flow
+  without pretending a raw event log is an executable workflow.
+- AI contribution: added Start/Stop recording controls, active/saved state
+  messaging, shell wiring to RecordingService, and deterministic fake-recorder
+  coverage.
+- Defect found: the redesigned shell had a real RecordingService but no
+  reachable recorder control; its advertised Record a task capability was
+  absent from the UI.
+- Verification: focused recording tests printed `4 passed`; detector returned
+  `[]`; `scripts/verify.ps1` printed `468 passed, 2 skipped`, Ruff and
+  formatting passed, both smoke tests passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:

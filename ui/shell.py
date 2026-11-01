@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import override
 
@@ -47,6 +48,8 @@ from ui.pages import (
 )
 from ui.strings import (
     APP_TITLE,
+    CREATE_RECORDING_ACTIVE,
+    CREATE_RECORDING_SAVED,
     DEMO_FAILED_TITLE,
     DEMO_FINISHED_BODY,
     DEMO_FINISHED_TITLE,
@@ -248,6 +251,8 @@ class MainWindow(QMainWindow):
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)
         self.create_automation_page.editor_requested.connect(self._show_editor)
+        self.create_automation_page.record_requested.connect(self._start_recording)
+        self.create_automation_page.stop_record_requested.connect(self._stop_recording)
         self.editor_page.saved.connect(self._editor_saved)
         self.editor_page.cancelled.connect(self._show_create_automation)
         self.review_page.cancelled.connect(self._on_review_cancelled)
@@ -377,6 +382,32 @@ class MainWindow(QMainWindow):
         user a workflow that cannot run.
         """
         self.create_automation_page.show_not_available(text)
+
+    def _start_recording(self) -> None:
+        if self._recording_service is None:
+            self.create_automation_page.show_not_available(
+                "Recording is not configured for this application."
+            )
+            return
+        try:
+            self._recording_service.start(f"recording-{time.time_ns()}")
+        except RuntimeError as error:
+            self.create_automation_page.show_not_available(str(error))
+            return
+        self.create_automation_page.set_recording_state(True, CREATE_RECORDING_ACTIVE)
+
+    def _stop_recording(self) -> None:
+        if self._recording_service is None or not self._recording_service.recording:
+            return
+        try:
+            recording = self._recording_service.stop()
+        except RuntimeError as error:
+            self.create_automation_page.show_not_available(str(error))
+            return
+        self.create_automation_page.set_recording_state(
+            False,
+            f"{CREATE_RECORDING_SAVED} ({len(recording.events)} events captured).",
+        )
 
     def _on_review_cancelled(self) -> None:
         self._show_page(ShellPages.HOME)

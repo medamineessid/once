@@ -396,3 +396,15 @@ Format per item: id, date, question, options, choice, reason.
 - Reason: terminals are not persisted workflow steps and must not pretend to
   be editable. The user can now discover the real creation path without
   changing the workflow model or validation rules.
+
+## AD-027 — 2026-11-01 — Recorder entry point and draft boundary
+
+- Question: how should the shell expose recording without falsely claiming that
+  raw screen events are already executable automation steps?
+- Choice: add Start recording and Stop recording to the create flow, persist
+  through the existing RecordingService, and explicitly state that the saved
+  recording still needs review before becoming runnable steps.
+- Reason: the recorder is a real local capability, but converting observations
+  into executable steps requires the existing analysis/proposal boundary and
+  approval. Fabricating nodes directly from clicks would violate the
+  untrusted-draft and safety contract.

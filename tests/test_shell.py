@@ -17,12 +17,26 @@ from PySide6.QtWidgets import (
     QToolButton,
 )
 
+from controller.recording import RecordingService
 from controller.service import WorkflowService
 from engine.workflow import StepKind, Workflow, WorkflowStep
+from integrations.recorder import EventSink
+from recorder.models import RecordedEvent, RecordedEventKind
 from ui.components.spacer import Spacer
 from ui.shell import MainWindow, ShellPages
 
 UI_ROOT = Path(__file__).resolve().parents[1] / "ui"
+
+
+class FakeRecorder:
+    def __init__(self, sink: EventSink) -> None:
+        self._sink = sink
+
+    def start(self) -> None:
+        self._sink.append(RecordedEvent(1, 1, RecordedEventKind.MOUSE_CLICK, x=10, y=20))
+
+    def stop(self) -> None:
+        return None
 
 
 @pytest.fixture
@@ -118,6 +132,32 @@ def test_create_from_scratch_clears_description_unavailable_banner(qtbot, window
     qtbot.mouseClick(page._scratch_button, Qt.MouseButton.LeftButton)
 
     assert page._banner.isHidden()
+
+
+def test_create_page_records_a_task_through_the_real_service(qtbot, tmp_path):
+    recording_service = RecordingService(
+        tmp_path / "recordings",
+        recorder_factory=FakeRecorder,
+    )
+    window = MainWindow(
+        service=WorkflowService(workflow_directory=tmp_path / "workflows"),
+        recording_service=recording_service,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    window._show_create_automation()
+    page = window.create_automation_page
+
+    qtbot.mouseClick(page._record_button, Qt.MouseButton.LeftButton)
+    assert recording_service.recording
+    assert page._stop_record_button.isVisible()
+    assert "Recording is active" in page._banner.body_text
+
+    qtbot.mouseClick(page._stop_record_button, Qt.MouseButton.LeftButton)
+    assert not recording_service.recording
+    assert page._record_button.isEnabled()
+    assert "Recording saved locally" in page._banner.body_text
+    assert recording_service.list_recordings()
 
 
 def test_sidebar_active_state_after_sidebar_click(qtbot, window):
