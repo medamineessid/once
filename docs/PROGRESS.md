@@ -55,7 +55,7 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | IN PROGRESS | editor run uses WorkflowWorker, requires saved definitions, locks edits while running, refreshes Activity, shows the existing desktop approval gate, renders live step states plus evidence in the inspector, requests cooperative cancellation safely, and opens saved reviews through a real Edit automation route; broader P8 hardening remains |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |
-| P8 | Hardening (slice/p8-hardening) | IN PROGRESS | Added bounded 101-step and overlong-text rejection coverage, repeated cancellation safety coverage, and explicit `--classic` entry-point escape hatch |
+| P8 | Hardening (slice/p8-hardening) | IN PROGRESS | Added bounded 101-step and overlong-text rejection coverage, repeated cancellation safety coverage, explicit `--classic` entry-point escape hatch, and a regression test for detaching a worker that ignores cancellation |
 | P9 | Parity, default switch, release (slice/p9-release) | IN PROGRESS | Added docs/MVP_CHECKLIST.md and `--classic`; default switch and packaging remain gated |
 
 ## Legacy journey queue (PHASE C) — superseded by the prompt queue above

@@ -11,12 +11,13 @@ from __future__ import annotations
 import time
 from types import SimpleNamespace
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtTest import QTest
 
 from controller.service import WorkflowService
 from engine.workflow import StepKind, Workflow, WorkflowStep
 from ui.shell import MainWindow, ShellPages
+from ui.workers import WorkflowWorker, cancel_and_join
 
 
 def slow_run_factory(recorder: list[str]):
@@ -131,3 +132,25 @@ def test_close_with_no_run_is_harmless(qtbot, tmp_path):
     assert window._demo_thread is None
     assert window.my_automations_page._thread is None
     assert window.isVisible() is False
+
+
+def test_cancel_and_join_detaches_worker_that_ignores_cancel(qtbot, monkeypatch):
+    """A stuck worker is detached rather than destroying a running QThread."""
+
+    class IgnoringThread(QThread):
+        def run(self) -> None:
+            time.sleep(0.1)
+
+    class IgnoringWorker:
+        def cancel(self) -> None:
+            return None
+
+    thread = IgnoringThread()
+    worker = IgnoringWorker()
+    monkeypatch.setattr(WorkflowWorker, "THREAD_JOIN_TIMEOUT_MS", 1)
+
+    thread.start()
+    qtbot.waitUntil(thread.isRunning, timeout=1000)
+    assert cancel_and_join(thread, worker) is False
+    assert thread.parent() is None
+    assert thread.wait(1000)

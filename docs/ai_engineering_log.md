@@ -42,6 +42,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-11-01 — P8: Bounded cancellation detach coverage   (commit: pending)
+- Task: prove that window-close cancellation remains safe when a worker ignores
+  the cooperative cancellation request.
+- AI contribution: added a focused Qt thread regression test for the bounded
+  `cancel_and_join` detach path.
+- Defect found: none in the implementation; the missing evidence was test
+  coverage for the documented timeout branch.
+- Verification: `.\.venv\Scripts\python.exe -m pytest
+  tests\test_close_during_run.py -q` printed `5 passed in 2.14s`.
+- Outcome: IN PROGRESS
+- Human review:
+
 ## 2026-11-01 — P6: Functional saved-review editing   (commit: pending)
 - Task: Remove the hidden dead Edit control from saved automation review.
 - AI contribution: wired the saved-workflow review action to the existing editor
