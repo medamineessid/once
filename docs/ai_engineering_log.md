@@ -16,6 +16,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: IN PROGRESS
 - Human review:
 
+## 2026-11-01 — P6: Saved review route complete   (commit: f7b5878)
+- Task: Make saved review editing functional without changing proposal
+  approval semantics.
+- AI contribution: connected Edit automation to the existing editor and reset
+  stale recorded-draft review state when showing saved workflows.
+- Defect found: the full suite was green before the final stale-title regression
+  test; the regression was identified during the adjacent state audit.
+- Verification: `.\.venv\Scripts\python.exe -m pytest -q` printed
+  `478 passed, 2 skipped`; Ruff, both smoke tests, and the engineering-log
+  append-only guard all passed in `scripts\verify.ps1`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-11-01 — P6: Functional saved-review editing   (commit: pending)
 - Task: Remove the hidden dead Edit control from saved automation review.
 - AI contribution: wired the saved-workflow review action to the existing editor

@@ -385,6 +385,19 @@ def test_review_edit_button_opens_saved_workflow_in_editor(qtbot, tmp_path):
     assert window.editor_page._name_input.text() == "List invoices"
 
 
+def test_saved_review_resets_recording_review_title(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+    window.review_page.load_proposal(None)
+    service.save(demo_workflow_for_tests())
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+
+    assert window.review_page._title_label.text() == "Review automation"
+
+
 def test_review_cancel_button_click_returns_home(qtbot, window):
     window.workspace.setCurrentWidget(window.review_page)
     qtbot.mouseClick(window.review_page._cancel_button, Qt.MouseButton.LeftButton)

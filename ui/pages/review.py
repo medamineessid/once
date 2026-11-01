@@ -110,6 +110,7 @@ class ReviewPage(QWidget):
         """Show an opened saved workflow for read-only review, like the old window."""
         self._proposal = None
         self._saved_workflow = workflow
+        self._title_label.setText("Review automation")
         self._edit_button.setVisible(workflow is not None)
         self._approve_button.hide()
         self._goal_label.setText(f"Goal: {workflow.name}" if workflow else "No workflow loaded.")
