@@ -13,6 +13,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from controller.run_events import RunEvent, RunEventSource, RunEventStream
 from controller.service import WorkflowService
 from engine.agent_change import ApprovedChange, ChangeReview
+from engine.desktop import DesktopApproval
 from engine.errors import OnceError
 from engine.workflow import Workflow
 
@@ -130,12 +131,14 @@ class WorkflowWorker(QObject):
         *,
         replay: bool = False,
         allowed_root: Path | None = None,
+        desktop_approval: DesktopApproval | None = None,
     ) -> None:
         super().__init__()
         self._service = service
         self._workflow = workflow
         self._replay = replay
         self._allowed_root = allowed_root
+        self._desktop_approval = desktop_approval
         self._cancel_requested = Event()
         self._event_stream: RunEventSource | None = None
 
@@ -155,7 +158,13 @@ class WorkflowWorker(QObject):
             self.progress.emit(step_result)
 
         try:
-            if self._replay:
+            if self._desktop_approval is not None:
+                result = self._service.run_desktop_approved(
+                    self._desktop_approval,
+                    cancel_check=self._cancel_requested.is_set,
+                    progress_callback=on_step_result,  # type: ignore[arg-type]
+                )
+            elif self._replay:
                 result = self._service.run_replay(
                     self._workflow,
                     allowed_root=self._allowed_root,
