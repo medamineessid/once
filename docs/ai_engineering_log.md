@@ -12,22 +12,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review: 
 
-## 2026-11-01 — A2c: screenshot-polish   (commit: pending)
-- Task: correct screenshot-observed shell presentation defects without changing
-  editor or workflow semantics.
-- AI contribution: styled editor action buttons with existing design tokens,
-  cleared the stale scratch-editor banner, increased the Home demo card height,
-  and added regression tests.
-- Defect found: the first full-suite verification had one review UI
-  FileNotFoundError while waiting for a merged test repository; the isolated
-  test and the complete review UI module passed, and the subsequent full gate
-  passed.
-- Verification: focused UI tests printed `33 passed`; `scripts/capture_screenshots.ps1`
-  exited 0; `scripts/verify.ps1` printed `462 passed, 2 skipped`,
-  `All checks passed!`, `150 files already formatted`, both smoke tests PASS,
-  and `ALL CHECKS PASSED`.
-- Outcome: PASSED
-- Human review:
+
 
 ## 2026-10-22 — Draft editing and history detail inspection   (commit: 53e4ce0)
 - Task: Improve the workflow editor and execution-history surface without
@@ -1223,5 +1208,38 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   distinct, non-empty PNGs, exit 0; `scripts/verify.ps1` -> `460 passed, 2
   skipped in 147.76s (0:02:27)`, Ruff check passed, format check passed (150
   files), both smoke tests passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-01 — A2c: screenshot-polish   (commit: 59f7605)
+- Task: correct screenshot-observed shell presentation defects without changing
+  editor or workflow semantics.
+- AI contribution: styled editor action buttons with existing design tokens,
+  cleared the stale scratch-editor banner, increased the Home demo card height,
+  and added regression tests.
+- Defect found: the first full-suite verification had one review UI
+  FileNotFoundError while waiting for a merged test repository; the isolated
+  test and the complete review UI module passed, and the subsequent full gate
+  passed.
+- Verification: focused UI tests printed `33 passed`; `scripts/capture_screenshots.ps1`
+  exited 0; `scripts/verify.ps1` printed `462 passed, 2 skipped`,
+  `All checks passed!`, `150 files already formatted`, both smoke tests PASS,
+  and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-01 — A2d: interactive canvas and layout persistence   (commit: pending)
+- Task: add usable canvas navigation and persist node movement as presentation
+  metadata without changing workflow execution.
+- AI contribution: added bounded zoom, fit-to-screen, a minimap, draggable
+  cards with edge refresh, controller metadata restoration, editor wiring, and
+  persistence regression coverage.
+- Defect found: the first canvas implementation needed explicit Qt override
+  annotations for inherited event handlers; Ruff identified this before the
+  final verification.
+- Verification: focused tests printed `35 passed`; screenshot capture printed
+  21 distinct, non-empty PNGs and exited 0; `scripts/verify.ps1` printed
+  `465 passed, 2 skipped`, `All checks passed!`, `150 files already formatted`,
+  both smoke tests PASS, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:

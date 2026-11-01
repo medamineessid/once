@@ -10,9 +10,12 @@ is not on screen.
 
 from __future__ import annotations
 
+from typing import override
+
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QKeyEvent, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import (
+    QGraphicsItem,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
     QGraphicsScene,
@@ -55,6 +58,8 @@ class NodeCard(QGraphicsPathItem):
     def __init__(self, slot: NodeSlot, title: str, subtitle: str) -> None:
         super().__init__()
         self.slot = slot
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         path = QPainterPath()
         path.addRoundedRect(QRectF(0.0, 0.0, slot.w, slot.h), 10.0, 10.0)
         self.setPos(slot.x, slot.y)
@@ -79,6 +84,17 @@ class NodeCard(QGraphicsPathItem):
         subtitle_item.setPlainText(subtitle)
         subtitle_item.setPos(12.0, slot.h - 26.0)
 
+    @override
+    def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value: object) -> object:
+        result = super().itemChange(change, value)
+        if change is QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
+            owner = self.scene()
+            if owner is not None:
+                view = owner.views()[0]
+                if isinstance(view, CanvasView):
+                    view.node_moved.emit(self.slot.step_id, self.pos().x(), self.pos().y())
+        return result
+
 
 class CanvasView(QGraphicsView):
     """Workflow chain renderer with node selection (mouse and keyboard)."""
@@ -87,6 +103,7 @@ class CanvasView(QGraphicsView):
     node_selected = Signal(object)
     #: Emitted on Enter over a selected node (keyboard activation).
     step_activated = Signal(object)
+    node_moved = Signal(object, float, float)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -99,8 +116,19 @@ class CanvasView(QGraphicsView):
         self.nodes: dict[str, NodeCard] = {}
         self.edge_items: list[tuple[QGraphicsPathItem, QGraphicsPolygonItem]] = []
         self.edge_lookup: dict[tuple[str, str], tuple[QGraphicsPathItem, QGraphicsPolygonItem]] = {}
+        self._edges: tuple[object, ...] = ()
         self.chain: tuple[str, ...] = ()
         self._selected_id: str | None = None
+        self._zoom = 1.0
+        self._minimap = QGraphicsView(self)
+        self._minimap.setObjectName("canvasMinimap")
+        self._minimap.setScene(self._scene)
+        self._minimap.setInteractive(False)
+        self._minimap.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._minimap.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._minimap.setFixedSize(160, 96)
+        self._minimap.show()
+        self.node_moved.connect(self._node_moved)
 
     @property
     def selected_id(self) -> str | None:
@@ -112,6 +140,7 @@ class CanvasView(QGraphicsView):
         self.nodes.clear()
         self.edge_items.clear()
         self.edge_lookup.clear()
+        self._edges = ()
         self._scene.clear()
         if workflow is None:
             self.chain = ()
@@ -125,6 +154,7 @@ class CanvasView(QGraphicsView):
         self.nodes.clear()
         self.edge_items.clear()
         self.edge_lookup.clear()
+        self._edges = plan.edges
         self._scene.clear()
         bounds = QRectF()
         for slot_id, slot in plan.slots.items():
@@ -164,9 +194,69 @@ class CanvasView(QGraphicsView):
             )
 
         self._scene.setSceneRect(bounds.adjusted(-MARGIN, -MARGIN, MARGIN, MARGIN))
+        for card in self.nodes.values():
+            card.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, True)
+        self.fit_to_screen()
         # Selection survives a rebuild (any edit) when the member still exists.
         self._selected_id = previous if previous in self.nodes else None
         self._apply_selection_visuals()
+        self._refresh_edges()
+
+    def zoom_in(self) -> None:
+        self._set_zoom(min(2.0, self._zoom + 0.1))
+
+    def zoom_out(self) -> None:
+        self._set_zoom(max(0.25, self._zoom - 0.1))
+
+    def fit_to_screen(self) -> None:
+        if self.scene().sceneRect().isEmpty():
+            return
+        self.fitInView(self.scene().sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+        self._zoom = self.transform().m11()
+
+    def _set_zoom(self, value: float) -> None:
+        factor = value / self._zoom
+        self.scale(factor, factor)
+        self._zoom = value
+
+    def _refresh_edges(self) -> None:
+        for edge in self._edges:
+            if edge.from_id not in self.nodes or edge.to_id not in self.nodes:
+                continue
+            before = self.nodes[edge.from_id]
+            after = self.nodes[edge.to_id]
+            if edge.wrap:
+                start = before.mapToScene(before.boundingRect().center())
+                start.setY(before.pos().y() + before.slot.h)
+                end = after.mapToScene(QPointF(0.0, after.slot.h / 2.0))
+                channel_y = start.y() + 20.0
+                points = (start, QPointF(start.x(), channel_y), QPointF(end.x(), channel_y), end)
+            else:
+                start = before.mapToScene(QPointF(before.slot.w, before.slot.h / 2.0))
+                end = after.mapToScene(QPointF(0.0, after.slot.h / 2.0))
+                points = (start, end)
+            path = QPainterPath(points[0])
+            for point in points[1:]:
+                path.lineTo(point)
+            edge_item, arrow = self.edge_lookup[(edge.from_id, edge.to_id)]
+            edge_item.setPath(path)
+            arrow.setPos(points[-1])
+
+    def _node_moved(self, _node_id: object, _x: float, _y: float) -> None:
+        self._refresh_edges()
+
+    @override
+    def resizeEvent(self, event: object) -> None:
+        super().resizeEvent(event)
+        self._minimap.move(self.viewport().width() - self._minimap.width() - 12, 12)
+
+    @override
+    def wheelEvent(self, event: object) -> None:
+        if not hasattr(event, "angleDelta"):
+            super().wheelEvent(event)
+            return
+        self.zoom_in() if event.angleDelta().y() > 0 else self.zoom_out()
+        event.accept()
 
     @staticmethod
     def _titles(workflow: Workflow) -> dict[str, tuple[str, str]]:

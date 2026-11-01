@@ -89,6 +89,7 @@ class EditorPage(QWidget):
         self._canvas.setMinimumHeight(220)
         self._canvas.installEventFilter(self)
         self._canvas.node_selected.connect(self._on_node_selected)
+        self._canvas.node_moved.connect(self._on_node_moved)
         self._canvas.step_activated.connect(self._focus_inspector)
         self._canvas.setMinimumHeight(220)
         self._inspector = InspectorPanel(self)
@@ -158,6 +159,21 @@ class EditorPage(QWidget):
         )
         self._name_input.setText("New automation")
         self._banner.hide()
+        self._refresh()
+
+    def open_workflow(self, workflow: Workflow) -> None:
+        """Open an existing workflow and restore its presentation metadata."""
+        self._session = WorkflowEditorSession(workflow)
+        if self._service is not None and self._service.layout_storage_configured:
+            loaded = self._service.load_layout(workflow.workflow_id)
+            if loaded.record is not None:
+                self._session.restore_layout(
+                    loaded.record.node_positions,
+                    loaded.record.notes,
+                )
+            if loaded.warning:
+                self._banner.show_message("warning", "Layout reset", loaded.warning)
+        self._name_input.setText(workflow.name)
         self._refresh()
 
     def _add_step(self) -> None:
@@ -272,6 +288,16 @@ class EditorPage(QWidget):
             return
         self._banner.clear()
         self._refresh()
+
+    def _on_node_moved(self, node_id: object, x: float, y: float) -> None:
+        if self._session is None or not isinstance(node_id, str):
+            return
+        if node_id.startswith("__"):
+            return
+        try:
+            self._session.move_node(node_id, x, y)
+        except WorkflowValidationError as error:
+            self._banner.show_message("error", EDITOR_EDIT_ERROR_TITLE, str(error))
 
     def _focus_inspector(self, _node_id: object) -> None:
         """Enter on a selected node moves keyboard focus to the inspector."""

@@ -374,3 +374,14 @@ Format per item: id, date, question, options, choice, reason.
 - Reason: these are presentation-only corrections with observable regression
   tests. They do not alter validators, approval behavior, persistence, or
   filesystem operations.
+
+## AD-025 — 2026-11-01 — A2d canvas interaction scope
+
+- Question: which canvas interactions belong in the MVP without changing
+  workflow execution?
+- Choice: use QGraphicsView zoom bounded to 25%-200%, fit-to-screen, a
+  non-interactive minimap, and draggable node cards whose positions are saved
+  as layout metadata through the existing controller and SQLite storage.
+- Reason: these interactions are reversible presentation changes and are
+  covered by focused Qt tests. Layout metadata remains separate from the
+  immutable workflow definition and never changes execution order or policy.

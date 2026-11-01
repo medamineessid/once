@@ -108,6 +108,27 @@ def test_canvas_grab_renders_non_empty(qtbot, canvas):
     assert pixmap.width() > 0 and pixmap.height() > 0
 
 
+def test_canvas_zoom_is_bounded_and_fit_is_available(qtbot, canvas):
+    canvas.set_workflow(canvas_workflow(2))
+    for _ in range(30):
+        canvas.zoom_out()
+    assert canvas._zoom == 0.25
+    for _ in range(40):
+        canvas.zoom_in()
+    assert canvas._zoom == 2.0
+    canvas.fit_to_screen()
+    assert canvas._zoom > 0
+    assert canvas._minimap.objectName() == "canvasMinimap"
+
+
+def test_canvas_moving_a_node_emits_its_position(qtbot, canvas):
+    canvas.set_workflow(canvas_workflow(1))
+    moved: list[tuple[str, float, float]] = []
+    canvas.node_moved.connect(lambda node_id, x, y: moved.append((node_id, x, y)))
+    canvas.nodes["s1"].setPos(123.0, 45.0)
+    assert moved[-1] == ("s1", 123.0, 45.0)
+
+
 def test_review_page_canvas_renders_chain(qtbot, app):
     """Opening a workflow fills the read-only canvas AND keeps the list."""
     from ui.pages.review import ReviewPage

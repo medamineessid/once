@@ -115,6 +115,19 @@ def test_editor_actions_have_visible_button_styles(qtbot, tmp_path) -> None:
     assert window.editor_page._save_button.objectName() == "primaryActionButton"
 
 
+def test_moved_node_is_saved_as_presentation_metadata(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    _create_and_rename(window, qtbot, "Positioned automation")
+    node = window.editor_page._canvas.nodes["step-1"]
+    node.setPos(321.0, 123.0)
+
+    qtbot.mouseClick(window.editor_page._save_button, Qt.MouseButton.LeftButton)
+
+    loaded = window._service.load_layout(window.editor_page._session.workflow().workflow_id)
+    assert loaded.record is not None
+    assert loaded.record.node_positions["step-1"] == (321.0, 123.0)
+
+
 def test_unsaved_bar_can_stay_then_discard_definition_changes(qtbot, tmp_path) -> None:
     window = _make_window(qtbot, tmp_path)
     _create_and_rename(window, qtbot, "Unsaved automation")

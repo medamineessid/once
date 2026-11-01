@@ -178,6 +178,17 @@ class WorkflowEditorSession:
     def node_positions(self) -> dict[str, tuple[float, float]]:
         return dict(self._positions)
 
+    def restore_layout(
+        self,
+        node_positions: dict[str, tuple[float, float]],
+        notes: dict[str, str],
+    ) -> None:
+        """Restore presentation metadata without adding a definition edit."""
+        for step_id, position in node_positions.items():
+            self.move_node(step_id, *position)
+        for step_id, text in notes.items():
+            self.set_note(step_id, text)
+
     def undo(self) -> None:
         if not self._undo:
             raise WorkflowValidationError("There is nothing to undo.")
