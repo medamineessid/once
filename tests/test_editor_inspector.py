@@ -250,3 +250,59 @@ def test_enter_on_a_selected_node_focuses_the_inspector(qtbot, app) -> None:
         )
 
     qtbot.waitUntil(inspector_focused, timeout=1000)
+
+
+def test_inspector_applies_editable_fields_through_the_session(qtbot, app) -> None:
+    page = make_page(qtbot, new_session())
+    click_node(page._canvas, "s1")
+
+    page._inspector.field("name").setText("A clearer note")
+    page._inspector.field("message").setText("updated message")
+    page._inspector.field("max_attempts").setValue(3)
+    QTest.mouseClick(page._inspector.apply_button, Qt.MouseButton.LeftButton)
+
+    step = page._session.workflow().steps[0]
+    assert step.name == "A clearer note"
+    assert step.message == "updated message"
+    assert step.max_attempts == 3
+    assert page._session.is_dirty()
+
+
+def test_inspector_exposes_only_fields_allowed_for_the_step_kind(qtbot, app) -> None:
+    page = make_page(qtbot, new_session())
+
+    click_node(page._canvas, "s1")
+    assert set(page._inspector.field_names) == {"name", "message", "max_attempts"}
+
+    page._session.update_step(
+        "s1",
+        kind=StepKind.WAIT_WINDOW,
+        target='{"title": "Invoices"}',
+        timeout_seconds=4.0,
+    )
+    page._refresh()
+    assert set(page._inspector.field_names) == {
+        "name",
+        "message",
+        "target",
+        "max_attempts",
+        "timeout_seconds",
+    }
+
+
+def test_invalid_inspector_edit_keeps_definition_and_shows_inline_error(qtbot, app) -> None:
+    page = make_page(qtbot, new_session())
+    page._session.update_step(
+        "s1",
+        kind=StepKind.INSPECT_PATH,
+        target="C:/authorized/invoice.pdf",
+    )
+    page._refresh()
+    click_node(page._canvas, "s1")
+    original = page._session.workflow().steps[0]
+
+    page._inspector.field("target").setText("relative\\invoice.pdf")
+    QTest.mouseClick(page._inspector.apply_button, Qt.MouseButton.LeftButton)
+
+    assert page._session.workflow().steps[0] == original
+    assert "absolute" in page._banner.body_text.lower()

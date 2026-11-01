@@ -22,7 +22,11 @@ from engine.workflow import Workflow
 from ui.components.banner import Banner
 from ui.editor.canvas import CanvasView
 from ui.editor.inspector import InspectorPanel
-from ui.strings import EDITOR_RENAME_EMPTY_MESSAGE, EDITOR_RENAME_ERROR_TITLE
+from ui.strings import (
+    EDITOR_EDIT_ERROR_TITLE,
+    EDITOR_RENAME_EMPTY_MESSAGE,
+    EDITOR_RENAME_ERROR_TITLE,
+)
 from ui.styles import SPACING_LG, SPACING_XL
 
 
@@ -60,6 +64,7 @@ class EditorPage(QWidget):
         self._canvas.step_activated.connect(self._focus_inspector)
         self._canvas.setMinimumHeight(220)
         self._inspector = InspectorPanel(self)
+        self._inspector.changes_applied.connect(self._apply_inspector_changes)
         canvas_and_inspector = QHBoxLayout()
         canvas_and_inspector.addWidget(self._canvas, 1)
         canvas_and_inspector.addWidget(self._inspector)
@@ -183,6 +188,17 @@ class EditorPage(QWidget):
         if self._session is None:
             return
         self._show_inspector_for(node_id, self._session.workflow())
+
+    def _apply_inspector_changes(self, changes: dict[str, object]) -> None:
+        if self._session is None or self._canvas.selected_id is None:
+            return
+        try:
+            self._session.update_step(self._canvas.selected_id, **changes)
+        except WorkflowValidationError as error:
+            self._banner.show_message("error", EDITOR_EDIT_ERROR_TITLE, str(error))
+            return
+        self._banner.clear()
+        self._refresh()
 
     def _focus_inspector(self, _node_id: object) -> None:
         """Enter on a selected node moves keyboard focus to the inspector."""
