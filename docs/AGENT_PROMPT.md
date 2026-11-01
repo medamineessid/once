@@ -11,8 +11,12 @@ FIRST ACTIONS (in order)
 MISSION
 Take the app to a working, intuitive, good-looking MVP with minimal input from the user. Today python app.py launches the OLD window (ui/main_window.py); python app.py --shell launches the redesigned shell. The shell has the P2 design system, a read-only workflow canvas on the review page (P3), close-during-run safety, and honest controls, but the user cannot yet create or edit automations in it. The user's top complaints: automations cannot be created, buttons do nothing, the UI is hard to understand. The finished product is a visual workflow editor (connected node cards on a pannable canvas, right inspector, insert-a-step on a connection, notes, undo and redo, run feedback), then the default window switches.
 
-STATE OF PLAY (verify each with a command)
-- main should be at 5978012 (P3 read-only canvas); last known: 407 passed, 2 skipped; verify.ps1 passed.
+STATE OF PLAY (verify each with a command; updated 2026-10-31, A1 session)
+- main = origin/main = 4cf0e39 + A1 name-display/rename slice
+  (`slice/a1-automation-names`, commits 11e0e74 + 0a325df + docs). verify.ps1
+  printed ALL CHECKS PASSED before the docs commit and again before the
+  ff-merge. `slice/naming-defect` (88298f7) is the previous agent's preserved
+  WIP park: never merge it; A1 supersedes it.
 - Done: backend (workflows and validators, approval gate, replay policy, desktop and browser steps, recording and AI proposals, review in isolated worktrees, history, packaging), P2 design system and shell, P3 canvas (ui/editor/layout.py pure layout with golden tests, ui/editor/canvas.py read-only scene, ReviewPage integration), cancel_and_join on window close.
 - Parked: P7 branching (docs/PARKED.md PARKED-1). Known defects: ui/pages/review.py:122 proposal.steps, review page never receives set_service. The create-automation page only shows a banner. The 8+ step layout wraps with a long return connector; avoid that pattern.
 - cancel_and_join detaches the thread after a 5 s bound; no test covers a worker that ignores cancel.

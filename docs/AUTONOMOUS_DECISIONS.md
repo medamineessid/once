@@ -268,3 +268,56 @@ Format per item: id, date, question, options, choice, reason.
   says undo/redo reverses definition edits only. This provides real controller
   behavior now without changing the validated workflow format or pretending that
   layout persistence exists before P4b.
+
+## AD-017 — 2026-10-31 — My-automations row title swaps filesystem stem for the saved name
+
+- Question: A1 says rows show the user-chosen name; the test
+  `test_rows_show_automation_name_and_actually_ran_status` asserted the file stem
+  (`alpha-workflow`). How is the swap logged and kept same-or-more?
+- Choice: the same test now asserts the saved definition name (`Alpha workflow`),
+  which covers the stem assertion's intent and extends it (name comes from the
+  validated saved JSON, not the file name). Two extra tests were added:
+  `test_rows_lead_the_caption_with_the_saved_date` (saved-date caption over real
+  tmp_path files) and
+  `test_unreadable_file_shows_file_name_and_warning_never_crashes`. The list item
+  text itself remains the file name, so `test_page_lists_saved_automations`
+  still passes unchanged.
+- Reason: A1 explicitly orders the swap; nothing was deleted or weakened — the
+  replacement asserts the same status/chip behavior plus the new name source.
+
+## AD-018 — 2026-10-31 — Editor acceptance test swap: internal id out, chosen name in
+
+- Question: `tests/test_editor_page.py` asserted that the saved row title equals
+  the internal id (`automation-<uuid hex>`), which A1 names as the wrong
+  assertion to keep.
+- Choice: replacement `test_create_rename_save_lists_opens_runs_and_activity_shows_name`
+  types a name through the editor header, saves, and asserts My automations, the
+  review page (`Goal: <name>`) and Activity (after a real run) all show the
+  chosen name. Two more tests pin the rename itself: undoable through the session
+  (`test_editor_rename_is_undoable_and_updates_the_field`) and the empty-name
+  inline guard (`test_clearing_the_name_keeps_previous_name_and_warns_inline`).
+- Reason: same-or-more — the new test covers create/add/save/list (the old test's
+  flow) and adds rename, review, run and Activity name assertions.
+
+## AD-019 — 2026-10-31 — Empty-name commit goes to the previous name with an inline banner
+
+- Question: what should `editingFinished` do when the user cleared the name field
+  and typed nothing? `rename_workflow("")` is a validation error.
+- Options: (a) modal dialog; (b) silently ignore; (c) keep the previous name and
+  show the non-modal error banner.
+- Choice: (c). The field is restored to the session name; the banner says the
+  automation needs a name. No rename is recorded, no undo entry is created.
+- Reason: the shell bans blocking modals and silent refusal; the save path
+  already surfaces an identical validation error inline.
+
+## AD-020 — 2026-10-31 — Two constants added to ui/strings.py under the A1 exception
+
+- Question: the solo-mode lane does not list `ui/strings.py`, but its protocol
+  makes it the single strings module; the new banner texts would otherwise be
+  hard-coded in page files (the strings rule forbids that).
+- Choice: added `MY_SAVED_PREFIX`, `MY_UNREADABLE_TITLE`, `MY_UNREADABLE_BODY`,
+  `EDITOR_RENAME_ERROR_TITLE`, `EDITOR_RENAME_EMPTY_MESSAGE` to `ui/strings.py`
+  as a minimal, additive extension needed by the A1 exception files.
+- Reason: obeying the strings rule for new UI text requires touching the lane's
+  strings module; no existing string was changed, so no page outside the A1
+  exception changes behavior.

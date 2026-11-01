@@ -5,9 +5,15 @@ full shell refresh, MVP moves to P9 (prompt queue P0–P9 in session prompt). Th
 spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 (AD-008); work proceeds from the session prompt.
 
-- Current branch: `slice/p4-editor` (fork of main at d40f741).
-- main = origin/main = d40f741 ("docs: preserve agent handoff prompt") — the
-  prompt handoff was saved verbatim, ff-merged and pushed on 2026-10-31.
+- Current branch: `slice/a1-automation-names` (2026-10-31 solo-mode A1 slice).
+- main = origin/main = 4cf0e39 ("fix(controller): use engine validator for editor
+  changes"); A1 commits 11e0e74 + 0a325df on top, docs commit next, then
+  ff-merge to main after verify.
+- `slice/naming-defect` (fec4213 + 88298f7) is the previous agent's WIP park: a
+  whole-repo CRLF churn commit plus a half-done name implementation (13 failing
+  My-automations tests, a bare `except Exception: pass` in editor.py, a
+  service.py except-hunk the session prompt forbids). It is PRESERVED, never
+  merged; A1 supersedes its content.
 - P4a verification on `slice/p4-editor`: "412 passed, 2 skipped in 116.61s",
   `ruff check .` "All checks passed!", `ruff format --check .` "140 files
   already formatted", both smoke tests PASS, and `scripts/verify.ps1`
@@ -34,6 +40,7 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | P4a | Qt-free editing (slice/p4-editor) | DONE | bb9c07b; coverage completed on slice/p4a-coverage |
 | P4b | Layout record storage | DONE | slice/p4b-layouts; SQLite migration, strict records, corrupt fallback |
 | P4c | Editor page and acceptance flow | DONE | slice/p4c-editor-page; create/add/save/open/run/activity acceptance |
+| A1 | Automation names everywhere (solo-mode lane) | DONE | slice/a1-automation-names: My automations rows show saved name + Saved date + unreadable-file warning; editor header renames through the session (undoable); editor test swapped to the chosen-name assertions (AD-017/018/019/020) |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |

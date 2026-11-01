@@ -1096,3 +1096,25 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   Ruff check and format check passed.
 - Outcome: PASSED
 - Human review:
+
+## 2026-10-31 — Step A1: automation names shown everywhere   (commit: 11e0e74, 0a325df)
+- Task: A1 — the user-chosen name is stored in the definition and shown in My
+  automations rows (title + Saved <date> caption), the editor header (inline
+  rename through the controller session, undoable), Activity rows and the
+  review page; unreadable saved files fall back to their file name with a
+  plain-language warning and never crash.
+- AI contribution: edited ui/pages/my_automations.py, ui/pages/editor.py,
+  ui/strings.py, tests/test_editor_page.py, tests/test_my_automations_page.py.
+  Reused the existing WorkflowService.workflow_name() loader on main instead
+  of duplicating any read path.
+- Defect found: the previous agent's WIP (slice/naming-defect 88298f7) had a
+  bare `except Exception: pass` rename handler and 13 failing My-automations
+  tests because the test fake lacked workflow_name; this slice supersedes it
+  with a validated, commit-per-enter implementation. The first FakeService
+  workflow_name draft also missed absolute tmp_path keys (test caught it).
+- Verification: tests first — new/changed tests failed 6 before the
+  implementation; after: `20 passed` (both page suites), `57 passed`
+  (shell/activity/architecture/p2_shell/styles), and scripts/verify.ps1 on the
+  worktree printed `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
