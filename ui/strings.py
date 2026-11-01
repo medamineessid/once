@@ -135,3 +135,9 @@ EDITOR_INSPECTOR_KIND_MUTATING = "Changes your computer"
 EDITOR_INSPECTOR_MUTATING_NOTE = (
     "This step changes your computer. Once asks for approval before it can run."
 )
+
+# --- lane B strings ---
+REVIEW_PREVIEW_PROBLEM_TITLE = "This proposal cannot be reviewed yet"
+REVIEW_SAVE_ERROR_TITLE = "Approval did not finish"
+REVIEW_APPROVED_TITLE = "Proposal approved"
+REVIEW_APPROVED_BODY = "Saved as {name}. Run it from My automations."

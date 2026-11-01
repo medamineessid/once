@@ -2,6 +2,14 @@
 
 > Handoff note (updated after every commit) — most recent at the top.
 
+## Handoff (2026-11-01) — B3 implementation on branch b/b3-review-wiring (about to commit)
+
+- B3 done in code: ui/pages/review.py now (1) renders proposals through THE existing approval path — `preview_proposal` for the steps list (fixes the review.py:129 `proposal.steps` AttributeError, parity with old-window _show_preview), `approve_proposal` + `service.save_approved` on click; (2) Approve becomes visible ONLY with a service injected AND a valid proposal loaded (Edit stays hidden — needs the shell hand-off, recorded for B7); (3) errors are non-modal banners (blocking QMessageBox.warning removed); (4) invalid drafts keep approval hidden with a plain-language banner.
+- Strings block "# --- lane B strings ---" appended to ui/strings.py (4 strings).
+- New tests tests/test_b3_review_wiring.py: 7 tests (load/preview, visibility gating, click-Approve lasting effect via service.list_saved()/load, no-service guard, invalid-draft banner, dismiss, Edit-hidden). Focused: `7 passed in 0.81s`; neighbors test_review_ui.py + test_shell.py: `39 passed in 58.16s` (old hidden-buttons test still green because defaults stay hidden).
+- Pending before landing: verify.ps1 + fence check + ff-merge.
+- Next after B3 lands: B1 run-events contract.
+
 ## Handoff (2026-11-01) — B6 LANDED on main (f57f09d + a6ed06f)
 
 - B6 done and landed: verify.ps1 ALL CHECKS PASSED on the task branch before the ff-merge; main pushed to a6ed06f. The fix ships behind `_detached_runs` + `_wait_out_detached_runs` (one-time atexit hook, 30 s grace join) in ui/workers.py.
