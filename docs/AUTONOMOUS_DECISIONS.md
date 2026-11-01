@@ -38,6 +38,16 @@ Format per item: id, date, question, options, choice, reason.
   immutable `StepResult` values. Reusing that signal keeps feedback local,
   observable, and free of a second execution state model.
 
+## AD-034 — 2026-11-01 — Cancel while running
+
+- Question: What should the editor's Cancel button do during execution?
+- Options: (a) navigate away immediately; (b) disable it; (c) change it to
+  Cancel run and request the worker's existing cooperative cancellation.
+- Choice: (c).
+- Reason: navigating away can hide an active side effect, while disabling the
+  control leaves the user without the promised safety action. The existing
+  worker cancellation and bounded join path are reused.
+
 ## AD-001 — 2026-10-29 — Where should the authorized folder live?
 
 - Question: P1.4 requires the chosen authorized folder to "persist through the

@@ -29,6 +29,19 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
+## 2026-11-01 — P6: Safe editor cancellation   (commit: pending)
+- Task: Make the editor's Cancel control safe and truthful during an active run.
+- AI contribution: changed the control to emit a cancellation request while
+  running, connected it to `WorkflowWorker.cancel`, and added cancelled-run
+  feedback.
+- Defect found: Ruff caught import ordering and a formatting wrap; both were
+  corrected before the passing focused rerun.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests\test_editor_page.py
+  tests\test_close_during_run.py -q` printed `16 passed in 5.87s`; Ruff check
+  printed `All checks passed!`.
+- Outcome: IN PROGRESS
+- Human review:
+
 ## 2026-11-01 — P6: Live step states and evidence   (commit: pending)
 - Task: Show observable execution results on the editor canvas and in the
   selected-step inspector.

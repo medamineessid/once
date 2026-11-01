@@ -34,6 +34,7 @@ from ui.components.banner import Banner
 from ui.editor.canvas import CanvasView
 from ui.editor.inspector import InspectorPanel
 from ui.strings import (
+    EDITOR_CANCEL_RUN,
     EDITOR_DISCARD,
     EDITOR_EDIT_ERROR_TITLE,
     EDITOR_RENAME_EMPTY_MESSAGE,
@@ -54,6 +55,7 @@ class EditorPage(QWidget):
 
     saved = Signal()
     cancelled = Signal()
+    cancel_run_requested = Signal()
     run_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None):
@@ -61,6 +63,7 @@ class EditorPage(QWidget):
         self._service: WorkflowService | None = None
         self._session: WorkflowEditorSession | None = None
         self._step_results: dict[str, object] = {}
+        self._running = False
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -154,7 +157,7 @@ class EditorPage(QWidget):
         self._save_button.clicked.connect(self._save)
         self._cancel_button = QPushButton("Cancel", self)
         self._cancel_button.setObjectName("secondaryActionButton")
-        self._cancel_button.clicked.connect(self.cancelled.emit)
+        self._cancel_button.clicked.connect(self._cancel_clicked)
         self._run_button = QPushButton(EDITOR_RUN, self)
         self._run_button.setObjectName("primaryActionButton")
         self._run_button.clicked.connect(self._run)
@@ -321,6 +324,12 @@ class EditorPage(QWidget):
     def show_run_message(self, severity: str, title: str, body: str) -> None:
         self._banner.show_message(severity, title, body)
 
+    def _cancel_clicked(self) -> None:
+        if self._running:
+            self.cancel_run_requested.emit()
+        else:
+            self.cancelled.emit()
+
     def show_step_result(self, result: object) -> None:
         """Render one worker progress result on the canvas and inspector."""
         step_id = getattr(result, "step_id", None)
@@ -334,6 +343,8 @@ class EditorPage(QWidget):
 
     def set_running(self, running: bool) -> None:
         """Lock definition controls while the saved definition is executing."""
+        self._running = running
+        self._cancel_button.setText(EDITOR_CANCEL_RUN if running else "Cancel")
         for button in (
             self._add_button,
             self._undo_button,

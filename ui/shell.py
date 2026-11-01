@@ -60,6 +60,7 @@ from ui.strings import (
     DEMO_FINISHED_TITLE,
     DEMO_STOPPED_TITLE,
     EDITOR_RUN,
+    EDITOR_RUN_CANCELLED,
     EDITOR_RUN_FAILED,
     EDITOR_RUN_STARTED,
     EDITOR_RUN_SUCCEEDED,
@@ -269,6 +270,7 @@ class MainWindow(QMainWindow):
         self.create_automation_page.cancelled.connect(self._show_page_home)
         self.editor_page.saved.connect(self._editor_saved)
         self.editor_page.run_requested.connect(self._run_from_editor)
+        self.editor_page.cancel_run_requested.connect(self._cancel_editor_run)
         self.editor_page.cancelled.connect(self._show_create_automation)
         self.review_page.cancelled.connect(self._on_review_cancelled)
         self.review_page.approved.connect(self._open_approved_draft)
@@ -422,6 +424,10 @@ class MainWindow(QMainWindow):
         """Forward one observable engine result to the editor surface."""
         self.editor_page.show_step_result(step_result)
 
+    def _cancel_editor_run(self) -> None:
+        if self._editor_worker is not None:
+            self._editor_worker.cancel()
+
     def _quit_editor_thread(self) -> None:
         if self._editor_thread is not None:
             self._editor_thread.quit()
@@ -438,6 +444,8 @@ class MainWindow(QMainWindow):
         status = getattr(getattr(run, "status", None), "value", "UNKNOWN")
         if status == "SUCCEEDED":
             self.editor_page.show_run_message("success", EDITOR_RUN, EDITOR_RUN_SUCCEEDED)
+        elif status == "CANCELLED":
+            self.editor_page.show_run_message("warning", EDITOR_RUN, EDITOR_RUN_CANCELLED)
         else:
             self.editor_page.show_run_message(
                 "warning", EDITOR_RUN, f"{EDITOR_RUN_FAILED} Status: {status}."

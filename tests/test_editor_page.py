@@ -193,6 +193,19 @@ def test_editor_shows_step_result_and_evidence_in_inspector(qtbot, tmp_path) -> 
     assert "redacted=true" in window.editor_page._inspector.summary_text
 
 
+def test_editor_cancel_button_requests_run_cancellation(qtbot, tmp_path) -> None:
+    window = _make_window(qtbot, tmp_path)
+    window._show_editor()
+    requests: list[bool] = []
+    window.editor_page.cancel_run_requested.connect(lambda: requests.append(True))
+    window.editor_page.set_running(True)
+
+    qtbot.mouseClick(window.editor_page._cancel_button, Qt.MouseButton.LeftButton)
+
+    assert window.editor_page._cancel_button.text() == "Cancel run"
+    assert requests == [True]
+
+
 def test_empty_editor_add_step_button_creates_an_editable_node(qtbot, tmp_path) -> None:
     window = _make_window(qtbot, tmp_path)
     window._show_editor()
