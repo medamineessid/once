@@ -1257,7 +1257,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-11-01 — A2e: editor empty-state and terminal UX   (commit: pending)
+## 2026-11-01 — A2e: editor empty-state and terminal UX   (commit: 43efd8b)
 - Task: make the new-automation editor understandable and ensure terminal
   clicks do not look like failed step editing.
 - AI contribution: distinguished fixed Start/Finish markers, added terminal
