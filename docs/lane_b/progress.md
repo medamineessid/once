@@ -2,6 +2,13 @@
 
 > Handoff note (updated after every commit) — most recent at the top.
 
+## Handoff (2026-11-01) — B6 LANDED on main (f57f09d + a6ed06f)
+
+- B6 done and landed: verify.ps1 ALL CHECKS PASSED on the task branch before the ff-merge; main pushed to a6ed06f. The fix ships behind `_detached_runs` + `_wait_out_detached_runs` (one-time atexit hook, 30 s grace join) in ui/workers.py.
+- Follow-up commit fixed lint on my new test (imports sorted, removed unused local, reinstalled QApplication before QWidget construction — a parentless QWidget construction aborts the process; that failure mode escaped into a pytest run before).
+- Next: B3 review page wiring. Then B1, B2, B5, B4, B7.
+- Uncommitted: nothing.
+
 ## Handoff (2026-11-01) — after B6
 
 - Done: B6 on branch b/b6-detach-exit — new tests/test_b6_cancel_detach_exit.py (2 tests: subprocess proves a cancel-ignoring worker through cancel_and_join's detach path exits cleanly; control test stays in-bound); fixed ui/workers.py cancel_and_join: the detach path now records (thread, worker) in a module-level `_detached_runs` registry and registers a one-time atexit hook granting a generous 30 s bounded join (DETACHED_RUN_EXIT_GRACE_MS) at interpreter exit, before PySide6 teardown destroys wrappers.
