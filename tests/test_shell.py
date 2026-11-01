@@ -369,6 +369,22 @@ def test_open_button_click_shows_opened_workflow_on_the_review_page(qtbot, tmp_p
     assert window.review_page._steps_list.count() == 1
 
 
+def test_review_edit_button_opens_saved_workflow_in_editor(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+    service.save(demo_workflow_for_tests())
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+
+    assert window.review_page._edit_button.isVisible()
+    qtbot.mouseClick(window.review_page._edit_button, Qt.MouseButton.LeftButton)
+
+    assert window.workspace.currentWidget() is window.editor_page
+    assert window.editor_page._name_input.text() == "List invoices"
+
+
 def test_review_cancel_button_click_returns_home(qtbot, window):
     window.workspace.setCurrentWidget(window.review_page)
     qtbot.mouseClick(window.review_page._cancel_button, Qt.MouseButton.LeftButton)

@@ -145,3 +145,7 @@ EDITOR_INSPECTOR_KIND_MUTATING = "Changes your computer"
 EDITOR_INSPECTOR_MUTATING_NOTE = (
     "This step changes your computer. Once asks for approval before it can run."
 )
+
+# --- Review -----------------------------------------------------------------
+REVIEW_EDIT = "Edit automation"
+REVIEW_APPROVE = "Approve draft and edit"

@@ -274,6 +274,7 @@ class MainWindow(QMainWindow):
         self.editor_page.cancelled.connect(self._show_create_automation)
         self.review_page.cancelled.connect(self._on_review_cancelled)
         self.review_page.approved.connect(self._open_approved_draft)
+        self.review_page.edit_requested.connect(self._open_review_workflow_editor)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 
@@ -511,6 +512,13 @@ class MainWindow(QMainWindow):
         self._show_page(ShellPages.REVIEW)
 
     def _open_approved_draft(self, workflow: Workflow) -> None:
+        if not isinstance(workflow, Workflow):
+            return
+        self.editor_page.open_workflow(workflow)
+        self._show_page(ShellPages.EDITOR)
+
+    def _open_review_workflow_editor(self, workflow: Workflow) -> None:
+        """Open an already-saved automation in the real editor."""
         if not isinstance(workflow, Workflow):
             return
         self.editor_page.open_workflow(workflow)

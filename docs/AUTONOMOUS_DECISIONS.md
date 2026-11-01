@@ -48,6 +48,17 @@ Format per item: id, date, question, options, choice, reason.
   control leaves the user without the promised safety action. The existing
   worker cancellation and bounded join path are reused.
 
+## AD-035 — 2026-11-01 — Saved review editing
+
+- Question: What should the Edit control do when My automations opens a saved
+  automation on the review page?
+- Options: (a) keep it hidden; (b) treat it as an unapproved recording draft;
+  (c) open the existing saved definition in the editor.
+- Choice: (c); recorded proposals keep the separate approve-then-edit route.
+- Reason: a saved definition already passed persistence validation and is not an
+  AI proposal, so showing it as a proposal would be misleading. The route now
+  uses the same editor service path as the Home build flow.
+
 ## AD-001 — 2026-10-29 — Where should the authorized folder live?
 
 - Question: P1.4 requires the chosen authorized folder to "persist through the

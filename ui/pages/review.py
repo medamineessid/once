@@ -20,6 +20,7 @@ from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
 from ui.editor.canvas import CanvasView
+from ui.strings import REVIEW_APPROVE, REVIEW_EDIT
 from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
 
@@ -28,11 +29,13 @@ class ReviewPage(QWidget):
 
     approved = Signal(object)
     cancelled = Signal()
+    edit_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._service: WorkflowService | None = None
         self._proposal: ProviderDraft | None = None
+        self._saved_workflow: Workflow | None = None
         self._steps_list: QListWidget | None = None
         self._init_ui()
 
@@ -63,23 +66,18 @@ class ReviewPage(QWidget):
         actions_layout.setSpacing(SPACING_SM)
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(SPACING_SM)
-        self._edit_button = QPushButton("Edit", self)
+        self._edit_button = QPushButton(REVIEW_EDIT, self)
         self._edit_button.setObjectName("secondaryActionButton")
         self._edit_button.setMinimumHeight(38)
-        # No handler yet: J6 wires Edit through the approval path. An unfinished
-        # feature is hidden, so the button stays unconnected and invisible until
-        # then (the honest-controls test rejects pass-only handlers).
+        self._edit_button.clicked.connect(self._edit_saved_workflow)
         self._cancel_button = QPushButton("Cancel", self)
         self._cancel_button.setObjectName("secondaryActionButton")
         self._cancel_button.setMinimumHeight(38)
         self._cancel_button.clicked.connect(self._cancel_review)
-        self._approve_button = QPushButton("Approve draft and edit", self)
+        self._approve_button = QPushButton(REVIEW_APPROVE, self)
         self._approve_button.setObjectName("primaryActionButton")
         self._approve_button.setMinimumHeight(38)
         self._approve_button.clicked.connect(self._approve)
-        # Honest-controls rule (2026-10-29): Edit has no real handler and Approve
-        # does nothing until this page receives a service and a proposal (J6).
-        # An unfinished feature is hidden, not shown inert.
         self._edit_button.hide()
         self._approve_button.hide()
         buttons_row.addWidget(self._edit_button)
@@ -94,6 +92,10 @@ class ReviewPage(QWidget):
     def _cancel_review(self) -> None:
         self.cancelled.emit()
 
+    def _edit_saved_workflow(self) -> None:
+        if self._saved_workflow is not None:
+            self.edit_requested.emit(self._saved_workflow)
+
     def _approve(self) -> None:
         if self._service is None or self._proposal is None:
             return
@@ -107,6 +109,9 @@ class ReviewPage(QWidget):
     def show_workflow(self, workflow: Workflow | None) -> None:
         """Show an opened saved workflow for read-only review, like the old window."""
         self._proposal = None
+        self._saved_workflow = workflow
+        self._edit_button.setVisible(workflow is not None)
+        self._approve_button.hide()
         self._goal_label.setText(f"Goal: {workflow.name}" if workflow else "No workflow loaded.")
         self._steps_list.clear()
         # The canvas is read-only for now (P3): the chain renders from the pure
@@ -122,6 +127,8 @@ class ReviewPage(QWidget):
 
     def load_proposal(self, proposal: ProviderDraft | None) -> None:
         self._proposal = proposal
+        self._saved_workflow = None
+        self._edit_button.hide()
         self._title_label.setText("Review recorded draft")
         self._goal_label.setText(f"Goal: {proposal.goal}" if proposal else "No proposal loaded.")
         self._steps_list.clear()

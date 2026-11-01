@@ -16,6 +16,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: IN PROGRESS
 - Human review:
 
+## 2026-11-01 — P6: Functional saved-review editing   (commit: pending)
+- Task: Remove the hidden dead Edit control from saved automation review.
+- AI contribution: wired the saved-workflow review action to the existing editor
+  route and kept recorded proposals behind their explicit approval gate.
+- Defect found: the first focused assertion guessed the fixture name; the test
+  was corrected to assert the actual saved workflow name.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests\test_shell.py
+  tests\test_editor_canvas.py -q` printed `40 passed`; Ruff printed
+  `All checks passed!` and `4 files already formatted`.
+- Outcome: IN PROGRESS
+- Human review:
+
 ## 2026-11-01 — P6: Mutating-step approval panel complete   (commit: d085937)
 - Task: Ship the editor approval gate without bypassing the existing desktop
   policy boundary.
