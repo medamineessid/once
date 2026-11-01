@@ -73,7 +73,7 @@ class ReviewPage(QWidget):
         self._cancel_button.setObjectName("secondaryActionButton")
         self._cancel_button.setMinimumHeight(38)
         self._cancel_button.clicked.connect(self._cancel_review)
-        self._approve_button = QPushButton("Approve and run", self)
+        self._approve_button = QPushButton("Approve draft and edit", self)
         self._approve_button.setObjectName("primaryActionButton")
         self._approve_button.setMinimumHeight(38)
         self._approve_button.clicked.connect(self._approve)

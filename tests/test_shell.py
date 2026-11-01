@@ -158,6 +158,7 @@ def test_create_page_records_a_task_through_the_real_service(qtbot, tmp_path):
     assert not recording_service.recording
     assert window.workspace.currentWidget() is window.review_page
     assert window.review_page._approve_button.isVisible()
+    assert window.review_page._approve_button.text() == "Approve draft and edit"
     assert window.review_page._steps_list.count() == 1
     assert recording_service.list_recordings()
 
