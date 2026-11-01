@@ -1119,7 +1119,7 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: PASSED
 - Human review:
 
-## 2026-11-01 — Task C1: CI Green and Required   (commit: pending)
+## 2026-11-01 — Task C1: CI Green and Required   (commit: c819fec)
 - Task: Complete Lane C, Task C1 — configure a reliable Windows GitHub Actions
   workflow for Python 3.14 targeting the verification gate (scripts/verify.ps1),
   ensure robust failure propagation, eliminate bashisms, support virtualenv and
