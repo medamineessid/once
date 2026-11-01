@@ -1190,3 +1190,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+## 2026-11-01 — A2c: editor undo, redo, save, and unsaved state   (commit: 9685c67)
+- Task: complete the editor's basic change lifecycle without modal dialogs:
+  keyboard-safe undo/redo/save, a visible unsaved-changes bar, and discard.
+- AI contribution: added WorkflowEditorSession.discard, editor Save/Discard/Stay
+  actions, Ctrl+Z/Ctrl+Y/Ctrl+S event-filter handling outside input widgets, and
+  focused controller/page tests.
+- Defect found: a window-level shortcut initially undid a definition while a
+  name field had focus; replacing it with watched-widget event filtering kept
+  native text-field shortcuts intact. Ruff also caught test selector style and
+  import-order issues before verification.
+- Verification: `pytest tests/test_controller_editor.py tests/test_editor_page.py
+  -q` -> `24 passed in 1.65s`; `scripts/capture_screenshots.ps1` -> 21
+  distinct, non-empty PNGs, exit 0; `scripts/verify.ps1` -> `460 passed, 2
+  skipped in 147.76s (0:02:27)`, Ruff check passed, format check passed (150
+  files), both smoke tests passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:

@@ -5,12 +5,11 @@ full shell refresh, MVP moves to P9 (prompt queue P0–P9 in session prompt). Th
 spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 (AD-008); work proceeds from the session prompt.
 
-- Current branch: `slice/a2b-inspector-forms` (2026-11-01 solo-mode A2b
-  slice). A2b code commit d819a98 is verified; screenshots were regenerated
-  (21 PNGs, editor page included, INDEX.md updated). The next step is the
-  A2b evidence commit, then push and fast-forward main.
-- main includes the remote CI commits and A2a integration at 37629c9; the
-  A2b branch starts from that remote tip.
+- Current branch: `slice/a2c-undo-save` (2026-11-01 solo-mode A2c slice).
+  A2c code commit 9685c67 is verified; screenshots were regenerated (21 PNGs,
+  editor page included, INDEX.md updated). The next step is the A2c evidence
+  commit, then push and fast-forward main.
+- main includes A2b at f72ead5; the A2c branch starts from that remote tip.
 - `slice/naming-defect` (fec4213 + 88298f7) is the previous agent's WIP park: a
   whole-repo CRLF churn commit plus a half-done name implementation (13 failing
   My-automations tests, a bare `except Exception: pass` in editor.py, a
@@ -45,6 +44,7 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | A1 | Automation names everywhere (solo-mode lane) | DONE | slice/a1-automation-names: My automations rows show saved name + Saved date + unreadable-file warning; editor header renames through the session (undoable); editor test swapped to the chosen-name assertions (AD-017/018/019/020) |
 | A2a | Editor selection + read-only inspector (solo-mode lane) | DONE | slice/a2a-selection-inspector 2db1087: click/keyboard selection with edge highlighting, closable right inspector (step summary or automation info), Enter focuses inspector; 12 new tests; screenshots include the editor page |
 | A2b | Inspector editing forms (solo-mode lane) | DONE | slice/a2b-inspector-forms d819a98: validator-backed name/message/attempts/target/wait-timeout/postcondition fields, controller-mediated atomic Apply, inline validation errors, 3 new tests; full verify 457 passed/2 skipped |
+| A2c | Undo, redo, save, and unsaved state (solo-mode lane) | DONE | slice/a2c-undo-save 9685c67: controller discard, Ctrl+Z/Ctrl+Y/Ctrl+S outside text fields, Save/Discard/Stay bar; 3 new tests; full verify 460 passed/2 skipped |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |

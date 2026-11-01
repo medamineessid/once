@@ -350,3 +350,16 @@ Format per item: id, date, question, options, choice, reason.
   validator's per-kind target/postcondition rules in engine/workflow.py.
   Apply emits values to WorkflowEditorSession.update_step, so invalid edits
   remain atomic and are reported by the existing validator.
+
+## AD-023 — 2026-11-01 — A2c shortcut and unsaved-state behavior
+
+- Question: how can editor shortcuts work without hijacking text editing, and
+  what should the non-modal unsaved state do?
+- Choice: handle Ctrl+Z, Ctrl+Y, and Ctrl+S through the editor event filter
+  only when the watched control is not a text or numeric input. Stay hides the
+  reminder, Discard restores the last opened/saved definition, and Save uses
+  the existing service persistence path.
+- Reason: the editor remains keyboard-friendly while native text-field editing
+  keeps ownership of its own shortcuts. The three actions are reversible or
+  use the already-tested save path; no modal confirmation or new persistence
+  semantics are introduced.
