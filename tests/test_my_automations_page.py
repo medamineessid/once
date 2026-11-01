@@ -161,8 +161,8 @@ def test_page_lists_saved_automations(qtbot):
     page = make_page(qtbot, service)
 
     assert page._workflow_list.count() == 2
-    assert page._workflow_list.item(0).text() == "alpha-workflow.json"
-    assert page._workflow_list.item(1).text() == "beta-workflow.json"
+    assert page._workflow_list.item(0).text() == ""
+    assert page._workflow_list.item(1).text() == ""
     assert page._workflow_list.item(0).data(Qt.UserRole) == Path("alpha-workflow.json")
 
 
@@ -215,6 +215,19 @@ def test_rows_show_automation_name_and_actually_ran_status(qtbot):
     assert chips[0].property("chipKind") == "fail"
 
 
+def test_selected_row_shows_one_readable_title_without_filename_overlap(qtbot):
+    service = FakeService(two_saved_workflows())
+    page = make_page(qtbot, service)
+
+    page._workflow_list.setCurrentRow(0)
+
+    row = page._workflow_list.itemWidget(page._workflow_list.item(0))
+    assert row._name_label.text() == "Alpha workflow"
+    assert page._workflow_list.item(0).text() == ""
+    assert "Alpha workflow" in page._details_label.text()
+    assert page._workflow_list.height() <= 320
+
+
 def test_rows_lead_the_caption_with_the_saved_date(qtbot, tmp_path) -> None:
     """The saved-on date separates rows that share the same automation name."""
     alpha_path = tmp_path / "alpha-workflow.json"
@@ -259,7 +272,7 @@ def test_refresh_picks_up_newly_saved_automation(qtbot):
     page.refresh()
 
     assert page._workflow_list.count() == 1
-    assert page._workflow_list.item(0).text() == "beta-workflow.json"
+    assert page._workflow_list.item(0).text() == ""
 
 
 def test_details_match_selected_automation(qtbot):

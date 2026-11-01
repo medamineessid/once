@@ -147,6 +147,7 @@ class MyAutomationsPage(QWidget):
         self._workflow_list.setObjectName("workflowList")
         self._workflow_list.setAlternatingRowColors(True)
         self._workflow_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._workflow_list.setMaximumHeight(320)
         self._workflow_list.itemSelectionChanged.connect(self._on_selection_changed)
         layout.addWidget(self._workflow_list, stretch=1)
 
@@ -390,11 +391,15 @@ class MyAutomationsPage(QWidget):
                 saved_on=_saved_on_text(path),
                 parent=self._workflow_list,
             )
+            # The custom row owns the visible title and caption. Leaving the
+            # QListWidget item's filename text enabled paints it underneath.
+            item.setText("")
             hint = row.sizeHint()
             hint.setHeight(_ROW_HEIGHT)
             item.setSizeHint(hint)
             self._workflow_list.addItem(item)
             self._workflow_list.setItemWidget(item, row)
+        self._workflow_list.setFixedHeight(max(84, min(320, 28 + len(saved_paths) * 64)))
         if unreadable:
             self._banner.show_message("warning", MY_UNREADABLE_TITLE, MY_UNREADABLE_BODY)
         if not saved_paths:
