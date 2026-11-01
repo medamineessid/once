@@ -31,6 +31,7 @@ PAGES = [
     ("activity", ShellPages.ACTIVITY),
     ("settings", ShellPages.SETTINGS),
     ("create-automation", ShellPages.CREATE),
+    ("editor", ShellPages.EDITOR),
 ]
 
 
@@ -70,6 +71,10 @@ def main() -> int:
         for page_name, page in PAGES:
             if page is None:
                 window._open_workflow(saved_path)
+            elif page_name == "editor":
+                # Fresh definition through the shell's own entry point, so the
+                # canvas and the A2a inspector capture in their real state.
+                window._show_editor()
             else:
                 window._show_page(page)
             settle(app)

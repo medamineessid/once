@@ -1139,3 +1139,32 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `app.py --shell --smoke-test`); append-only log guard passed; `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-01 — A2a: editor node selection and read-only inspector   (commit: 027894b)
+- Task: click a canvas node to select it (accent outline, adjacent edges
+  highlighted); empty click or Esc deselects; a closable right-hand inspector
+  summarises the selected step (name, kind, read-only vs mutating plus the
+  approval note, target, timeout) or the whole automation when nothing is
+  selected; Tab/Shift+Tab/arrows walk the chain edges, Enter focuses the
+  inspector; selection survives rebuilds when the step still exists.
+- AI contribution: selection layer in ui/editor/canvas.py (select_node,
+  _apply_selection_visuals, focusNextPrevChild override), new
+  ui/editor/inspector.py (InspectorPanel), EditorPage wiring
+  (_on_node_selected/_focus_inspector/_show_inspector_for), 4 new strings in
+  ui/strings.py, tests/test_editor_inspector.py (12 tests), editor page added
+  to scripts/capture_shell_pages.py + count 18->21 in capture_screenshots.ps1,
+  INDEX.md regenerated.
+- Defect found: my first inspector draft referenced undefined string constants
+  and missed the StepKind import (pytest caught both); the keyboard walk used
+  dict(titles) order which put Finish second (new test caught it — fixed to
+  plan slot order); my test fixture passed a dict target where the engine
+  requires a JSON string; ACCENT hex-case comparison; Tab never reaches
+  keyPressEvent (Qt focus processing) — fixed with a focusNextPrevChild
+  override, not by weakening the test.
+- Verification: `pytest tests/test_editor_inspector.py -x -q` ->
+  `12 passed in 0.53s`; `pytest tests/test_editor_canvas.py
+  tests/test_editor_page.py tests/test_architecture.py -q` -> `17 passed in
+  4.22s`; `ruff check .` -> `All checks passed!`;
+  scripts/capture_screenshots.ps1 exit 0, 21 distinct non-empty PNGs.
+- Outcome: PASSED
+- Human review:

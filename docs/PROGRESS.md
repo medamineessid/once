@@ -5,10 +5,14 @@ full shell refresh, MVP moves to P9 (prompt queue P0–P9 in session prompt). Th
 spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 (AD-008); work proceeds from the session prompt.
 
-- Current branch: `slice/a1-automation-names` (2026-10-31 solo-mode A1 slice).
-- main = origin/main = 4cf0e39 ("fix(controller): use engine validator for editor
-  changes"); A1 commits 11e0e74 + 0a325df on top, docs commit next, then
-  ff-merge to main after verify.
+- Current branch: `slice/a2a-selection-inspector` (2026-11-01 solo-mode A2a
+  slice). Handoff: A2a code commit 2db1087 pushed; screenshots regenerated
+  (21 PNGs, editor page included, INDEX.md updated); next = this docs commit,
+  then scripts/verify.ps1 once, ff-merge to main, push. Nothing uncommitted
+  beyond this docs batch. Next queue item: A2b (inspector editing forms via
+  controller/editor.py operations).
+- main was = origin/main = ab5de63 (A1 and solo prompt merged) at
+  session start; A2a merges on top after verify.
 - `slice/naming-defect` (fec4213 + 88298f7) is the previous agent's WIP park: a
   whole-repo CRLF churn commit plus a half-done name implementation (13 failing
   My-automations tests, a bare `except Exception: pass` in editor.py, a
@@ -41,6 +45,7 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | P4b | Layout record storage | DONE | slice/p4b-layouts; SQLite migration, strict records, corrupt fallback |
 | P4c | Editor page and acceptance flow | DONE | slice/p4c-editor-page; create/add/save/open/run/activity acceptance |
 | A1 | Automation names everywhere (solo-mode lane) | DONE | slice/a1-automation-names: My automations rows show saved name + Saved date + unreadable-file warning; editor header renames through the session (undoable); editor test swapped to the chosen-name assertions (AD-017/018/019/020) |
+| A2a | Editor selection + read-only inspector (solo-mode lane) | DONE | slice/a2a-selection-inspector 2db1087: click/keyboard selection with edge highlighting, closable right inspector (step summary or automation info), Enter focuses inspector; 12 new tests; screenshots include the editor page |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
 | P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |
