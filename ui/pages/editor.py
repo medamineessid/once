@@ -21,6 +21,7 @@ from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
 from ui.components.banner import Banner
 from ui.editor.canvas import CanvasView
+from ui.strings import EDITOR_RENAME_EMPTY_MESSAGE, EDITOR_RENAME_ERROR_TITLE
 from ui.styles import SPACING_LG, SPACING_XL
 
 
@@ -48,6 +49,9 @@ class EditorPage(QWidget):
         self._name_input = QLineEdit(self)
         self._name_input.setPlaceholderText("Automation name")
         self._name_input.setText("New automation")
+        # The name is edited inline and committed as ONE undoable controller
+        # operation when the user presses Enter or leaves the field (A1).
+        self._name_input.editingFinished.connect(self._commit_name)
         layout.addWidget(self._name_input)
         self._canvas = CanvasView(self)
         self._canvas.setMinimumHeight(220)
@@ -79,6 +83,28 @@ class EditorPage(QWidget):
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service
 
+    def _commit_name(self) -> None:
+        """Apply the typed name through the controller session; failures stay inline."""
+        if self._session is None:
+            return
+        name = self._name_input.text().strip()
+        current_name = self._session.workflow().name
+        if not name:
+            self._name_input.setText(current_name)
+            self._banner.show_message(
+                "error", EDITOR_RENAME_ERROR_TITLE, EDITOR_RENAME_EMPTY_MESSAGE
+            )
+            return
+        if name == current_name:
+            return
+        try:
+            self._session.rename_workflow(name)
+        except WorkflowValidationError as error:
+            self._name_input.setText(current_name)
+            self._banner.show_message("error", EDITOR_RENAME_ERROR_TITLE, str(error))
+            return
+        self._refresh()
+
     def start_new(self) -> None:
         self._session = WorkflowEditorSession(
             Workflow(f"automation-{uuid4().hex}", "New automation", ())
@@ -98,12 +124,18 @@ class EditorPage(QWidget):
     def _undo(self) -> None:
         if self._session is not None and self._session.can_undo:
             self._session.undo()
+            self._sync_name_input()
             self._refresh()
 
     def _redo(self) -> None:
         if self._session is not None and self._session.can_redo:
             self._session.redo()
+            self._sync_name_input()
             self._refresh()
+
+    def _sync_name_input(self) -> None:
+        if self._session is not None:
+            self._name_input.setText(self._session.workflow().name)
 
     def _save(self) -> None:
         if self._service is None or self._session is None:
@@ -133,3 +165,4 @@ class EditorPage(QWidget):
         self._canvas.set_workflow(workflow)
         self._undo_button.setEnabled(self._session.can_undo)
         self._redo_button.setEnabled(self._session.can_redo)
+        self._sync_name_input()
