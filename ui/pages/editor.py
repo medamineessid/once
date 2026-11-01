@@ -21,6 +21,7 @@ from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
 from ui.components.banner import Banner
 from ui.editor.canvas import CanvasView
+from ui.editor.inspector import InspectorPanel
 from ui.strings import EDITOR_RENAME_EMPTY_MESSAGE, EDITOR_RENAME_ERROR_TITLE
 from ui.styles import SPACING_LG, SPACING_XL
 
@@ -55,7 +56,14 @@ class EditorPage(QWidget):
         layout.addWidget(self._name_input)
         self._canvas = CanvasView(self)
         self._canvas.setMinimumHeight(220)
-        layout.addWidget(self._canvas)
+        self._canvas.node_selected.connect(self._on_node_selected)
+        self._canvas.step_activated.connect(self._focus_inspector)
+        self._canvas.setMinimumHeight(220)
+        self._inspector = InspectorPanel(self)
+        canvas_and_inspector = QHBoxLayout()
+        canvas_and_inspector.addWidget(self._canvas, 1)
+        canvas_and_inspector.addWidget(self._inspector)
+        layout.addLayout(canvas_and_inspector)
         self._steps_list = QListWidget(self)
         self._steps_list.setObjectName("editorStepsList")
         layout.addWidget(self._steps_list)
@@ -163,6 +171,31 @@ class EditorPage(QWidget):
         for index, step in enumerate(workflow.steps, start=1):
             self._steps_list.addItem(f"{index}. {step.name} — {step.message}")
         self._canvas.set_workflow(workflow)
+        self._show_inspector_for(self._canvas.selected_id, workflow)
         self._undo_button.setEnabled(self._session.can_undo)
         self._redo_button.setEnabled(self._session.can_redo)
         self._sync_name_input()
+
+    # --------------------------------------------------------- inspector (A2a)
+
+    def _on_node_selected(self, node_id: object) -> None:
+        """Show the selected step's summary, or the automation summary."""
+        if self._session is None:
+            return
+        self._show_inspector_for(node_id, self._session.workflow())
+
+    def _focus_inspector(self, _node_id: object) -> None:
+        """Enter on a selected node moves keyboard focus to the inspector."""
+        self._inspector.setFocus()
+
+    def _show_inspector_for(self, node_id: object, workflow) -> None:
+        step = None
+        if isinstance(node_id, str):
+            for candidate in workflow.steps:
+                if candidate.step_id == node_id:
+                    step = candidate
+                    break
+        if step is None:
+            self._inspector.show_automation(workflow)
+        else:
+            self._inspector.show_step(step)

@@ -113,3 +113,11 @@ RUN_CANCELLED_MESSAGE = "The run was cancelled before it finished."
 # --- Editor -----------------------------------------------------------------
 EDITOR_RENAME_ERROR_TITLE = "Name not applied"
 EDITOR_RENAME_EMPTY_MESSAGE = "An automation needs a name. The previous name was kept."
+EDITOR_INSPECTOR_STEPS = "step"
+EDITOR_INSPECTOR_NO_TARGET = "no target"
+EDITOR_INSPECTOR_TARGET_UNREADABLE = "target the editor cannot show"
+EDITOR_INSPECTOR_KIND_READ_ONLY = "Read-only"
+EDITOR_INSPECTOR_KIND_MUTATING = "Changes your computer"
+EDITOR_INSPECTOR_MUTATING_NOTE = (
+    "This step changes your computer. Once asks for approval before it can run."
+)
