@@ -16,6 +16,20 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Outcome: IN PROGRESS
 - Human review:
 
+## 2026-11-01 — P9: Verify packaged executable   (commit: pending)
+- Task: build the existing one-folder PyInstaller package and smoke-test its
+  real executable without writing into user data.
+- AI contribution: ran `once.spec` and verified the packaged executable in an
+  isolated `LOCALAPPDATA` directory.
+- Defect found: none in the packaging path; the first output check ran before
+  the process-created database was enumerated, so the isolated directory was
+  inspected separately.
+- Verification: PyInstaller reported `Building COLLECT COLLECT-00.toc
+  completed successfully`; `Once.exe --smoke-test` printed `PACKAGED_EXIT=0`;
+  isolated inspection found `Once\once.db` and `Once\logs\once.log`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-11-01 — P8/P9: Hardening baseline and release checklist   (commit: pending)
 - Task: Add concrete hardening coverage and document the release gate without
   switching the default window prematurely.

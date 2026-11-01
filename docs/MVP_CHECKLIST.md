@@ -19,7 +19,7 @@ point.
 | Cancel safely during a run | Working | `ui/workers.py`, `ui/shell.py` | `tests/test_close_during_run.py` |
 | Require approval for mutating desktop steps | Working | `engine/desktop.py`, `ui/pages/editor.py` | `tests/test_editor_page.py::test_editor_shows_existing_desktop_approval_gate` |
 | Branching / decision nodes | Parked | `docs/PARKED.md` PARKED-1 | Intentionally out of MVP scope |
-| Packaged executable | Missing | `once.spec` | P9 release gate |
+| Packaged executable | Working | `once.spec`, `dist/Once/Once.exe` | PyInstaller build completed; isolated `Once.exe --smoke-test` exited 0 and created `once.db` |
 | Default shell window | Pending | `app.py` | Switch only after this checklist has no MVP-scope Missing rows |
 
 ## Release gate
