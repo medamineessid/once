@@ -66,10 +66,11 @@ def test_home_page_shows_welcome_and_empty_activity(qtbot, window):
     assert window.workspace.currentIndex() == ShellPages.HOME
     title = home._title_label.text()
     subtitle = home._subtitle_label.text()
-    assert "Once" in title
-    assert "personal assistant" in subtitle
+    assert "automate" in title.casefold()
+    assert "choose how" in subtitle.casefold()
     assert home._activity_empty.isVisible() is True
-    assert home._demo_button.parentWidget().minimumHeight() >= 180
+    assert home._record_button.text() == "Start with a recording"
+    assert home.findChildren(QPushButton, "primaryActionButton")
 
 
 def test_create_automation_page_has_description_input(qtbot, window):
@@ -290,16 +291,21 @@ def test_sidebar_click_home_returns_to_home(qtbot, window):
     assert window.sidebar.is_on(ShellPages.HOME)
 
 
-def test_home_create_button_clicks_into_create_flow(qtbot, window):
-    qtbot.mouseClick(window.home_page._create_automation_button, Qt.MouseButton.LeftButton)
+def test_home_build_button_clicks_into_create_flow(qtbot, window):
+    build_button = next(
+        button
+        for button in window.home_page.findChildren(QPushButton)
+        if button.text() == "Build an automation"
+    )
+    qtbot.mouseClick(build_button, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
     assert window.workspace.currentWidget() is window.create_automation_page
 
 
-def test_home_demo_button_runs_the_demo_exactly_once(qtbot, tmp_path):
+def test_demo_runner_remains_available_for_diagnostics(qtbot, tmp_path):
     window, service = _window_with_service(qtbot, tmp_path)
 
-    qtbot.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
     qtbot.waitUntil(lambda: len(service.history()) == 1, timeout=10_000)
     # Wait for the demo thread to fully finish before teardown: destroying a
     # running QThread aborts the process under the offscreen platform.
@@ -362,7 +368,7 @@ def test_sidebar_has_four_nav_items_brand_and_one_footer(qtbot, window):
     buttons = [w for w in widgets if isinstance(w, QToolButton)]
     labels = [w for w in widgets if isinstance(w, QLabel) and not isinstance(w, Spacer)]
     assert [b.text() for b in buttons] == ["Home", "My automations", "Activity", "Settings"]
-    assert [label.text() for label in labels] == ["Once", "Once Assistive Automation"]
+    assert [label.text() for label in labels] == ["Once", "Local app"]
 
 
 def _ui_sources() -> dict[Path, str]:

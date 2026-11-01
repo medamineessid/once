@@ -1287,3 +1287,18 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   formatting passed, both smoke tests passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-01 — A2g: Home first-run UX correction   (commit: pending)
+- Task: remove misleading demo content and make the first Home screen point to
+  the two real creation paths.
+- AI contribution: replaced the demo card with manual-build and recording
+  choices, removed the redundant header action and repeated footer branding,
+  and excluded diagnostic demo runs from Home's recent-run list.
+- Defect found: the Home screenshot presented a safe diagnostic demonstration
+  as the main product action and showed repeated demo history as if it were
+  user activity.
+- Verification: focused tests printed `46 passed`; `scripts/verify.ps1`
+  printed `468 passed, 2 skipped`, Ruff and formatting passed, both smoke tests
+  passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:

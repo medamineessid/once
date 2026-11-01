@@ -149,7 +149,7 @@ class Sidebar(QToolBar):
         ):
             button.setAutoRepeat(False)
         self.addWidget(Spacer())
-        footer = QLabel("Once Assistive Automation")
+        footer = QLabel("Local app")
         footer.setObjectName("sidebarFooter")
         self.addWidget(footer)
 
@@ -246,7 +246,7 @@ class MainWindow(QMainWindow):
         self.sidebar.settingsClicked.connect(self._show_page_settings)
         self._install_page_shortcuts()
         self.home_page.created_automation.connect(self._show_create_automation)
-        self.home_page.run_demo_requested.connect(self._run_demo_from_home)
+        self.home_page.record_requested.connect(self._show_create_automation)
         self.my_automations_page.created_automation.connect(self._show_create_automation)
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)

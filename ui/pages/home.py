@@ -1,4 +1,4 @@
-"""Home page — the first screen new users see: start, create, recent activity."""
+"""Home page — the first screen new users see: choose a clear starting path."""
 
 from __future__ import annotations
 
@@ -15,10 +15,12 @@ from ui.components.cards import Card, EmptyState
 from ui.components.formatting import human_timestamp, status_display
 from ui.components.pageheader import PageHeader
 from ui.strings import (
-    HOME_CARD_DEMO_ACTION,
-    HOME_CARD_DEMO_BODY,
-    HOME_CARD_DEMO_TITLE,
-    HOME_CREATE_ACTION,
+    HOME_CARD_CREATE_ACTION,
+    HOME_CARD_CREATE_BODY,
+    HOME_CARD_CREATE_TITLE,
+    HOME_CARD_RECORD_ACTION,
+    HOME_CARD_RECORD_BODY,
+    HOME_CARD_RECORD_TITLE,
     HOME_RECENT_EMPTY,
     HOME_RECENT_LIST_TITLE,
     HOME_SUBTITLE,
@@ -33,14 +35,14 @@ class HomePage(QWidget):
     """Welcome screen with the demonstration, the create entry, and recent runs."""
 
     created_automation = Signal()
-    run_demo_requested = Signal()
+    record_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._service: WorkflowService | None = None
         self._activity_panel: QWidget | None = None
         self._create_automation_button: QWidget | None = None
-        self._demo_button: QWidget | None = None
+        self._record_button: QWidget | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -48,9 +50,7 @@ class HomePage(QWidget):
         layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
         layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop)
-        self._header = PageHeader(
-            HOME_TITLE, HOME_SUBTITLE, primary_label=HOME_CREATE_ACTION, parent=self
-        )
+        self._header = PageHeader(HOME_TITLE, HOME_SUBTITLE, parent=self)
         # Tests read the page title through the same attributes as before.
         self._title_label = self._header.title_label
         self._subtitle_label = self._header.description_label
@@ -61,17 +61,24 @@ class HomePage(QWidget):
 
         cards_row = QHBoxLayout()
         cards_row.setSpacing(SPACING_SM)
-        demo_card = Card(
-            HOME_CARD_DEMO_TITLE,
-            HOME_CARD_DEMO_BODY,
-            HOME_CARD_DEMO_ACTION,
+        create_card = Card(
+            HOME_CARD_CREATE_TITLE,
+            HOME_CARD_CREATE_BODY,
+            HOME_CARD_CREATE_ACTION,
             parent=self,
         )
-        demo_card.setMinimumHeight(190)
-        self._demo_button = demo_card.action_button
-        self._demo_button.setObjectName("primaryActionButton")
-        demo_card.action_requested.connect(self._run_demo)
-        cards_row.addWidget(demo_card)
+        create_card.action_button.setObjectName("primaryActionButton")
+        create_card.action_requested.connect(self._create_automation)
+        cards_row.addWidget(create_card)
+        record_card = Card(
+            HOME_CARD_RECORD_TITLE,
+            HOME_CARD_RECORD_BODY,
+            HOME_CARD_RECORD_ACTION,
+            parent=self,
+        )
+        self._record_button = record_card.action_button
+        record_card.action_requested.connect(self.record_requested.emit)
+        cards_row.addWidget(record_card)
         cards_row.addStretch(1)
         cards_holder = QWidget(self)
         cards_holder.setLayout(cards_row)
@@ -108,6 +115,8 @@ class HomePage(QWidget):
         rows: list[tuple[str, str, str]] = []
         for run in self._service.history()[:_RECENT_RUN_COUNT]:
             workflow_id = getattr(run, "workflow_id", "?")
+            if workflow_id == "demo-local-workflow":
+                continue
             name = self._service.workflow_name(workflow_id) or workflow_id
             status_value = getattr(getattr(run, "status", None), "value", "Unknown")
             rows.append((name, status_value, human_timestamp(getattr(run, "finished_at", None))))
@@ -115,10 +124,6 @@ class HomePage(QWidget):
 
     def _create_automation(self) -> None:
         self.created_automation.emit()
-
-    def _run_demo(self) -> None:
-        """Emit the typed request; the shell triggers exactly one demo run."""
-        self.run_demo_requested.emit()
 
     def _refresh_activity(self) -> None:
         runs = self._recent_rows()

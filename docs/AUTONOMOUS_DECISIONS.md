@@ -408,3 +408,15 @@ Format per item: id, date, question, options, choice, reason.
   into executable steps requires the existing analysis/proposal boundary and
   approval. Fabricating nodes directly from clicks would violate the
   untrusted-draft and safety contract.
+
+## AD-028 — 2026-11-01 — Home screen first-run focus
+
+- Question: what should the first Home screen show while the recorder-to-editor
+  flow is still incomplete?
+- Choice: remove the demo card and redundant header CTA, present only Build it
+  yourself and Record a task, remove the repeated brand footer, and keep demo
+  runs available only through diagnostics and Activity.
+- Reason: the demo looked like the primary product path and persisted demo rows
+  made Recent activity look like user work. The two remaining choices map to
+  real reachable flows and reduce first-time-user ambiguity without changing
+  execution or approval behavior.

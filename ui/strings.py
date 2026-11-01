@@ -24,25 +24,21 @@ DEMO_STOPPED_TITLE = "Demonstration stopped"
 DEMO_FAILED_TITLE = "Demonstration failed"
 
 # --- Home -------------------------------------------------------------------
-HOME_TITLE = "Welcome to Once"
-HOME_SUBTITLE = "Your personal assistant for automating repetitive computer tasks."
-HOME_CREATE_ACTION = "Create an automation"
-HOME_CARD_DEMO_TITLE = "Try a demonstration"
-HOME_CARD_DEMO_BODY = (
-    "Watch a small, safe automation run on this PC. Nothing is changed on your computer."
-)
-HOME_CARD_CREATE_TITLE = "Create from scratch"
-HOME_CARD_CREATE_BODY = "Build an automation from connected steps on a visual canvas."
+HOME_TITLE = "What do you want to automate?"
+HOME_SUBTITLE = "Choose how to show Once the task. You can build the steps yourself or record them."
+HOME_CARD_CREATE_TITLE = "Build it yourself"
+HOME_CARD_CREATE_BODY = "Add clear steps on a visual canvas, then preview and save the automation."
+HOME_CARD_CREATE_ACTION = "Build an automation"
 HOME_CARD_RECORD_TITLE = "Record a task"
 HOME_CARD_RECORD_BODY = (
-    "Do the task once while Once records your actions, then review and edit the draft."
+    "Show Once the task once. Your recording stays on this PC and needs review before it can run."
 )
-HOME_RECENT_LIST_TITLE = "Recent activity"
-HOME_RECENT_EMPTY = "You haven't run any automations yet. Try the demonstration to get started."
+HOME_CARD_RECORD_ACTION = "Start with a recording"
+HOME_RECENT_LIST_TITLE = "Your recent runs"
+HOME_RECENT_EMPTY = "No runs yet. Save an automation, then run it from My automations."
 HOME_RUN_SUCCEEDED = "Succeeded"
 HOME_RUN_FAILED = "Failed"
 HOME_RUN_CANCELLED = "Cancelled"
-HOME_CARD_DEMO_ACTION = "Run demonstration"
 
 # --- My automations ----------------------------------------------------------
 MY_TITLE = "My automations"

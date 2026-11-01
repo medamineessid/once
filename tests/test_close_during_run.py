@@ -59,7 +59,7 @@ def test_close_during_demo_cancels_and_joins_thread(qtbot, tmp_path, monkeypatch
     recorder: list[str] = []
     monkeypatch.setattr(window._service, "run_workflow", slow_run_factory(recorder))
 
-    QTest.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
     qtbot.waitUntil(lambda: window.status_footer.state == "Running…", timeout=5000)
 
     window.close()
