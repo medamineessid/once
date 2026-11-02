@@ -86,7 +86,7 @@ def load_layout(connection: sqlite3.Connection, workflow_id: str) -> LayoutLoadR
         return LayoutLoadResult(None, None)
     try:
         record = _decode(json.loads(row["layout"] if isinstance(row, sqlite3.Row) else row[0]))
-    except TypeError, ValueError, json.JSONDecodeError:
+    except (TypeError, ValueError, json.JSONDecodeError):
         return LayoutLoadResult(None, CORRUPT_LAYOUT_WARNING)
     return LayoutLoadResult(record, None)
 

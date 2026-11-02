@@ -13,8 +13,8 @@ from engine.workflow import (
     StepStatus,
     Workflow,
     WorkflowRunner,
-    WorkflowStep,
     WorkflowStatus,
+    WorkflowStep,
 )
 from integrations.chrome_devtools import (
     BrowserError,
@@ -106,7 +106,7 @@ class BrowserSessionStub:
 
 class _StubRegistry:
     def resolve(self, name: str) -> Path:
-        return Path("/tmp/chrome.exe")
+        return Path("C:/fake/chrome.exe")
 
 
 def make_actions(targets, ws_script=None, ws_factory=None, *, version=None):
@@ -564,7 +564,9 @@ def _browser_steps(port: int) -> tuple[WorkflowStep, ...]:
     return (
         WorkflowStep("nav", "Navigate", StepKind.NAVIGATE_BROWSER, "Navigated.", target=navigate),
         WorkflowStep("inspect", "Inspect", StepKind.INSPECT_PAGE, "Inspected.", target=inspect),
-        WorkflowStep("wait", "Wait", StepKind.WAIT_PAGE, "Waited.", target=wait, timeout_seconds=2.0),
+        WorkflowStep(
+            "wait", "Wait", StepKind.WAIT_PAGE, "Waited.", target=wait, timeout_seconds=2.0
+        ),
     )
 
 
