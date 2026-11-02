@@ -1,6 +1,6 @@
 # UI redesign progress
 
-NEXT TASK: Extend the latest screenshot set to the dedicated recording screen and fix the create-page state leak the identical-md5 guard exposed in the capture driver.
+NEXT TASK (needs the user): flip the P9 default window to the shell — the gate is satisfied (no MVP-scope missing rows, both app.py acceptance paths verified this session, packaged exe verified 2026-11-01), but docs/ui_migration_plan.md Slice 8 CHECKPOINT 2 reserves the flip to the human; no other unfinished UI work found on redesign-ui.
 
 ## Log
 - 2026-11-02: DONE. Entry-point acceptance: extracted `app.build_window`, added `tests/test_entry_acceptance.py` (first-run Home + full create → rename → save → run → Activity journey through real wiring on isolated LOCALAPPDATA). Files: app.py, tests/test_entry_acceptance.py, PROGRESS-UI.md. Checks: pytest tests/test_entry_acceptance.py tests/test_app_entry.py → 8 passed; ruff check/format clean. Next: update the two MVP_CHECKLIST rows to Working with the new proof, then commit docs.
