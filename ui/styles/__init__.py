@@ -52,7 +52,7 @@ TEXT_BODY = "#525A66"
 TEXT_FAINT = "#525A66"
 TEXT_SIDEBAR = "#3A3A3A"
 TEXT_SIDEBAR_HOVER = "#1D1D1D"
-SIDEBAR_HOVER_BG = "#E5DEF7"
+SIDEBAR_HOVER_BG = "#7E57C2"
 STATUS_OK = "#15803D"
 STATUS_ERROR = "#B91C1C"
 STATUS_WARNING = "#92400E"
@@ -73,12 +73,11 @@ CONTRAST_PAIRS = (
     ("body on accent tint", TEXT_BODY, ACCENT_SOFT),
     ("sidebar text on sidebar", TEXT_SIDEBAR, SURFACE),
     ("sidebar hover text on card", TEXT_SIDEBAR_HOVER, SURFACE),
-    ("sidebar hover bg vs card", SIDEBAR_HOVER_BG, SURFACE),
+    ("sidebar hover bg vs card", SIDEBAR_HOVER_BG, SURFACE_ALT),
     ("button text on primary", "#FFFFFF", PRIMARY_BTN),
     ("status ok text", STATUS_OK, "#FFFFFF"),
     ("status error text", STATUS_ERROR, "#FFFFFF"),
     ("status warning text", STATUS_WARNING, "#FFFFFF"),
-    ("sidebar hover bg vs card", SIDEBAR_HOVER_BG, SURFACE),
     ("strong on action tint", TEXT_STRONG, TINT_ACTION),
     ("strong on verify tint", TEXT_STRONG, TINT_VERIFY),
     ("strong on progress tint", TEXT_STRONG, TINT_PROGRESS),
