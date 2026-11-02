@@ -33,6 +33,9 @@ PAGES = [
     ("create-automation", ShellPages.CREATE),
     ("editor", ShellPages.EDITOR),
 ]
+# main() appends the palette-less captures (recording mode, opened review),
+# so the caller can assert the full expected count without re-running logic.
+EXPECTED_PAGE_COUNT = len(PAGES) + 2
 
 
 def settle(app: QApplication) -> None:
@@ -59,6 +62,10 @@ def main() -> int:
     window.show()
     settle(app)
 
+    # The recording flow is the create page in its dedicated recording mode
+    # (reached exactly the way Home's record card does it).
+    PAGES.append(("recording", None))
+
     # Give the review capture something real to show: the demo workflow opened
     # through the same path the sidebar list uses.
     saved_path = service.save(service.demo_workflow())
@@ -70,7 +77,14 @@ def main() -> int:
     for width, height in SIZES:
         for page_name, page in PAGES:
             if page is None:
-                window._open_workflow(saved_path)
+                if page_name == "review":
+                    window._open_workflow(saved_path)
+                elif page_name == "recording":
+                    window._show_recording()
+            elif page_name == "create-automation":
+                # Restore the typed-description mode explicitly: a later
+                # recording capture must not leak its page state here.
+                window._show_create_automation()
             elif page_name == "editor":
                 # Fresh definition through the shell's own entry point, so the
                 # canvas and the A2a inspector capture in their real state.
