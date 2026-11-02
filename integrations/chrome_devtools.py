@@ -315,7 +315,7 @@ class ChromeDevtoolsActions:
         while self._clock() < deadline:
             try:
                 pages = [t for t in http.list_targets() if t.get("type") == "page"]
-            except OSError, ValueError:
+            except (OSError, ValueError):
                 pages = []
             if pages:
                 return True
@@ -457,7 +457,7 @@ class ChromeDevtoolsActions:
             client = self._ws_factory(ws_url)
             try:
                 state = self._runtime_expression(client, EXPR_PAGE_STATE)
-            except BrowserError, OSError, ValueError, WebSocketClosed:
+            except (BrowserError, OSError, ValueError, WebSocketClosed):
                 state = None
             finally:
                 client.close()
