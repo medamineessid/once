@@ -31,12 +31,53 @@ CHECKLIST (strictly required for that one flow; everything else is out of scope)
       prints the run id; a second invocation on a cold start works.
 - [x] 6. Cold-start twice consecutively: no leaked Chrome/profile/server state
       between runs (acceptance = run the check twice, both PASS).
-- [ ] 7. DEMO section below with the exact demo command, expected result, gaps.
+- [x] 7. DEMO section below with the exact demo command, expected result, gaps.
 
 Lanes/limits: no UI code, no redesign-ui branch, no new runtime dependencies
 (engine browser path is stdlib-only). Design rules held: JSON intent + ordered
 steps; URL + DOM-selector targets (no coordinate clicks); parameterized inputs;
 one pass/fail check command.
+
+---
+
+DEMO (MVP verified complete 2026-11-02)
+
+Exact command (Windows console, needs a real Chrome installed at the default
+location and any Python 3.12+; the repo's Windows venv works):
+
+    C:\Users\DELL\once\.venv\Scripts\python.exe C:\Users\DELL\once-desktop\scripts\check_mvp.py
+
+(from a WSL shell, equivalent shortcut: `../once/.venv/Scripts/python.exe scripts/check_mvp.py`)
+
+What you will see, end to end, unattended:
+1. `local fixture page: http://127.0.0.1:<port>/index.html`
+2. `[launch] SUCCEEDED` with `cdp_port=` evidence (isolated Chrome profile).
+3. Ordered step report: navigate -> wait-page -> inspect -> find -> click -> type
+   -> wait-status -> verify, each `SUCCEEDED`/`VERIFIED` with evidence.
+4. `history: run snapshots recorded in C:\Users\DELL\AppData\Local\Once\history.db`
+5. `CHECK: PASS - run <uuid> verified end to end.` and exit code 0. The engine
+   closes the isolated browser and the fixture server; no windows left open.
+
+Any failure prints `CHECK: FAIL - <single-idea reason>` and exits 1.
+
+Cheapest targeted check without Chrome:
+    python -m pytest tests/test_check_mvp.py -q   ->  5 passed
+
+Known gaps:
+- Chrome discovery (integrations/chrome_devtools.py) probes fixed install paths
+  (C:\Program Files\..., C:\Program Files (x86)\...) and rejects anything not
+  containing chrome.exe; a Chrome elsewhere needs the default install path.
+- One fixture flow only: the demo page DOM (#demo-button, #demo-input, #status)
+  is fixed in the DemoServer page that scripts/check_mvp.py imports from
+  chrome_demo.py; a new flow needs a matching fixture JSON whose first step is
+  LAUNCH_BROWSER.
+- The fixture wrapper (intent/params) sits outside workflow_from_dict's schema;
+  the workflow itself is strictly validated (schema v3). Adding intent fields to
+  the root schema is future work.
+- The 6 pre-existing pytest failures that need a live Chrome were not part of
+  this checklist; not revisited (unchanged by this session).
+- History DB stores step evidence tuples; evidence redaction was not revisited
+  for this flow (targets are local URL + selectors + fixture text only).
 
 ---
 
@@ -80,3 +121,7 @@ Next: none — engine work is complete pending a real Chrome/Windows environment
 - Item 6 done: check_mvp.py run twice consecutively on real Chrome; both CHECK: PASS exit 0 (runs 852d0139..., 7a9d63b9...); history DB shows 4 workflow_runs / 18 step_results appended with both new run ids.
 - Files: PROGRESS-DESKTOP.md only (verification run).
 - Next: item 7 — DEMO section, then stop.
+
+- Item 7 done: DEMO section written (exact command, expected output, 5 known gaps); checklist complete.
+- Files: PROGRESS-DESKTOP.md.
+- Next: none — the MVP flow runs unattended on real Chrome from one command; stop here.
