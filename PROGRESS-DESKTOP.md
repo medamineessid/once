@@ -15,10 +15,10 @@ CHECKLIST (strictly required for that one flow; everything else is out of scope)
 - [x] 1. Engine code runs on Windows under a real Chrome from one command:
       baseline `scripts/chrome_demo.py` green end to end (the 6 earlier
       Chrome-blocked tests re-attributed to the missing real run).
-- [ ] 2. Fixture automation as JSON on disk: intent + ordered steps, saved via
+- [x] 2. Fixture automation as JSON on disk: intent + ordered steps, saved via
       storage/workflows.py (workflow_to_dict/from_dict strict validation), with
       parameter inputs (`{url}`, `{text}` placeholders) substituted at check time.
-- [ ] 3. `scripts/check_mvp.py`: single command, no manual steps, sets up the
+- [x] 3. `scripts/check_mvp.py`: single command, no manual steps, sets up the
       local fixture page host, loads the fixture JSON, runs launch -> navigate ->
       wait -> inspect -> find -> click -> type -> wait -> verify through
       approve_desktop_workflow + ReplayExecutor, prints per-step report and
@@ -57,6 +57,14 @@ Next: none — engine work is complete pending a real Chrome/Windows environment
 
 ## LOG (MVP push)
 
-- Item 1 done: full chrome_demo.py flow PASS on real Chrome 156.0.8078.76 (isolated profile, DevTools port, clean shutdown), run via the Windows venv python through WSL interop. The "needs real Chrome" gap from the first pass is resolved.
-- Files ticked: PROGRESS-DESKTOP.md. Demo run only.
+- Item 1 done: full chrome_demo.py flow PASS on real Chrome 156.0.8078.76 (isolated profile, clean shutdown) via the Windows venv python through WSL interop; the "needs real Chrome" gap from the first pass is resolved.
+- Files: PROGRESS-DESKTOP.md only (demo run).
 - Next: item 2 — fixture automation JSON (intent + ordered steps + params).
+
+- Item 2 done: fixture automation JSON (intent + ordered steps, strict schema v3 validation) loads via workflow_from_dict; parameter inputs {url}/{text}/{cdp_port} substituted at check time (cdp_port coerced to int for the validator).
+- Files: scripts/fixtures/mvp_flow.json (new). E2E check: real run in item 3 below.
+- Next: item 3 — check_mvp.py single-command PASS/FAIL flow.
+
+- Item 3 done: scripts/check_mvp.py runs the fixture flow unattended on real Chrome 156 (isolated profile) end to end; CHECK: PASS run 7b5cc0de-9f0d-477c-afed-d4fdf1eac093, exit 0.
+- Files: scripts/check_mvp.py (new), PROGRESS-DESKTOP.md.
+- Next: item 4 pytest covers fixture load/validation + check logic with fake actions; failure path exits 1.
