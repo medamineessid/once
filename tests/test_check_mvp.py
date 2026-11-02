@@ -147,6 +147,28 @@ def test_missing_port_prevents_flow_and_fails_fairly():
     assert check.checked_outcome(None, None)[0] is False
 
 
+def test_record_runs_persists_snapshots_for_a_second_invocation(tmp_path):
+    check = _load_check()
+    from storage.database import connect as connect_database
+
+    db = tmp_path / "history.db"
+    actions = FakeBrowserActions()
+    setup_run, main_run = check.run_fixture_flow(
+        "http://127.0.0.1:1/", actions, ReplayExecutor(DESKTOP_INTERACTION_POLICY)
+    )
+    recorded_at = check.record_runs(db, setup_run, main_run)
+    assert str(recorded_at).endswith("history.db")
+    connection = connect_database(db)
+    try:
+        rows = connection.execute("SELECT run_id, status FROM workflow_runs").fetchall()
+        assert len(rows) == 2
+        assert {row[1] for row in rows} == {"SUCCEEDED"}
+        step_rows = connection.execute("SELECT COUNT(*) FROM workflow_step_results").fetchone()
+        assert step_rows[0] == 9
+    finally:
+        connection.close()
+
+
 def test_failing_step_turns_the_verdict_false():
     check = _load_check()
     setup_run, main_run = check.run_fixture_flow(

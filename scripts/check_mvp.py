@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -38,6 +39,8 @@ from engine.workflow import (
     WorkflowRun,
 )
 from integrations.chrome_devtools import ChromeDevtoolsActions
+from storage.database import connect as connect_database
+from storage.history import ExecutionHistory
 from storage.workflows import workflow_from_dict
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -152,9 +155,36 @@ def run_fixture_flow(
     return setup_run, main_run
 
 
+def default_history_path() -> Path:
+    """App-data location for the run history database (same convention as app.py)."""
+    local = os.environ.get("LOCALAPPDATA")
+    base = Path(local) if local else Path.home() / "AppData" / "Local"
+    return base / "Once" / "history.db"
+
+
+def record_runs(db_path: Path, *runs: WorkflowRun | None) -> str:
+    """Append every completed run snapshot to the history database."""
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = connect_database(db_path)
+    try:
+        history = ExecutionHistory(connection)
+        for run in runs:
+            if run is not None:
+                history.record(run)
+    finally:
+        connection.close()
+    return str(db_path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.parse_args()
+    parser.add_argument(
+        "--history-db",
+        type=Path,
+        default=default_history_path(),
+        help="Optional path for the run history SQLite database.",
+    )
+    args = parser.parse_args()
 
     server = DemoServer()
     print(f"local fixture page: {server.url()}")
@@ -166,6 +196,8 @@ def main() -> int:
         show(setup_run)
         if main_run is not None:
             show(main_run)
+        recorded_at = record_runs(args.history_db, setup_run, main_run)
+        print(f"history: run snapshots recorded in {recorded_at}")
         ok, verdict = checked_outcome(setup_run, main_run)
         if ok and main_run is not None:
             print(f"CHECK: PASS - run {main_run.run_id} verified end to end.")

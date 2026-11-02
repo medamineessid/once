@@ -27,9 +27,9 @@ CHECKLIST (strictly required for that one flow; everything else is out of scope)
       the check exit 1 with a clear message; targeted pytest covers fixture
       loading/validation + the check logic with fake browser actions (no Chrome
       in the test suite).
-- [ ] 5. Run persisted: check stores the run in the history SQLite database and
+- [x] 5. Run persisted: check stores the run in the history SQLite database and
       prints the run id; a second invocation on a cold start works.
-- [ ] 6. Cold-start twice consecutively: no leaked Chrome/profile/server state
+- [x] 6. Cold-start twice consecutively: no leaked Chrome/profile/server state
       between runs (acceptance = run the check twice, both PASS).
 - [ ] 7. DEMO section below with the exact demo command, expected result, gaps.
 
@@ -72,3 +72,11 @@ Next: none — engine work is complete pending a real Chrome/Windows environment
 - Item 4 done: check script reshaped into testable pieces (_split_workflow/_coerce_browser_port/checked_outcome/run_fixture_flow); 4 targeted tests green with fake browser actions, no Chrome in the suite (fixture strict load, ordered dispatch, missing port -> fair fail, failing step -> FAIL verdict).
 - Files: scripts/check_mvp.py (restructure), tests/test_check_mvp.py (new), PROGRESS-DESKTOP.md. pytest 4 passed; ruff clean on both.
 - Next: item 5 — persist runs to history DB and print run id.
+
+- Item 5 done: record_runs(default_history_path()) persists setup+main snapshots to %LOCALAPPDATA%/Once/history.db and prints the path; test test_record_runs_persists_snapshots_for_a_second_invocation covers the schema rows with tmp_path DB (5 tests pass).
+- Files: scripts/check_mvp.py (record_runs, --history-db), tests/test_check_mvp.py, PROGRESS-DESKTOP.md.
+- Next: item 6 — cold-start double run on Windows.
+
+- Item 6 done: check_mvp.py run twice consecutively on real Chrome; both CHECK: PASS exit 0 (runs 852d0139..., 7a9d63b9...); history DB shows 4 workflow_runs / 18 step_results appended with both new run ids.
+- Files: PROGRESS-DESKTOP.md only (verification run).
+- Next: item 7 — DEMO section, then stop.
