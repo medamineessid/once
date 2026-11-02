@@ -91,7 +91,10 @@ def build_window(
     try:
         recording_service = RecordingService(app_data_dir / "recordings")
         verifier_config, verifier_note = _load_verifier_setup(app_data_dir)
-        window_cls = ShellMainWindow if use_shell and CLASSIC_FLAG not in args else MainWindow
+        # Default to the redesigned shell (Slice 8 CHECKPOINT 2 lifted by
+        # explicit user request on 2026-11-02); the legacy window remains
+        # reachable explicitly via --classic for one release cycle.
+        window_cls = MainWindow if CLASSIC_FLAG in args else ShellMainWindow
         window = window_cls(
             service,
             recording_service,
