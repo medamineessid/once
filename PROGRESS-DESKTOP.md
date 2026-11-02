@@ -23,7 +23,7 @@ CHECKLIST (strictly required for that one flow; everything else is out of scope)
       wait -> inspect -> find -> click -> type -> wait -> verify through
       approve_desktop_workflow + ReplayExecutor, prints per-step report and
       final PASS/FAIL, exit 0/1.
-- [ ] 4. Failure path stays honest: a failing step (e.g. missing selector) makes
+- [x] 4. Failure path stays honest: a failing step (e.g. missing selector) makes
       the check exit 1 with a clear message; targeted pytest covers fixture
       loading/validation + the check logic with fake browser actions (no Chrome
       in the test suite).
@@ -68,3 +68,7 @@ Next: none — engine work is complete pending a real Chrome/Windows environment
 - Item 3 done: scripts/check_mvp.py runs the fixture flow unattended on real Chrome 156 (isolated profile) end to end; CHECK: PASS run 7b5cc0de-9f0d-477c-afed-d4fdf1eac093, exit 0.
 - Files: scripts/check_mvp.py (new), PROGRESS-DESKTOP.md.
 - Next: item 4 pytest covers fixture load/validation + check logic with fake actions; failure path exits 1.
+
+- Item 4 done: check script reshaped into testable pieces (_split_workflow/_coerce_browser_port/checked_outcome/run_fixture_flow); 4 targeted tests green with fake browser actions, no Chrome in the suite (fixture strict load, ordered dispatch, missing port -> fair fail, failing step -> FAIL verdict).
+- Files: scripts/check_mvp.py (restructure), tests/test_check_mvp.py (new), PROGRESS-DESKTOP.md. pytest 4 passed; ruff clean on both.
+- Next: item 5 — persist runs to history DB and print run id.

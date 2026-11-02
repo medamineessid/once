@@ -20,11 +20,23 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.desktop import approve_desktop_workflow
 from engine.replay import DESKTOP_INTERACTION_POLICY, ReplayExecutor
-from engine.workflow import StepKind, StepStatus, WorkflowRun
+from engine.workflow import (
+    VALID_CDP_PORT_MAX as VALID_CDP_PORT_MAX,
+)
+from engine.workflow import (
+    VALID_CDP_PORT_MIN as VALID_CDP_PORT_MIN,
+)
+from engine.workflow import (
+    StepKind,
+    StepStatus,
+    Workflow,
+    WorkflowRun,
+)
 from integrations.chrome_devtools import ChromeDevtoolsActions
 from storage.workflows import workflow_from_dict
 
@@ -60,83 +72,105 @@ def _substitute(text: str, values: dict[str, str]) -> str:
     return substituted
 
 
-def _browser_port_to_int(step_target: str | None) -> str | None:
+def _coerce_browser_port(target: str | None) -> str | None:
     """Coerce the engine-controlled cdp_port value to the int the validator demands."""
-    if step_target is None:
+    if target is None:
         return None
-    target = json.loads(step_target)
-    browser = target.get("browser")
+    parsed = json.loads(target)
+    browser = parsed.get("browser")
     if isinstance(browser, dict) and "cdp_port" in browser:
         browser["cdp_port"] = int(browser["cdp_port"])
-    return json.dumps(target)
+    return json.dumps(parsed)
+
+
+def _split_workflow(document: dict, demo_url: str) -> tuple[list, list]:
+    """Prepare the fixture's ordered steps: static parameters in, launch split out."""
+    text_input = str(document["params"]["text"])
+    raw = _substitute(
+        json.dumps(document["workflow"]),
+        {"url": demo_url, "text": text_input},
+    )
+    steps = json.loads(raw)["steps"]
+    if not steps or StepKind(steps[0]["kind"]) is not StepKind.LAUNCH_BROWSER:
+        raise ValueError("The fixture workflow must start with a launch step.")
+    return steps[:1], steps[1:]
+
+
+def _workflow_object(steps: list, name: str) -> Workflow:
+    return workflow_from_dict(
+        {
+            "schema_version": 3,
+            "workflow_id": "mvp-chrome-demo-flow",
+            "name": name,
+            "steps": steps,
+        }
+    )
+
+
+def checked_outcome(
+    setup_run: WorkflowRun | None, main_run: WorkflowRun | None
+) -> tuple[bool, str]:
+    """The single pass/fail verdict for the MVP flow."""
+    if not _run_report_pass(setup_run):
+        return False, "The launch step did not succeed."
+    port = _cdp_port(setup_run.results[0].evidence)
+    if port is None or not (VALID_CDP_PORT_MIN <= port <= VALID_CDP_PORT_MAX):
+        return False, "The launch step reported no DevTools port."
+    if not _run_report_pass(main_run):
+        return False, "One or more flow steps failed; see the step messages."
+    return True, "The fixture flow ran and verified end to end."
+
+
+def run_fixture_flow(
+    demo_url: str, actions, executor
+) -> tuple[WorkflowRun | None, WorkflowRun | None]:
+    """Execute the fixture automation: launch first, then the ordered flow."""
+    document = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    setup_steps, main_steps = _split_workflow(document, demo_url)
+
+    setup_run = executor.execute(
+        approve_desktop_workflow(
+            _workflow_object(setup_steps, "MVP browser fixture setup")
+        ).workflow,
+        allowed_root=None,
+        browser_actions=actions,
+    )
+    port = _cdp_port(setup_run.results[0].evidence) if setup_run.results else None
+    if port is None or not (VALID_CDP_PORT_MIN <= port <= VALID_CDP_PORT_MAX):
+        return setup_run, None
+
+    prepared = []
+    for step in main_steps:
+        step["target"] = _substitute(str(step["target"]), {"cdp_port": str(port)})
+        step["target"] = _coerce_browser_port(step["target"])
+        prepared.append(step)
+    main_run = executor.execute(
+        approve_desktop_workflow(_workflow_object(prepared, "MVP browser fixture flow")).workflow,
+        allowed_root=None,
+        browser_actions=actions,
+    )
+    return setup_run, main_run
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--fixture", type=Path, default=FIXTURE_PATH)
-    args = parser.parse_args()
-
-    document = json.loads(args.fixture.read_text(encoding="utf-8"))
-    text_input = str(document["params"]["text"])
-    print(f"check text input parameterized from fixture: {text_input}")
+    parser.parse_args()
 
     server = DemoServer()
     print(f"local fixture page: {server.url()}")
     actions = ChromeDevtoolsActions()
     executor = ReplayExecutor(DESKTOP_INTERACTION_POLICY)
-    setup_run: WorkflowRun | None = None
-    main_run: WorkflowRun | None = None
 
     try:
-        launch_values = {"url": server.url(), "text": text_input}
-        split_doc = _substitute(json.dumps(document["workflow"]), launch_values)
-        steps = json.loads(split_doc)["steps"]
-        if not steps or StepKind(steps[0]["kind"]) is not StepKind.LAUNCH_BROWSER:
-            print("CHECK: FAIL - the fixture workspace must start with a launch step.")
-            return 1
-
-        setup_workflow = workflow_from_dict(
-            {
-                "schema_version": 3,
-                "workflow_id": "mvp-chrome-demo-flow",
-                "name": "MVP browser fixture setup",
-                "steps": steps[:1],
-            }
-        )
-        setup_run = executor.execute(
-            approve_desktop_workflow(setup_workflow).workflow,
-            allowed_root=None,
-            browser_actions=actions,
-        )
+        setup_run, main_run = run_fixture_flow(server.url(), actions, executor)
         show(setup_run)
-        port = _cdp_port(setup_run.results[0].evidence) if setup_run.results else None
-        if port is None:
-            print("CHECK: FAIL - the launch step reported no DevTools port.")
-            return 1
-
-        full_doc = _substitute(split_doc, {"cdp_port": str(port)})
-        main_steps = json.loads(full_doc)["steps"][1:]
-        for step in main_steps:
-            step["target"] = _browser_port_to_int(step["target"])
-        main_workflow = workflow_from_dict(
-            {
-                "schema_version": 3,
-                "workflow_id": "mvp-chrome-demo-flow",
-                "name": "MVP browser fixture flow",
-                "steps": main_steps,
-            }
-        )
-        main_run = executor.execute(
-            approve_desktop_workflow(main_workflow).workflow,
-            allowed_root=None,
-            browser_actions=actions,
-        )
-        show(main_run)
-
-        if _run_report_pass(setup_run) and _run_report_pass(main_run):
+        if main_run is not None:
+            show(main_run)
+        ok, verdict = checked_outcome(setup_run, main_run)
+        if ok and main_run is not None:
             print(f"CHECK: PASS - run {main_run.run_id} verified end to end.")
             return 0
-        print("CHECK: FAIL - see the step messages above.")
+        print("CHECK: FAIL - " + verdict)
         return 1
     finally:
         actions.shutdown()
