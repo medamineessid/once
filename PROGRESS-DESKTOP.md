@@ -12,7 +12,7 @@ run report, and exits PASS or FAIL from the fixture-based check command.
 
 CHECKLIST (strictly required for that one flow; everything else is out of scope):
 
-- [ ] 1. Engine code runs on Windows under a real Chrome from one command:
+- [x] 1. Engine code runs on Windows under a real Chrome from one command:
       baseline `scripts/chrome_demo.py` green end to end (the 6 earlier
       Chrome-blocked tests re-attributed to the missing real run).
 - [ ] 2. Fixture automation as JSON on disk: intent + ordered steps, saved via
@@ -52,3 +52,11 @@ Done:
 Verified: 104 passed, 6 failed + 2 skipped across tests/test_chrome_devtools.py, test_browser_engine.py, test_desktop_engine.py, test_devtools_ws.py, test_replay.py, test_loop.py, test_verifier.py, test_workflow.py. All 6 failures require real Chrome installed on Windows (environment-only, not engine bugs). ruff check/format clean on touched files.
 
 Next: none — engine work is complete pending a real Chrome/Windows environment to run the 4 launch/registry tests that need an actual Chrome binary.
+
+---
+
+## LOG (MVP push)
+
+- Item 1 done: full chrome_demo.py flow PASS on real Chrome 156.0.8078.76 (isolated profile, DevTools port, clean shutdown), run via the Windows venv python through WSL interop. The "needs real Chrome" gap from the first pass is resolved.
+- Files ticked: PROGRESS-DESKTOP.md. Demo run only.
+- Next: item 2 — fixture automation JSON (intent + ordered steps + params).
