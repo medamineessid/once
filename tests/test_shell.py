@@ -395,7 +395,7 @@ def test_saved_review_resets_recording_review_title(qtbot, tmp_path):
     page._workflow_list.setCurrentRow(0)
     qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
 
-    assert window.review_page._title_label.text() == "Review automation"
+    assert window.review_page._title_label.text() == "Automation details"
 
 
 def test_review_cancel_button_click_returns_home(qtbot, window):

@@ -149,3 +149,5 @@ EDITOR_INSPECTOR_MUTATING_NOTE = (
 # --- Review -----------------------------------------------------------------
 REVIEW_EDIT = "Edit automation"
 REVIEW_APPROVE = "Approve draft and edit"
+REVIEW_TITLE_DRAFT = "Review recorded draft"
+REVIEW_TITLE_SAVED = "Automation details"
