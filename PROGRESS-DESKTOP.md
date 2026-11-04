@@ -229,3 +229,21 @@ Next step (carry out of Phase 2)
   failure (`test_launch_refuses_a_non_chrome_endpoint`) is a test/fake mismatch on
   this branch and is the most obvious thing to clear before any further browser-engine
   work — either by adjusting the fake/assertion or by confirming the real launch path.
+
+## Recording replay MVP (2026-11-04, integration/preview @ 64cd90a)
+
+- "Record open VS Code, then close it" now produces a runnable draft: the recorder
+  captures WINDOW_OPEN/WINDOW_CLOSE (process name + window title) via a bounded
+  Win32 snapshot monitor; the deterministic mapping turns them into
+  LAUNCH_APPLICATION / CLOSE_APPLICATION steps (Code.exe -> vscode registry entry,
+  same-run launch session, fail-closed without it).
+- Optional AI analysis (`ai/analyze_recording.py`, ONCE_LLM_PROVIDER=gemini default,
+  anthropic supported; models pinned gemini-3.5-flash-lite / claude-haiku-5-5)
+  answers with workflow-steps JSON, is validated by the strict workflow validator,
+  and falls back to the local mapping on missing key, HTTP failure, or invalid
+  output. Nothing runs without the desktop approval gate.
+- Verified this session: 552 passed / 2 skipped, ruff clean, fake-provider replay
+  test record->approve->replay (launch+close in order). NOT VERIFIED here: a real
+  VS Code launch/close (needs an interactive Windows session) and the reported
+  duplicate Start node on the Review page (no reproducible code path; scene is
+  cleared on every set_workflow).
