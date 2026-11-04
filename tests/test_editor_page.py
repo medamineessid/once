@@ -61,7 +61,10 @@ def test_create_rename_save_lists_opens_runs_and_activity_shows_name(qtbot, tmp_
     qtbot.wait(50)
     qtbot.mouseClick(window.my_automations_page._run_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(
-        lambda: "Run OBSERVATION_ONLY" in window.my_automations_page._details_label.text(),
+        lambda: (
+            "Run Observation only — nothing was performed"
+            in window.my_automations_page._details_label.text()
+        ),
         timeout=5000,
     )
     window._show_page_activity()

@@ -11,6 +11,9 @@ from datetime import date, datetime
 #: Human labels and chip kinds for workflow run statuses.
 _STATUS_DISPLAY: dict[str, tuple[str, str]] = {
     "SUCCEEDED": ("Succeeded", "ok"),
+    # A run that only looked and reported: finished, not an error (see
+    # docs/contracts/run-outcomes.md).
+    "OBSERVATION_ONLY": ("Observation only — nothing was performed", "neutral"),
     "FAILED": ("Failed", "fail"),
     "CANCELLED": ("Cancelled", "neutral"),
     "RUNNING": ("Running…", "warn"),

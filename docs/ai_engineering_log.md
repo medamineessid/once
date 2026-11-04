@@ -1367,3 +1367,24 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `subprocess.Popen` to raise before previewing a LAUNCH_APPLICATION proposal.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-04 — B4: plain-language label for observation-only runs   (commit: pending)
+- Task: an observation-only run must not surface as a status code. Label it
+  "Observation only — nothing was performed" in the Activity page and in the
+  Home "recent activity" list, without creating a second source of wording.
+- AI contribution: one entry in `ui/components/formatting._STATUS_DISPLAY`
+  (consumed by both pages through `status_display`), a friendly run-status
+  label in the Activity details header and in `ui/pages/my_automations.py`
+  ("Run <label>: N steps recorded"), and `tests/test_b4_status_labels.py`
+  (5 tests covering the label map, the Activity row, the Activity details and
+  the Home list, plus a guard that Failed/Succeeded keep their own labels).
+- Defect found: after B1 the raw enum value `OBSERVATION_ONLY` was rendered
+  verbatim in three places (Activity row and details, My automations details),
+  which is exactly the jargon the product rules out; the label map is the
+  single place that now decides the wording.
+- Verification: `pytest tests/test_b4_status_labels.py -q` printed `5 passed`;
+  `pytest tests/test_my_automations_page.py tests/test_b2_approval_panel.py
+  tests/test_b4_status_labels.py tests/test_activity_page.py -q` printed
+  `41 passed`; `ruff check .` printed `All checks passed!`.
+- Outcome: PASSED
+- Human review:

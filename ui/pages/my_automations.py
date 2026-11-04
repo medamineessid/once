@@ -377,8 +377,10 @@ class MyAutomationsPage(QWidget):
         self._details_label.setText(f"{self._details_label.text()}\n{line}")
 
     def _on_run_finished(self, run: object) -> None:
+        status_value = getattr(getattr(run, "status", None), "value", "Unknown")
+        label, _chip = status_display(status_value)
         self._details_label.setText(
-            f"Run {run.status.value}: {len(run.results)} steps recorded."  # type: ignore[attr-defined]
+            f"Run {label}: {len(run.results)} steps recorded."  # type: ignore[attr-defined]
         )
 
     def _on_run_failed(self, message: str) -> None:

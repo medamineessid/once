@@ -104,8 +104,9 @@ class ActivityPage(QWidget):
         step_lines = "\n".join(
             f"{result.step_id} — {result.status.value} — {result.message}" for result in run.results
         )
+        label, _kind = status_display(getattr(run.status, "value", "Unknown"))
         self._details_label.setText(
-            f"{run.workflow_id} — {run.status.value} — {len(run.results)} steps"
+            f"{run.workflow_id} — {label} — {len(run.results)} steps"
             + (f"\n{step_lines}" if step_lines else "")
         )
 

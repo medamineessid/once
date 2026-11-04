@@ -335,7 +335,7 @@ def test_approved_mutating_automation_can_run_through_the_gate_and_policy(qtbot,
     assert len(runs) == 1
     assert runs[0].status.value == "SUCCEEDED"
     assert page._approval_panel.isVisibleTo(page) is False
-    assert "SUCCEEDED" in page._details_label.text()
+    assert "Run Succeeded" in page._details_label.text()
 
 
 def test_cancelling_the_panel_runs_nothing(qtbot, tmp_path) -> None:

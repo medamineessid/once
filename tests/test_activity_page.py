@@ -69,8 +69,8 @@ def test_details_label_matches_selected_run(qtbot, tmp_path):
 
     details = page._details_label.text()
     assert details.startswith("demo-local-workflow-2")
-    # The run only reported, so it performed nothing.
-    assert "OBSERVATION_ONLY" in details
+    # The run only reported, so it says so in plain language.
+    assert "Observation only — nothing was performed" in details
     assert "inspect-2" in details
 
     page._history_list.setCurrentRow(1)

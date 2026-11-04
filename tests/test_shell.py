@@ -352,7 +352,7 @@ def test_activity_run_click_shows_its_steps(qtbot, tmp_path):
     )
 
     assert "demo-local-workflow" in page._details_label.text()
-    assert "OBSERVATION_ONLY" in page._details_label.text()
+    assert "Observation only — nothing was performed" in page._details_label.text()
 
 
 # --- Layout foundation (B3): structure and honest controls -------------------------------
