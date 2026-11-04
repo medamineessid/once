@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
+from ui.components.approval_panel import DesktopApprovalPanel
 from ui.components.banner import Banner
 from ui.components.cards import Chip
 from ui.components.confirm import InlineConfirm
@@ -126,6 +127,7 @@ class MyAutomationsPage(QWidget):
         self._workflow_list: QListWidget | None = None
         self._worker: WorkflowWorker | None = None
         self._thread: QThread | None = None
+        self._pending_approval_path: Path | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -177,6 +179,10 @@ class MyAutomationsPage(QWidget):
         actions_container_layout.addLayout(actions_row)
         layout.addWidget(actions_container)
         layout.addSpacing(SPACING_SM)
+        self._approval_panel = DesktopApprovalPanel(self)
+        self._approval_panel.approved.connect(self._on_run_approved)
+        self._approval_panel.cancelled.connect(self._on_run_cancelled)
+        layout.addWidget(self._approval_panel)
         self._details_label = QLabel(MY_EMPTY, self)
         self._details_label.setObjectName("automationDetailsLabel")
         self._details_label.setWordWrap(True)
@@ -219,6 +225,12 @@ class MyAutomationsPage(QWidget):
     def _on_selection_changed(self) -> None:
         self.workflow_selected.emit()
         self._run_button.reset()
+        # A panel is approval for exactly one automation; switching rows
+        # discards it, so no stale approval can start a run for another row.
+        self._approval_panel.reset()
+        self._pending_approval_path = None
+        if self._thread is None:
+            self._set_running(False)
         item = self._workflow_list.currentItem()
         if item is None or self._service is None:
             self._details_label.setText(MY_DETAILS_EMPTY)
@@ -287,16 +299,39 @@ class MyAutomationsPage(QWidget):
             self._run_button.reset()
             self._show_page_error(str(error))
             return
+        if self._approval_panel.show_for(workflow):
+            # Mutating desktop automations wait here: the approval panel is
+            # the run gate, so the run starts only from the panel's Approve.
+            self._pending_approval_path = saved_path
+            self._set_running(True)
+            return
         self.run_requested.emit(saved_path)
         self._start_run(workflow)
 
-    def _start_run(self, workflow: Workflow) -> None:
+    # ----------------------------------------------------- desktop approval
+
+    def _on_run_approved(self, approval: object) -> None:
+        """The panel's Approve click passed the gate; run the automation."""
+        saved_path = self._pending_approval_path
+        self._pending_approval_path = None
+        if saved_path is None or self._service is None:
+            return
+        self.run_requested.emit(saved_path)
+        self._start_run(approval.workflow, approval=approval)  # type: ignore[attr-defined]
+
+    def _on_run_cancelled(self) -> None:
+        """The panel was declined: nothing runs and the page stays usable."""
+        self._pending_approval_path = None
+        self._run_button.reset()
+        self._set_running(False)
+
+    def _start_run(self, workflow: Workflow, approval: object | None = None) -> None:
         if self._thread is not None:
             return
         self._details_label.setText(f"Running '{workflow.name}'...")
         self._set_running(True)
         self._thread = QThread(self)
-        self._worker = WorkflowWorker(self._service, workflow)
+        self._worker = WorkflowWorker(self._service, workflow, desktop_approval=approval)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         # The handlers below touch widgets, so they must run in the GUI thread.
@@ -325,6 +360,8 @@ class MyAutomationsPage(QWidget):
     def shutdown_worker(self) -> None:
         """Cancel and join the running automation thread for window close."""
         if self._thread is None:
+            self._approval_panel.reset()
+            self._pending_approval_path = None
             return
         cancel_and_join(self._thread, self._worker)
         self._worker = None

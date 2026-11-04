@@ -8,7 +8,14 @@ from pathlib import Path
 import pytest
 
 from engine.errors import ExecutionError
-from engine.workflow import StepStatus
+from engine.workflow import (
+    StepKind,
+    StepStatus,
+    Workflow,
+    WorkflowRunner,
+    WorkflowStatus,
+    WorkflowStep,
+)
 from integrations.chrome_devtools import (
     BrowserError,
     ChromeApplicationRegistry,
@@ -95,6 +102,11 @@ class BrowserSessionStub:
         self.process = process
         self.port = port
         self.profile_dir = Path()
+
+
+class _StubRegistry:
+    def resolve(self, name: str) -> Path:
+        return Path("C:/fake/chrome.exe")
 
 
 def make_actions(targets, ws_script=None, ws_factory=None, *, version=None):
@@ -424,7 +436,7 @@ def test_launch_refuses_a_non_chrome_endpoint() -> None:
         registry=ChromeApplicationRegistry(),
         popen=lambda argv: StderrProcess(),
         http_factory=lambda port: FakeHttp(
-            [],  # no usable target list yet, version check runs first
+            [single_page_target()],
             version={"Browser": "Edg/1.0"},
         ),
         ws_factory=lambda url: FakePageWs({}),
@@ -540,3 +552,91 @@ def test_shutdown_closes_sessions_and_cleans_profiles() -> None:
         assert removed == [Path("fake-profile-dir")]
     finally:
         module.ChromeDevtoolsActions._safe_rmtree = module.original
+
+
+# --------------------------------------------------- engine + provider wiring
+
+
+def _browser_steps(port: int) -> tuple[WorkflowStep, ...]:
+    navigate = json.dumps({"browser": {"cdp_port": port}, "url": "http://127.0.0.1:8000/demo.html"})
+    inspect = json.dumps({"browser": {"cdp_port": port}, "include_text": True})
+    wait = json.dumps({"browser": {"cdp_port": port}, "conditions": {"title": "Demo"}})
+    return (
+        WorkflowStep("nav", "Navigate", StepKind.NAVIGATE_BROWSER, "Navigated.", target=navigate),
+        WorkflowStep("inspect", "Inspect", StepKind.INSPECT_PAGE, "Inspected.", target=inspect),
+        WorkflowStep(
+            "wait", "Wait", StepKind.WAIT_PAGE, "Waited.", target=wait, timeout_seconds=2.0
+        ),
+    )
+
+
+def test_runner_dispatches_navigate_inspect_wait_through_real_provider() -> None:
+    script = {
+        "Page.navigate": {"frameId": "f1"},
+        "Runtime.evaluate": [
+            {"href": "http://127.0.0.1:8000/demo.html", "title": "Demo", "readyState": "complete"},
+            page_response("hello world"),
+            {"href": "http://127.0.0.1:8000/demo.html", "title": "Demo", "readyState": "complete"},
+            "done ok",
+        ],
+    }
+    actions = make_actions([single_page_target()], script)
+    run = WorkflowRunner().run(
+        Workflow("browser-flow", "Browser flow", _browser_steps(TEST_PORT)),
+        browser_actions=actions,
+    )
+    assert run.status is WorkflowStatus.SUCCEEDED
+    assert [r.step_id for r in run.results] == ["nav", "inspect", "wait"]
+    assert all(r.status in (StepStatus.SUCCEEDED, StepStatus.VERIFIED) for r in run.results)
+    joined = " ".join(" ".join(r.evidence) for r in run.results)
+    assert "readyState=complete" in joined
+    assert "final_url=http://127.0.0.1:8000/demo.html" in joined
+    assert "text_length=" in joined
+
+
+def test_runner_launch_registers_session_through_real_provider() -> None:
+    stderr_data = [
+        b"other line\r\n",
+        b"DevTools listening on ws://127.0.0.1:51922/devtools/browser/xyz\r\n",
+    ]
+
+    class StderrProcess:
+        pid = 8
+        stderr = iter(stderr_data)
+
+        def poll(self):
+            return None
+
+        def kill(self):
+            pass
+
+    actions = ChromeDevtoolsActions(
+        registry=_StubRegistry(),
+        popen=lambda argv: StderrProcess(),
+        http_factory=lambda port: FakeHttp(
+            [single_page_target()],
+            version={"Browser": "Chrome/141.0.7390.122"},
+        ),
+        ws_factory=lambda url: FakePageWs({}),
+    )
+    target = json.dumps({"application": "chrome"})
+    run = WorkflowRunner().run(
+        Workflow(
+            "launch-flow",
+            "Launch flow",
+            (
+                WorkflowStep(
+                    "launch",
+                    "Launch",
+                    StepKind.LAUNCH_BROWSER,
+                    "Launched.",
+                    target=target,
+                ),
+            ),
+        ),
+        browser_actions=actions,
+    )
+    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.results[0].status is StepStatus.SUCCEEDED
+    assert "cdp_port=51922" in " ".join(run.results[0].evidence)
+    assert 51922 in actions._sessions

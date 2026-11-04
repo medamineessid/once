@@ -1,0 +1,107 @@
+{
+  "intent": "Open the local fixture page in an isolated Chrome session, click the demo button, type a parameterized value into the demo input, and verify the page reports the click. The browser is launched by the engine with an isolated temporary profile; targets are the page URL and DOM selectors only.",
+  "params": {
+    "text": "demo input",
+    "placeholders": {
+      "url": "Substituted by scripts/check_mvp.py with the local fixture page URL.",
+      "cdp_port": "Substituted by scripts/check_mvp.py from the launch step evidence."
+    }
+  },
+  "workflow": {
+    "schema_version": 3,
+    "workflow_id": "mvp-chrome-demo-flow",
+    "name": "MVP browser demo flow",
+    "steps": [
+      {
+        "step_id": "launch",
+        "name": "Launch",
+        "kind": "LAUNCH_BROWSER",
+        "message": "An isolated Chrome instance is running for this workflow.",
+        "target": "{\"application\": \"chrome\"}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      },
+      {
+        "step_id": "navigate",
+        "name": "Navigate",
+        "kind": "NAVIGATE_BROWSER",
+        "message": "The isolated browser shows the local fixture page.",
+        "target": "{\"browser\": {\"cdp_port\": \"{cdp_port}\"}, \"url\": \"{url}\"}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      },
+      {
+        "step_id": "wait-page",
+        "name": "WaitPage",
+        "kind": "WAIT_PAGE",
+        "message": "The fixture page title is present.",
+        "target": "{\"browser\": {\"cdp_port\": \"{cdp_port}\"}, \"conditions\": {\"title\": \"Once Browser Demo\"}}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      },
+      {
+        "step_id": "inspect",
+        "name": "Inspect",
+        "kind": "INSPECT_PAGE",
+        "message": "Title, URL, and bounded page text were recorded.",
+        "target": "{\"browser\": {\"cdp_port\": \"{cdp_port}\"}, \"include_text\": true}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      },
+      {
+        "step_id": "find",
+        "name": "Find",
+        "kind": "FIND_PAGE_ELEMENT",
+        "message": "The demo button is uniquely identified.",
+        "target": "{\"browser\": {\"cdp_port\": \"{cdp_port}\"}, \"selector\": \"#demo-button\"}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      },
+      {
+        "step_id": "click",
+        "name": "Click",
+        "kind": "INTERACT_PAGE_ELEMENT",
+        "message": "The demo button was clicked.",
+        "target": "{\"browser\": {\"cdp_port\": \"{cdp_port}\"}, \"selector\": \"#demo-button\", \"interaction\": \"click\"}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      },
+      {
+        "step_id": "type",
+        "name": "Type",
+        "kind": "INTERACT_PAGE_ELEMENT",
+        "message": "The demo text stayed within its bound.",
+        "target": "{\"browser\": {\"cdp_port\": \"{cdp_port}\"}, \"selector\": \"#demo-input\", \"interaction\": \"type\", \"text\": \"{text}\"}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      },
+      {
+        "step_id": "wait-status",
+        "name": "WaitStatus",
+        "kind": "WAIT_PAGE",
+        "message": "The page reflects the click.",
+        "target": "{\"browser\": {\"cdp_port\": \"{cdp_port}\"}, \"conditions\": {\"text\": \"button was clicked\"}}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      },
+      {
+        "step_id": "verify",
+        "name": "Verify",
+        "kind": "FIND_PAGE_ELEMENT",
+        "message": "The status element shows the click effect.",
+        "target": "{\"browser\": {\"cdp_port\": \"{cdp_port}\"}, \"selector\": \"#status\"}",
+        "max_attempts": 1,
+        "postcondition": null,
+        "timeout_seconds": 30.0
+      }
+    ]
+  }
+}

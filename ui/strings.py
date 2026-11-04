@@ -151,3 +151,31 @@ REVIEW_EDIT = "Edit automation"
 REVIEW_APPROVE = "Approve draft and edit"
 REVIEW_TITLE_DRAFT = "Review recorded draft"
 REVIEW_TITLE_SAVED = "Automation details"
+# --- lane B strings ---
+REVIEW_PREVIEW_PROBLEM_TITLE = "This proposal cannot be reviewed yet"
+REVIEW_SAVE_ERROR_TITLE = "Approval did not finish"
+REVIEW_APPROVED_TITLE = "Proposal approved"
+REVIEW_APPROVED_BODY = "Saved as {name}. Run it from My automations."
+
+DESKTOP_APPROVAL_TITLE = "Permission needed to act on the desktop"
+DESKTOP_APPROVAL_LEAD = (
+    "This automation can act on your desktop outside Once. Approve it before it may run."
+)
+DESKTOP_APPROVAL_STEPS_HEADING = (
+    "The approved run may perform exactly these actions, in this order:"
+)
+DESKTOP_APPROVAL_KIND_LAUNCH_APPLICATION = "Launch an application"
+DESKTOP_APPROVAL_KIND_CLICK_UI_ELEMENT = "Click an item on screen"
+DESKTOP_APPROVAL_KIND_TYPE_TEXT = "Type text"
+DESKTOP_APPROVAL_KIND_PRESS_SHORTCUT = "Press a keyboard shortcut"
+DESKTOP_APPROVAL_KIND_LAUNCH_BROWSER = "Open a browser"
+DESKTOP_APPROVAL_KIND_NAVIGATE_BROWSER = "Go to a page in the browser"
+DESKTOP_APPROVAL_KIND_INTERACT_PAGE_ELEMENT = "Interact with a page element"
+DESKTOP_APPROVAL_KIND_FALLBACK = "Perform a desktop action"
+DESKTOP_APPROVAL_STEP_TEMPLATE = '{action} · step "{step_name}"'
+DESKTOP_APPROVAL_BINDING_NOTE = (
+    "Approval covers only the actions listed here, for exactly this run."
+)
+DESKTOP_APPROVAL_REJECTED_TITLE = "This automation cannot be approved"
+DESKTOP_APPROVAL_APPROVE = "Approve for this run"
+DESKTOP_APPROVAL_CANCEL = "Do not run"

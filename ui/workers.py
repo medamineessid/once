@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import logging
 import sqlite3
 from pathlib import Path
@@ -9,6 +10,7 @@ from threading import Event
 
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 
+from controller.run_events import RunEvent, RunEventSource, RunEventStream
 from controller.service import WorkflowService
 from engine.agent_change import ApprovedChange, ChangeReview
 from engine.desktop import DesktopApproval
@@ -28,6 +30,14 @@ def cancel_and_join(thread: QThread | None, worker: WorkflowWorker | None) -> bo
     be destroyed safely. On timeout the thread is detached from its parent:
     destroying a still-running QThread aborts the process, so the window
     close must never leave it parented while busy (AD-015 rationale).
+
+    A worker that ignores the cancel flag would still be running when the
+    process exits. Destroying a running QThread at interpreter shutdown
+    makes PySide6 fail-fast (Windows exit code -1073740791), so detach also
+    remembers the thread in a module-level registry and lets an
+    interpreter-exit hook give it one generous bounded join first; a
+    QThread that has finished is always destroyed safely (proven by
+    tests/test_b6_cancel_detach_exit.py).
     """
     if thread is None:
         return True
@@ -42,7 +52,63 @@ def cancel_and_join(thread: QThread | None, worker: WorkflowWorker | None) -> bo
         WorkflowWorker.THREAD_JOIN_TIMEOUT_MS,
     )
     thread.setParent(None)
+    _detached_runs.append((thread, worker))
+    register_detached_run_exit_hook()
     return False
+
+
+# Detached, still-running runs are kept here so no caller can leave a busy
+# QThread unowned: PySide6 destroys it while running at interpreter exit and
+# the process fails with -1073740791 (see the B6 test).
+_detached_runs: list[tuple[QThread, QObject | None]] = []
+
+#: Extra, generous join window granted to detached threads at exit.
+DETACHED_RUN_EXIT_GRACE_MS = 30_000
+
+_EXIT_HOOK_REGISTERED = False
+
+
+def register_detached_run_exit_hook() -> None:
+    """Register (once) the interpreter-exit hook that out-waits detached runs."""
+    global _EXIT_HOOK_REGISTERED
+    if _EXIT_HOOK_REGISTERED:
+        return
+    _EXIT_HOOK_REGISTERED = True
+    atexit.register(_wait_out_detached_runs)
+
+
+def _wait_out_detached_runs() -> None:
+    """At exit, join every detached still-running thread with a generous bound.
+
+    Runs before Python and PySide6 teardown, so a thread that finishes here
+    is destroyed cleanly afterwards. A thread that is still running after
+    DETACHED_RUN_EXIT_GRACE_MS keeps piping through teardown: destroying a
+    running QThread aborts the process, so we log and leave it alone.
+    """
+    for index, (thread, _worker) in enumerate(_detached_runs):
+        try:
+            if thread is not None and thread.isRunning():
+                joined = thread.wait(DETACHED_RUN_EXIT_GRACE_MS)
+                if joined:
+                    logger.info(
+                        "Detached workflow thread joined after an extra %s ms.",
+                        DETACHED_RUN_EXIT_GRACE_MS,
+                    )
+                else:
+                    logger.warning(
+                        "Detached workflow thread was still running after an "
+                        "extra %s ms; the process may report a fault while "
+                        "shutting down.",
+                        DETACHED_RUN_EXIT_GRACE_MS,
+                    )
+        except RuntimeError as error:
+            # The wrapper was already destroyed elsewhere; nothing to do.
+            logger.debug("Detached thread record already gone at exit: %s", error)
+        # After the grace join the thread is finished (destroyable) or was
+        # still running and got the warning above; the record itself is no
+        # longer needed.
+        _detached_runs[index] = (None, None)
+    _detached_runs.clear()
 
 
 class WorkflowWorker(QObject):
@@ -54,6 +120,9 @@ class WorkflowWorker(QObject):
     progress = Signal(object)
     finished = Signal(object)
     failed = Signal(str)
+    #: One typed ui.run_events contract event per engine observation, emitted
+    #: from the worker thread; connections must be queued (cross-thread).
+    run_event = Signal(object)
 
     def __init__(
         self,
@@ -71,6 +140,7 @@ class WorkflowWorker(QObject):
         self._desktop_approval = desktop_approval
         self._allowed_root = allowed_root
         self._cancel_requested = Event()
+        self._event_stream: RunEventSource | None = None
 
     def cancel(self) -> None:
         """Request cancellation before the next engine step starts."""
@@ -79,31 +149,45 @@ class WorkflowWorker(QObject):
     @Slot()
     def run(self) -> None:
         """Execute the controller operation and publish its outcome."""
+        events = RunEventStream(self._workflow)
+        self._event_stream = events
+        self._emit_run_events(events.start())
+
+        def on_step_result(step_result: object) -> None:
+            self._emit_run_events(events.observe_step(step_result))  # type: ignore[arg-type]
+            self.progress.emit(step_result)
+
         try:
             if self._desktop_approval is not None:
                 result = self._service.run_desktop_approved(
                     self._desktop_approval,
                     allowed_root=self._allowed_root,
                     cancel_check=self._cancel_requested.is_set,
-                    progress_callback=self.progress.emit,
+                    progress_callback=on_step_result,  # type: ignore[arg-type]
                 )
             elif self._replay:
                 result = self._service.run_replay(
                     self._workflow,
                     allowed_root=self._allowed_root,
                     cancel_check=self._cancel_requested.is_set,
-                    progress_callback=self.progress.emit,
+                    progress_callback=on_step_result,  # type: ignore[arg-type]
                 )
             else:
                 result = self._service.run_workflow(
                     self._workflow,
                     cancel_check=self._cancel_requested.is_set,
-                    progress_callback=self.progress.emit,
+                    progress_callback=on_step_result,  # type: ignore[arg-type]
                 )
         except (OnceError, OSError, sqlite3.Error) as error:
+            self._emit_run_events(events.observe_failure(str(error)))
             self.failed.emit(str(error))
         else:
+            self._emit_run_events(events.observe_run(result))
             self.finished.emit(result)
+
+    def _emit_run_events(self, events: tuple[RunEvent, ...]) -> None:
+        for event in events:
+            self.run_event.emit(event)
 
 
 class VerifyProposalWorker(QObject):
