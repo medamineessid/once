@@ -10,11 +10,14 @@ windows, and never waits or retries without the step's timeout.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from engine.errors import ExecutionError
 from engine.workflow import StepResult, StepStatus
@@ -36,16 +39,68 @@ SHORTCUT_CODES: dict[str, str] = {
 POLL_INTERVAL_SECONDS = 0.25
 MAX_ARGUMENTS = 16
 
+CHROME_EXECUTABLE_NAME = "chrome.exe"
+#: Relative location of chrome.exe inside each Windows install root.
+CHROME_RELATIVE_EXECUTABLE = Path("Google", "Chrome", "Application", CHROME_EXECUTABLE_NAME)
+#: (environment variable, documented default) for Chrome's install roots.
+CHROME_INSTALL_ROOTS: tuple[tuple[str, str | None], ...] = (
+    ("ProgramFiles", r"C:\Program Files"),
+    ("ProgramFiles(x86)", r"C:\Program Files (x86)"),
+    ("LOCALAPPDATA", None),
+)
+#: Chrome switches Once refuses to take from a step: it always picks its own
+#: disposable profile so the launched process is separate and its PID is ours.
+CHROME_PROFILE_SWITCHES = frozenset({"--user-data-dir", "--profile-directory"})
+CHROME_PROFILE_PREFIX = "once-chrome-profile-"
+
+
+def chrome_install_candidates() -> tuple[Path, ...]:
+    """Standard absolute chrome.exe locations, in resolution order."""
+    candidates: list[Path] = []
+    for variable, fallback in CHROME_INSTALL_ROOTS:
+        root = os.environ.get(variable) or fallback
+        if root:
+            candidates.append(Path(root) / CHROME_RELATIVE_EXECUTABLE)
+    return tuple(candidates)
+
+
+def _is_chrome(executable: Path) -> bool:
+    return executable.name.lower() == CHROME_EXECUTABLE_NAME
+
+
+def _chrome_profile_argument() -> tuple[str, Path]:
+    """A throwaway --user-data-dir, so this launch is a separate Chrome process."""
+    profile = Path(tempfile.gettempdir()) / f"{CHROME_PROFILE_PREFIX}{uuid4().hex}"
+    return f"--user-data-dir={profile}", profile
+
 
 class WindowsApplicationRegistry:
     """Controlled expansion of allow-listed application names to executables."""
+
+    def __init__(self, chrome_candidates: tuple[Path, ...] | None = None) -> None:
+        self._chrome_candidates = (
+            chrome_install_candidates() if chrome_candidates is None else tuple(chrome_candidates)
+        )
+
+    def chrome_candidates(self) -> tuple[Path, ...]:
+        """The chrome.exe locations this registry will consider, in order."""
+        return self._chrome_candidates
 
     def resolve(self, name: str) -> Path:
         """Return the executable path for one registered application name."""
         lowered = name.strip().lower()
         if lowered == "notepad":
-            root = Path(__import__("os").environ.get("SystemRoot", r"C:\Windows"))
+            root = Path(os.environ.get("SYSTEMROOT", r"C:\Windows"))
             return root / "System32" / "notepad.exe"
+        if lowered == "chrome":
+            for candidate in self._chrome_candidates:
+                if candidate.is_file():
+                    return candidate
+            raise ExecutionError(
+                "Chrome was not found in its standard install locations on this "
+                "computer, so Once cannot launch it by name. Install Chrome, or "
+                "point the step at an absolute chrome.exe path you approve."
+            )
         raise ExecutionError(
             f"The application registry does not contain {name}. Use an "
             "allow-listed application name or an explicitly approved absolute "
@@ -103,7 +158,7 @@ class PywinautoDesktopActions:
     def launch_application(self, target_json: str) -> StepResult:
         """Start one approved application; never uses a shell."""
         target = _load_parsed(target_json, "launch")
-        arguments = target.get("arguments", [])
+        arguments = [str(item) for item in target.get("arguments", [])]
         if isinstance(target.get("application"), str):
             executable = self._registry.resolve(target["application"])
         else:
@@ -118,6 +173,30 @@ class PywinautoDesktopActions:
                 ),
                 evidence=("missing=true", f"executable={executable}"),
             )
+        extra_evidence: tuple[str, ...] = ()
+        if _is_chrome(executable):
+            refused = sorted(
+                {
+                    switch
+                    for switch in CHROME_PROFILE_SWITCHES
+                    for argument in arguments
+                    if argument.split("=", 1)[0].strip().lower() == switch
+                }
+            )
+            if refused:
+                return StepResult(
+                    step_id="",
+                    status=StepStatus.FAILED,
+                    message=(
+                        "Once launches Chrome with its own temporary profile, so this "
+                        f"step cannot choose one ({', '.join(refused)}). Remove that "
+                        "argument and run the step again."
+                    ),
+                    evidence=(f"refused_argument={refused[0]}", f"executable={executable}"),
+                )
+            profile_argument, profile = _chrome_profile_argument()
+            arguments = [*arguments, profile_argument]
+            extra_evidence = ("isolated_profile=true", f"chrome_profile={profile}")
         argv = [str(executable), *arguments]
         try:
             process = self._popen(argv)
@@ -136,6 +215,7 @@ class PywinautoDesktopActions:
                 f"executable={executable}",
                 f"process_id={process.pid}",
                 f"argument_count={len(argv) - 1}",
+                *extra_evidence,
             ),
         )
 

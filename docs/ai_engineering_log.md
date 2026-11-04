@@ -1315,3 +1315,31 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `All checks passed!`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-04 — B2: Chrome as a registered desktop application   (commit: pending)
+- Task: let an approved workflow launch Chrome through the desktop registry,
+  on its own disposable profile so the launched process is a separate browser
+  whose PID can be tracked; say plainly what closing it would have to do.
+- AI contribution: `chrome` in `KNOWN_APPLICATIONS`; `chrome_install_candidates`
+  and `WindowsApplicationRegistry.resolve("chrome")` over Program Files,
+  Program Files (x86) and `%LOCALAPPDATA%` (injectable candidates for tests);
+  forced `--user-data-dir` on every Chrome launch with refusal of a
+  step-supplied `--user-data-dir`/`--profile-directory`;
+  `tests/test_b2_chrome_launch.py` (9 tests, 2 `windows_only`).
+- Defect found: the registry only knew notepad, and `launch_application`
+  passed step arguments straight through, so a step could have pointed Chrome
+  at the user's real profile - the hand-off case where Chrome forwards to the
+  running instance and the returned PID is not the browser. The provider now
+  always supplies its own profile and refuses the profile switches. Also
+  found that `close_application` and `ai/provider.py PROCESS_TO_APPLICATION`
+  do not exist in this repository (nor does `ai/analyze_recording.py`), so
+  neither could be extended; recorded in docs/lane_b/questions.md with the
+  PID-matching design that a future close would need.
+- Verification: `pytest tests/test_b2_chrome_launch.py -q` printed `9 passed`;
+  `pytest tests/test_b2_chrome_launch.py tests/test_windows_desktop.py -q`
+  printed `28 passed`; `ruff check .` printed `All checks passed!`. No live
+  Chrome was launched; the real-install resolution is covered by a
+  `windows_only` test that skips when Chrome is absent, and manual steps are
+  in the session report.
+- Outcome: PASSED (close/PROCESS_TO_APPLICATION: NOT IMPLEMENTED - names absent)
+- Human review:

@@ -210,7 +210,7 @@ DESKTOP_PROVIDER_KINDS = frozenset(
 
 #:
 #: The browser launch registry is KNOWN_BROWSERS below.
-KNOWN_APPLICATIONS: frozenset[str] = frozenset({"notepad"})
+KNOWN_APPLICATIONS: frozenset[str] = frozenset({"notepad", "chrome"})
 
 #: Browser names the isolated-browser launch action may use via the registry.
 KNOWN_BROWSERS: frozenset[str] = frozenset({"chrome"})

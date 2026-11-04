@@ -2,6 +2,16 @@
 
 > Handoff note (updated after every commit) — most recent at the top.
 
+## Handoff (2026-11-01) — B1 LANDED on main (f7217c7); B2 implemented on branch b/b2-approval-panel (538b4cd)
+
+- B1 landed (verify.ps1 ALL CHECKS PASSED before ff-merge; fence empty at that time).
+- B2 done in code: new ui/components/approval_panel.py (DesktopApprovalPanel: lists exactly the mutating steps via engine MUTATING_DESKTOP_KINDS + mutating_kind_names, Approve enabled only while the list is shown, Approve click calls the real gate approve_desktop_workflow; gate refusals surface inline; read-only automations never show it). ui/pages/my_automations.py run flow: confirmed Run → mutating automation shows the panel and starts nothing; approval → run_requested + WorkflowWorker(desktop_approval=...) → service.run_desktop_approved; decline → nothing runs, page reusable; row switch or shutdown discards a waiting panel. ui/workers.py gained the additive desktop_approval mode (cancel_check + progress wired as before).
+- tests/test_b2_approval_panel.py: 12 tests — panel hidden/read-only exactness, exact row list (kinds == mutating_kind_names), approve click → real DesktopApproval bound to the listed workflow, refuse mix → inline rejection + no approval, fresh-panel inert, unapproved-can't-run, approved-runs (fake providers, real engine gate + policy), decline runs nothing, row-switch discards panel, read-only runs without panel. Guards proven: approve-disabled guard violated deliberately during the session → test failed (`assert True is False`), then restored.
+- Focus result: `12 passed in 0.57s`; neighbors test_my_automations_page + test_desktop_controller + test_b1: `38 passed in 1.71s` (combined run `50 passed in 1.71s` with B2); test_shell.py: `28 passed in 5.80s`; test_review_ui+test_during earlier neighbor run (51 passed incl. b6). ruff check clean on all touched files.
+- Known product behavior surfaced (not an engine change on my side): the desktop gate REJECTS a REPORT step mixed into a desktop automation ("Replay does not allow these step kinds: REPORT"); the panel shows this inline. Question for owner in questions.md.
+- Pending: verify.ps1 + fence + ff-merge + push main.
+- Next: B5 activity evidence, then B4 record-a-task, then B7.
+
 ## Handoff (2026-11-01) — B1 implemented on branch b/b1-run-events (about to commit)
 
 - controller/run_events.py: RunEventKind (7 kinds), frozen RunEvent (sequence, workflow/step ids, status, message, evidence, engine_run_id), RunEventStream (locked, closes after RUN_FINISHED — empty tuples afterwards), FakeRunEventSource for tests. Events derive ONLY from real engine results: skip/cancel classification keys off the engine's two canonical skip phrases; retries surface once with "(attempt N)" message and attempt evidence.
@@ -44,3 +54,11 @@
 - Environment fix (local-only, no repo content changed): this clone was checked out with CRLF by the Windows git while WSL-side git had `core.autocrlf` unset, so `git status` showed all 161 files modified (31,570 +/- each, pure line-ending noise, proven with `git diff --ignore-cr-at-eol` and `git -c core.autocrlf=true status -sb` => clean). Fix: `git config core.autocrlf true` in this clone only (mirrors the Windows checkout; per-blob content unchanged). See decisions.md B-001.
 - Next: read docs (AGENT_PROMPT, WORKING_AGREEMENT, UX_BRIEF, BUTTON_AUDIT, design/visual_editor.md, PROGRESS.md), then the QUEUE in order: B6 (cancel_and_join detach-path subprocess test), B3 (review page wiring), B1 (run-events contract), B2 (approval panel), B5 (activity evidence), B4 (record a task), B7 (only if Lane A A2c is DONE).
 - Uncommitted: nothing after this commit.
+
+## Handoff (2026-11-04) — run-truth B1/B2 on branch b/b2-approval-panel (owner-assigned tasks B1-B4)
+
+- Branch note: the task brief named branch `lane-b/run-truth`; that branch does not exist here. Work continued on the current branch `b/b2-approval-panel` without switching, pushing, merging or rebasing.
+- B1 (committed first: `1d76b5f` contract, then `ef842d9` engine): `docs/contracts/run-outcomes.md` published before any code. `StepStatus.OBSERVED` (REPORT steps), `WorkflowStatus.OBSERVATION_ONLY` (no non-REPORT step succeeded/verified), `_final_status` decision order with failures first, `OBSERVED` added to `controller.run_events._SUCCESS_STATUSES`, run-events contract row updated. History needs no migration (statuses are plain text, no CHECK constraint); old rows still load and keep their stored meaning. One out-of-lane but unavoidable edit: `ui/shell.py::_on_demo_finished` hard-coded `status.value == "SUCCEEDED"`, so the observation-only demo would have shown "Demonstration failed"; the branch now accepts `OBSERVATION_ONLY`. Only that condition changed.
+- B1 tests: new `tests/test_b1_run_outcomes.py` (11 tests) plus expectation updates in `test_workflow.py`, `test_b1_run_events.py`, `test_b2_approval_panel.py`, `test_workers.py`, `test_smoke.py`, `test_shell.py`, `test_p2_shell.py`, `test_activity_page.py`, `test_editor_page.py` — all assert a report is not a success now.
+- B2: `chrome` registered as a desktop application (`KNOWN_APPLICATIONS`, `WindowsApplicationRegistry.resolve` over the three standard install roots, injectable candidates for tests), launch forced onto a disposable `--user-data-dir`, and a step that supplies `--user-data-dir`/`--profile-directory` is refused. New `tests/test_b2_chrome_launch.py` (9 tests incl. two `windows_only`). No live Chrome was started; `close_application` and `PROCESS_TO_APPLICATION` do not exist in this tree (see questions.md).
+- Next: B3 (`preview_proposal` must reflect `DESKTOP_INTERACTION_POLICY`), then B4 run-status labels.
