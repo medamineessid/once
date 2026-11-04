@@ -44,6 +44,7 @@ class RecordingStore:
                     timestamp_ns=item["timestamp_ns"],
                     kind=RecordedEventKind(item["kind"]),
                     window_title=item["window_title"],
+                    process_name=item.get("process_name"),
                     element=(
                         UIElementInfo(**item["element"]) if item["element"] is not None else None
                     ),
