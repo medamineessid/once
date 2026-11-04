@@ -1343,3 +1343,27 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   in the session report.
 - Outcome: PASSED (close/PROCESS_TO_APPLICATION: NOT IMPLEMENTED - names absent)
 - Human review:
+
+## 2026-11-04 — B3: proposal preview follows the desktop gate policy   (commit: pending)
+- Task: `ai/approval.py::preview_proposal` used a bare `ReplayExecutor()`
+  (read-only policy), so an approved desktop automation was previewed as
+  UNSUPPORTED. It must reflect `DESKTOP_INTERACTION_POLICY`, still never
+  execute, and never be more permissive than the gate.
+- AI contribution: `preview_proposal` now previews with
+  `ReplayExecutor(DESKTOP_INTERACTION_POLICY)` (the same imported object
+  `engine.desktop.approve_desktop_workflow` validates with), and
+  `WorkflowPreview` gained `needs_desktop_approval` (defaulted, so existing
+  callers keep working) fed by `engine.desktop.requires_desktop_approval`.
+  New `tests/test_b3_preview_policy.py` (12 tests).
+- Defect found: the preview and the gate disagreed about the same workflow -
+  the review page could show "permission=UNSUPPORTED" for exactly the desktop
+  automation the panel would gate and run. Fixed by making the policy object
+  shared instead of duplicated.
+- Verification: `pytest tests/test_b3_preview_policy.py -q` printed
+  `12 passed`; neighbours (`test_recording_flow`, `test_b3_review_wiring`,
+  `test_review_ui`, `test_desktop_engine`, `test_desktop_controller`,
+  `test_my_automations_page`) printed `67 passed`; `ruff check .` printed
+  `All checks passed!`. Preview was proven not to execute by patching
+  `subprocess.Popen` to raise before previewing a LAUNCH_APPLICATION proposal.
+- Outcome: PASSED
+- Human review:
