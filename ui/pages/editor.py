@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import override
 from uuid import uuid4
 
@@ -29,10 +30,10 @@ from engine.desktop import (
     requires_desktop_approval,
 )
 from engine.errors import WorkflowValidationError
-from engine.workflow import Workflow
+from engine.workflow import Workflow, WorkflowRunner
 from ui.components.banner import Banner
 from ui.editor.canvas import CanvasView
-from ui.editor.inspector import InspectorPanel
+from ui.editor.inspector import InspectorPanel, PreviewCandidate
 from ui.strings import (
     EDITOR_CANCEL_RUN,
     EDITOR_DISCARD,
@@ -135,6 +136,7 @@ class EditorPage(QWidget):
         self._inspector = InspectorPanel(self)
         self._inspector.installEventFilter(self)
         self._inspector.changes_applied.connect(self._apply_inspector_changes)
+        self._inspector.preview_requested.connect(self._on_preview_candidate)
         canvas_and_inspector = QHBoxLayout()
         canvas_and_inspector.addWidget(self._canvas, 1)
         canvas_and_inspector.addWidget(self._inspector)
@@ -355,6 +357,8 @@ class EditorPage(QWidget):
             button.setEnabled(not running)
         self._canvas.setEnabled(not running)
         self._inspector.setEnabled(not running)
+        if running:
+            self._inspector.stop_preview()
 
     def _discard(self) -> None:
         if self._session is None:
@@ -404,6 +408,36 @@ class EditorPage(QWidget):
             return
         self._banner.clear()
         self._refresh()
+
+    def _on_preview_candidate(self, candidate: object) -> None:
+        """Validate one in-flight edit with the engine validator only.
+
+        The candidate is untrusted data: it never mutates the session and it
+        is never executed. Results for steps that are no longer selected are
+        dropped, and nothing is shown while a run is active.
+        """
+        if self._running or self._session is None:
+            return
+        if not isinstance(candidate, PreviewCandidate):
+            return
+        if self._canvas.selected_id != candidate.step_id:
+            return  # the selection changed; this draft is stale
+        step_id = candidate.step_id
+        step = next((s for s in self._session.workflow().steps if s.step_id == step_id), None)
+        if step is None:
+            return
+        try:
+            steps = tuple(
+                replace(step_payload, **candidate.values)
+                if step_payload.step_id == step_id
+                else step_payload
+                for step_payload in self._session.workflow().steps
+            )
+            WorkflowRunner.validate(replace(self._session.workflow(), steps=steps))
+        except (WorkflowValidationError, TypeError) as error:
+            self._inspector.show_preview(False, str(error))
+        else:
+            self._inspector.show_preview(True, "")
 
     def _on_node_moved(self, node_id: object, x: float, y: float) -> None:
         if self._session is None or not isinstance(node_id, str):

@@ -2,6 +2,26 @@
 
 Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 
+## 2026-11-04 — Editor A2: live inspector preview validated by the engine only   (commit: this code commit)
+- Task: while a user edits a step in the inspector, the panel emits ONE debounced
+  candidate carrying step_id; the page validates it with the existing engine
+  validator (WorkflowRunner.validate) and shows the verdict without applying or
+  executing anything. Programmatic loads/rebuilds never preview; stale
+  candidates for a changed selection and any candidate while running are dropped.
+- AI contribution: rebuilt ui/editor/inspector.py field construction (kind
+  editor, typed combo reads, populating guard, QLineEdit.textEdited wiring,
+  QTimer debounce, PreviewCandidate protocol), added the page handler and
+  set_running stop, guarded the canvas focus hook, and wrote 8 pytest-qt tests.
+- Defect found: PySide6 Signal(dict) marshalling flattened StrEnum payloads into
+  plain strings (unknown-kind errors at Apply); QFormLayout.removeRow deletes
+  the row widgets so deleteLater raised on real widgets; disabling the canvas
+  triggered its focusNextPrevChild tab-walk, re-selecting nodes while running.
+- Verification: focused editor tests printed `64 passed`; full `pytest -q`
+  printed `559 passed, 2 skipped in 128.44s`; `ruff check .` `All checks
+  passed!`; `ruff format .` `175 files left unchanged`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-11-01 — P6: Editor run action   (commit: pending)
 - Task: Add a real saved-definition run action to the visual editor with inline
   feedback, edit locking, and Activity refresh.

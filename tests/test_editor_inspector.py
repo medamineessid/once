@@ -18,8 +18,10 @@ from PySide6.QtWidgets import QApplication
 
 from controller.editor import WorkflowEditorSession
 from engine.replay import MUTATING_DESKTOP_KINDS
-from engine.workflow import StepKind, Workflow, WorkflowStep
+from engine.workflow import StepKind, Workflow, WorkflowRunner, WorkflowStep
+from ui.editor import inspector as inspector_module
 from ui.editor.canvas import CanvasView
+from ui.editor.inspector import PreviewCandidate
 from ui.editor.layout import FINISH_ID, START_ID
 from ui.pages.editor import EditorPage
 from ui.styles import ACCENT
@@ -281,7 +283,7 @@ def test_inspector_exposes_only_fields_allowed_for_the_step_kind(qtbot, app) -> 
     page = make_page(qtbot, new_session())
 
     click_node(page._canvas, "s1")
-    assert set(page._inspector.field_names) == {"name", "message", "max_attempts"}
+    assert set(page._inspector.field_names) == {"name", "message", "kind", "max_attempts"}
 
     page._session.update_step(
         "s1",
@@ -293,6 +295,7 @@ def test_inspector_exposes_only_fields_allowed_for_the_step_kind(qtbot, app) -> 
     assert set(page._inspector.field_names) == {
         "name",
         "message",
+        "kind",
         "target",
         "max_attempts",
         "timeout_seconds",
@@ -315,3 +318,169 @@ def test_invalid_inspector_edit_keeps_definition_and_shows_inline_error(qtbot, a
 
     assert page._session.workflow().steps[0] == original
     assert "absolute" in page._banner.body_text.lower()
+
+
+# --- A2: live preview (debounced, engine-validator only) --------------------------------
+
+
+@pytest.fixture
+def fast_preview(monkeypatch: pytest.MonkeyPatch) -> int:
+    """Shrink the debounce window so previews settle within the test."""
+    interval = 30
+    monkeypatch.setattr(inspector_module, "PREVIEW_DEBOUNCE_MS", interval)
+    return interval
+
+
+def _record_previews(page: EditorPage) -> list[PreviewCandidate]:
+    candidates: list[PreviewCandidate] = []
+    page._inspector.preview_requested.connect(candidates.append)
+    return candidates
+
+
+def test_rapid_field_edits_send_a_single_preview(qtbot, app, fast_preview) -> None:
+    page = make_page(qtbot, new_session())
+    click_node(page._canvas, "s1")
+    candidates = _record_previews(page)
+
+    qtbot.keyClicks(page._inspector.field("name"), "X")
+    qtbot.keyClicks(page._inspector.field("message"), "halfwayY")
+    qtbot.waitUntil(lambda: len(candidates) == 1, timeout=2000)
+    qtbot.wait(fast_preview * 3)
+    assert len(candidates) == 1
+
+    (candidate,) = candidates
+    assert candidate.step_id == "s1"
+    # Values are read when the timer fires, so the latest edits win.
+    assert candidate.values["name"] == "Look aroundX"
+    assert candidate.values["message"] == "firsthalfwayY"
+
+
+def test_loading_a_step_sends_no_preview(qtbot, app, fast_preview) -> None:
+    page = make_page(qtbot, new_session())
+    click_node(page._canvas, "s1")
+    candidates = _record_previews(page)
+
+    page._refresh()  # programmatic load
+    qtbot.wait(fast_preview * 4)
+    assert candidates == []
+
+    # Programmatic line-edit writes are silent too: line edits use textEdited,
+    # so only real typing schedules a preview. (Number fields have no
+    # user-only signal in Qt; they are silent only while populating.)
+    page._inspector.field("name").setText("quiet")
+    page._inspector.field("message").setText("still quiet")
+    qtbot.wait(fast_preview * 4)
+    assert candidates == []
+
+
+def test_kind_switch_previews_once_with_current_values(qtbot, app, fast_preview) -> None:
+    page = make_page(qtbot, new_session())
+    click_node(page._canvas, "s1")
+    candidates = _record_previews(page)
+
+    qtbot.keyClicks(page._inspector.field("name"), "X")
+    kind_field = page._inspector.field("kind")
+    kind_field.setCurrentIndex(kind_field.findData(StepKind.WAIT_WINDOW))
+    qtbot.waitUntil(lambda: len(candidates) == 1, timeout=2000)
+    qtbot.wait(fast_preview * 3)
+    assert len(candidates) == 1
+
+    (candidate,) = candidates
+    assert candidate.step_id == "s1"
+    assert candidate.values["kind"] is StepKind.WAIT_WINDOW
+    assert candidate.values["name"] == "Look aroundX"
+    # Retargeted fields appear with their rebuilt values at fire time.
+    assert candidate.values["target"] == ""
+    assert candidate.values["timeout_seconds"] == 30.0
+    assert "postcondition" not in candidate.values
+
+
+def test_selection_change_drops_a_pending_preview(qtbot, app, fast_preview) -> None:
+    page = make_page(qtbot, new_session())
+    click_node(page._canvas, "s1")
+    candidates = _record_previews(page)
+
+    qtbot.keyClicks(page._inspector.field("name"), "lost")
+    click_node(page._canvas, "s2")
+
+    qtbot.wait(fast_preview * 4)
+    assert candidates == []
+    assert page._inspector.preview_verdict == ""
+
+
+def test_a_stale_candidate_after_selection_change_is_dropped(qtbot, app, fast_preview) -> None:
+    page = make_page(qtbot, new_session())
+    click_node(page._canvas, "s2")  # a valid LAUNCH_APPLICATION step
+    qtbot.keyClicks(page._inspector.field("message"), "!")
+    qtbot.waitUntil(lambda: "valid" in page._inspector.preview_verdict.lower(), timeout=2000)
+    verdict = page._inspector.preview_verdict
+
+    # A late preview for the previously selected step must be discarded.
+    page._inspector.preview_requested.emit(PreviewCandidate("s1", {"name": ""}))
+    qtbot.wait(fast_preview * 2)
+    assert page._inspector.preview_verdict == verdict
+
+    # Only the selected step can be previewed.
+    page._inspector.preview_requested.emit(PreviewCandidate("s1", {"name": "mine"}))
+    qtbot.wait(fast_preview * 2)
+    assert page._inspector.preview_verdict == verdict
+
+
+def test_running_stops_a_pending_preview_and_ignores_candidates(qtbot, app, fast_preview) -> None:
+    page = make_page(qtbot, new_session())
+    click_node(page._canvas, "s1")
+    candidates = _record_previews(page)
+    qtbot.keyClicks(page._inspector.field("name"), "during")
+
+    page.set_running(True)
+    qtbot.wait(fast_preview * 4)
+    assert candidates == []
+    assert page._inspector.preview_verdict == ""
+
+    # A late candidate is ignored while running...
+    page._inspector.preview_requested.emit(PreviewCandidate("s1", {"name": ""}))
+    qtbot.wait(10)
+    assert page._inspector.preview_verdict == ""
+
+    # ...but after the run ends a candidate is validated again.
+    page.set_running(False)
+    page._inspector.preview_requested.emit(PreviewCandidate("s1", {"name": "Back again"}))
+    qtbot.wait(10)
+    assert "valid" in page._inspector.preview_verdict.lower()
+    # Only the two manual test emits were recorded; no burst from the run.
+    assert len(candidates) == 2
+
+
+def test_preview_uses_the_engine_validator_and_never_runs_or_mutates(
+    qtbot, app, fast_preview, monkeypatch
+) -> None:
+    def refuse_run(*args: object, **kwargs: object) -> None:
+        raise AssertionError("The live preview must never execute a workflow.")
+
+    validate_calls: list[Workflow] = []
+    real_validate = WorkflowRunner.validate
+
+    def counting_validate(workflow: Workflow) -> None:  # type: ignore[no-untyped-def]
+        validate_calls.append(workflow)
+        real_validate(workflow)
+
+    monkeypatch.setattr(WorkflowRunner, "run", refuse_run)
+    monkeypatch.setattr(WorkflowRunner, "validate", staticmethod(counting_validate))
+
+    page = make_page(qtbot, new_session())
+    steps_before = page._session.workflow().steps
+    click_node(page._canvas, "s1")
+    validate_calls.clear()
+
+    qtbot.keyClicks(page._inspector.field("message"), " live")
+    qtbot.waitUntil(lambda: "valid" in page._inspector.preview_verdict.lower(), timeout=2000)
+    assert len(validate_calls) == 1  # exactly the engine validator was called
+    assert page._session.workflow().steps == steps_before  # preview edits nothing
+    assert page._session.is_dirty() is False
+    assert page._session.can_undo is False
+
+    # An invalid edit shows the validator's message, still without mutating.
+    page._inspector.preview_requested.emit(PreviewCandidate("s1", {"name": "  "}))
+    qtbot.wait(10)
+    assert "needs a name" in page._inspector.preview_verdict.lower()
+    assert page._session.workflow().steps == steps_before

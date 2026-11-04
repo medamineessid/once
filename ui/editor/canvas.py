@@ -397,8 +397,14 @@ class CanvasView(QGraphicsView):
 
     def focusNextPrevChild(self, next: bool) -> bool:  # noqa: N802 - Qt name
         """Tab moves forward along the chain; Shift+Tab moves back. Qt never
-        runs keyPressEvent for Tab, so focus processing is the hook."""
-        if self.chain:
+        runs keyPressEvent for Tab, so focus processing is the hook.
+
+        The walk only applies while the canvas is enabled: Qt also routes
+        focus relocation (e.g. a disabled widget losing focus) through this
+        hook, and stepping the selection for a programmatic focus move
+        would change the selection without any user input.
+        """
+        if self.isEnabled() and self.chain:
             self._toggle_or_step(None, not next)
             return True
         return super().focusNextPrevChild(next)
