@@ -14,6 +14,8 @@ class RawDraftAction:
     sequence: int
     description: str
     source_event: RecordedEventKind
+    process_name: str | None = None
+    window_title: str | None = None
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,8 @@ def build_raw_draft(recording: Recording) -> RawDraft:
             sequence=event.sequence,
             description=_describe(event),
             source_event=event.kind,
+            process_name=event.process_name,
+            window_title=event.window_title,
         )
         for event in recording.events
     )
@@ -44,4 +48,12 @@ def _describe(event: RecordedEvent) -> str:
         return "Key press observed."
     if event.kind is RecordedEventKind.TEXT_INPUT:
         return "Text input observed." if event.text is None else "Non-password text input observed."
+    if event.kind is RecordedEventKind.WINDOW_OPEN:
+        title = event.window_title or "untitled window"
+        who = event.process_name or "an application"
+        return f"A {who} window opened: {title}."
+    if event.kind is RecordedEventKind.WINDOW_CLOSE:
+        title = event.window_title or "untitled window"
+        who = event.process_name or "an application"
+        return f"The {who} window closed: {title}."
     return f"Window focus observed: {event.window_title or 'unknown window'}."

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from ai.approval import approve_proposal, preview_proposal
@@ -11,7 +13,7 @@ from ai.provider import FakeAnalysisProvider
 from controller.recording import RecordingService
 from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
-from engine.workflow import StepKind, Workflow, WorkflowStep
+from engine.workflow import StepKind, StepResult, StepStatus, Workflow, WorkflowStep
 from integrations.recorder import EventSink
 from recorder.drafts import build_raw_draft
 from recorder.models import RecordedEvent, RecordedEventKind
@@ -88,3 +90,81 @@ def test_unapproved_proposal_cannot_be_saved_or_executed(tmp_path) -> None:
         service.save_approved(workflow)  # type: ignore[arg-type]
     with pytest.raises(WorkflowValidationError, match="explicitly approved"):
         service.run_approved(workflow)  # type: ignore[arg-type]
+
+
+class FakeLaunchCloseDesktopActions:
+    """Minimal desktop provider fake: records launch/close targets only."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def launch_application(self, target_json: str) -> StepResult:
+        self.calls.append(("LAUNCH_APPLICATION", target_json))
+        return StepResult("", StepStatus.SUCCEEDED, "The application was launched.")
+
+    def close_application(self, target_json: str) -> StepResult:
+        self.calls.append(("CLOSE_APPLICATION", target_json))
+        return StepResult("", StepStatus.SUCCEEDED, "The application windows were closed.")
+
+
+class WindowRecordingStub:
+    """Recorder fake: emits VS Code open then close observations."""
+
+    def __init__(self, sink: EventSink) -> None:
+        self._sink = sink
+
+    def start(self) -> None:
+        self._sink.append(
+            RecordedEvent(
+                1,
+                10,
+                RecordedEventKind.WINDOW_OPEN,
+                process_name="Code.exe",
+                window_title="Visual Studio Code",
+            )
+        )
+        self._sink.append(
+            RecordedEvent(
+                2,
+                20,
+                RecordedEventKind.WINDOW_CLOSE,
+                process_name="Code.exe",
+                window_title="Visual Studio Code",
+            )
+        )
+
+    def stop(self) -> None:
+        return None
+
+
+def test_recorded_vscode_open_close_replays_unapproved_free(tmp_path) -> None:
+    """Record -> draft -> launch/close steps -> approval -> deterministic replay."""
+    from ai.provider import deterministic_recording_provider
+    from engine.desktop import approve_desktop_workflow
+    from engine.workflow import StepStatus
+
+    service = RecordingService(tmp_path / "recordings", recorder_factory=WindowRecordingStub)
+    service.start("vscode-demo")
+    recording = service.stop()
+
+    proposal = deterministic_recording_provider().analyze(
+        AnalysisRequest(build_raw_draft(recording))
+    )
+    assert [step.kind for step in proposal.workflow.steps] == [
+        StepKind.LAUNCH_APPLICATION,
+        StepKind.CLOSE_APPLICATION,
+    ]
+
+    approval = approve_desktop_workflow(proposal.workflow)
+    desktop = FakeLaunchCloseDesktopActions()
+    app = WorkflowService(
+        history=ExecutionHistory(connect(tmp_path / "history.db")), desktop_actions=desktop
+    )
+    run = app.run_desktop_approved(approval, cancel_check=lambda: False)
+
+    assert run.status.value == "SUCCEEDED"
+    assert [(kind, target) for kind, target in desktop.calls] == [
+        ("LAUNCH_APPLICATION", json.dumps({"application": "vscode"})),
+        ("CLOSE_APPLICATION", json.dumps({"application": "vscode"})),
+    ]
+    assert [result.status for result in run.results] == [StepStatus.SUCCEEDED, StepStatus.SUCCEEDED]
