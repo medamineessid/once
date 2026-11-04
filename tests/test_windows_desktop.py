@@ -97,6 +97,11 @@ class FakeWindow(FakeWrapper):
     def __init__(self, info: FakeElementInfo, children: list[FakeWrapper], **kw) -> None:
         super().__init__(info, **kw)
         self._children = children
+        self.closed = False
+
+    def close(self) -> None:
+        """Mirror pywinauto's close: marks the window closed for the fake surface."""
+        self.closed = True
 
     def descendants(self) -> tuple[FakeWrapper, ...]:
         return tuple(self._children)
@@ -107,7 +112,7 @@ class FakeDesktop:
         self._windows = windows
 
     def windows(self) -> list[FakeWrapper]:
-        return list(self._windows)
+        return [wrapper for wrapper in self._windows if not getattr(wrapper, "closed", False)]
 
 
 def shortcut_payload(**overrides) -> str:
@@ -434,3 +439,77 @@ def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
     assert observed["shell"] is False
     assert observed["argv"] == argv
     process.wait(timeout=10)
+
+
+def close_provider(windows, *, clock=lambda: 0.0) -> PywinautoDesktopActions:
+    """Provider bound to one fake desktop surface with launch and close access."""
+    desktop = FakeDesktop(windows)
+    return PywinautoDesktopActions(
+        desktop_factory=lambda: desktop,
+        registry=WindowsApplicationRegistry(),
+        popen=lambda argv: FakeProcess(),
+        sleep=lambda _s: None,
+        clock=clock,
+    )
+
+
+def test_close_refuses_when_this_run_launched_nothing() -> None:
+    provider = close_provider([])
+    result = provider.close_application(json.dumps({"application": "vscode"}))
+    assert result.status is StepStatus.FAILED
+    assert "did not launch" in result.message
+    assert "registered=false" in result.evidence
+
+
+def test_close_only_touches_windows_of_the_launched_process() -> None:
+    own = FakeWindow(FakeElementInfo(name="Visual Studio Code", process_id=FakeProcess.pid), [])
+    foreign = FakeWindow(FakeElementInfo(name="Unrelated windows", process_id=99), [])
+    provider = close_provider([own, foreign])
+    launched = provider.launch_application(json.dumps({"application": "vscode"}))
+    assert launched.status is StepStatus.SUCCEEDED
+
+    result = provider.close_application(json.dumps({"application": "vscode"}))
+    assert result.status is StepStatus.SUCCEEDED
+    assert own.closed is True
+    assert foreign.closed is False
+    assert "process_id=4242" in result.evidence
+    assert "windows_closed=1" in result.evidence
+
+
+def test_close_fails_when_a_window_refuses_to_disappear() -> None:
+    class StickyWindow(FakeWindow):
+        def close(self) -> None:
+            return None
+
+    sticky = StickyWindow(FakeElementInfo(name="Stuck", process_id=FakeProcess.pid), [])
+    ticks = iter(range(1, 100))
+
+    def clock() -> float:
+        return float(next(ticks))
+
+    provider = close_provider([sticky], clock=clock)
+    provider.launch_application(json.dumps({"application": "vscode"}))
+
+    result = provider.close_application(json.dumps({"application": "vscode"}))
+    assert result.status is StepStatus.FAILED
+    assert "did not close" in result.message
+
+
+def test_close_fails_closed_when_the_window_close_errors() -> None:
+    class BrokenWindow(FakeWindow):
+        def close(self) -> None:
+            raise RuntimeError("the surface refused")
+
+    broken = BrokenWindow(FakeElementInfo(name="Broken", process_id=FakeProcess.pid), [])
+    provider = close_provider([broken])
+    provider.launch_application(json.dumps({"application": "vscode"}))
+
+    result = provider.close_application(json.dumps({"application": "vscode"}))
+    assert result.status is StepStatus.FAILED
+    assert "the surface refused" in result.message
+
+
+def test_registry_resolves_vscode_to_a_known_code_executable() -> None:
+    path = WindowsApplicationRegistry().resolve("vscode")
+    assert path.name == "Code.exe"
+    assert "Microsoft VS Code" in path.parts

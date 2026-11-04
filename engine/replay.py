@@ -48,6 +48,7 @@ READ_ONLY_POLICY = ReplayPolicy()
 MUTATING_DESKTOP_KINDS: frozenset[StepKind] = frozenset(
     {
         StepKind.LAUNCH_APPLICATION,
+        StepKind.CLOSE_APPLICATION,
         StepKind.CLICK_UI_ELEMENT,
         StepKind.TYPE_TEXT,
         StepKind.PRESS_SHORTCUT,

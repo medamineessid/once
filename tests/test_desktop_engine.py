@@ -59,6 +59,13 @@ class FakeDesktopActions:
         )
         return make_result(status, message, evidence)
 
+    def close_application(self, target_json: str):
+        self.calls.append(("CLOSE_APPLICATION", target_json))
+        status, message, evidence = self._result(
+            "CLOSE_APPLICATION", "The application windows were closed."
+        )
+        return make_result(status, message, evidence)
+
     def wait_window(self, target_json: str, timeout_seconds: float):
         self.calls.append(("WAIT_WINDOW", target_json))
         status, message, evidence = self._result("WAIT_WINDOW", "The identified window appeared.")
@@ -347,6 +354,7 @@ def test_mutating_kinds_constant_covers_all_mutations() -> None:
         frozenset(
             {
                 StepKind.LAUNCH_APPLICATION,
+                StepKind.CLOSE_APPLICATION,
                 StepKind.CLICK_UI_ELEMENT,
                 StepKind.TYPE_TEXT,
                 StepKind.PRESS_SHORTCUT,
@@ -416,3 +424,56 @@ def test_verify_file_text_may_carry_a_path_postcondition(tmp_path: Path) -> None
     )
     with pytest.raises(WorkflowValidationError, match="cannot carry a postcondition"):
         WorkflowRunner.validate(Workflow("w", "w", (verify,)))
+
+
+def test_close_application_validation_requires_a_known_application() -> None:
+    """Close is registry-directed: one allow-listed application, nothing else."""
+    good = desktop_step("c1", StepKind.CLOSE_APPLICATION, json.dumps({"application": "vscode"}))
+    WorkflowRunner.validate(Workflow("w", "w", (good[1],)))
+
+    unknown = desktop_step("c2", StepKind.CLOSE_APPLICATION, json.dumps({"application": "cmd"}))
+    with pytest.raises(WorkflowValidationError, match="registry does not allow"):
+        WorkflowRunner.validate(Workflow("w2", "w2", (unknown[1],)))
+
+    empty = desktop_step("c3", StepKind.CLOSE_APPLICATION, json.dumps({}))
+    with pytest.raises(WorkflowValidationError, match="application name to close"):
+        WorkflowRunner.validate(Workflow("w3", "w3", (empty[1],)))
+
+    executable = desktop_step(
+        "c4", StepKind.CLOSE_APPLICATION, json.dumps({"executable": "C:\\co\\Code.exe"})
+    )
+    with pytest.raises(WorkflowValidationError, match="unknown close fields"):
+        WorkflowRunner.validate(Workflow("w4", "w4", (executable[1],)))
+
+
+def test_launch_validation_accepts_the_vscode_registry_name() -> None:
+    launch = desktop_step("l1", StepKind.LAUNCH_APPLICATION, json.dumps({"application": "vscode"}))
+    WorkflowRunner.validate(Workflow("w", "w", (launch[1],)))
+
+
+def test_close_gate_requires_approval_and_lists_the_kind() -> None:
+    close = desktop_step("c1", StepKind.CLOSE_APPLICATION, json.dumps({"application": "vscode"}))
+    workflow = Workflow("w", "w", (close[1],))
+
+    with pytest.raises(ExecutionError, match="does not allow"):
+        ReplayExecutor(READ_ONLY_POLICY).validate(workflow)
+
+    approval = approve_desktop_workflow(workflow)
+    assert mutating_kind_names(approval.workflow) == ("CLOSE_APPLICATION",)
+    assert requires_desktop_approval(workflow) is True
+    ReplayExecutor(DESKTOP_INTERACTION_POLICY).validate(workflow)
+
+
+def test_launch_and_close_run_in_order_through_one_fake_provider() -> None:
+    """Launch registers the target; close follows in the same deterministic run."""
+    launch = desktop_step("l1", StepKind.LAUNCH_APPLICATION, json.dumps({"application": "vscode"}))
+    close = desktop_step("c1", StepKind.CLOSE_APPLICATION, json.dumps({"application": "vscode"}))
+    run, actions = run_with_fakes((launch[1], close[1]))
+
+    assert tuple(result.step_id for result in run.results) == ("l1", "c1")
+    assert all(result.status is StepStatus.SUCCEEDED for result in run.results)
+    assert tuple(kind for kind, _target in actions.calls) == (
+        "LAUNCH_APPLICATION",
+        "CLOSE_APPLICATION",
+    )
+    assert json.loads(actions.calls[1][1]) == {"application": "vscode"}
