@@ -309,7 +309,8 @@ def test_home_demo_button_runs_the_demo_exactly_once(qtbot, tmp_path):
     runs = service.history()
     assert len(runs) == 1
     assert runs[0].workflow_id == "demo-local-workflow"
-    assert runs[0].status.value == "SUCCEEDED"
+    # The demo only reports, so it observed and performed nothing.
+    assert runs[0].status.value == "OBSERVATION_ONLY"
 
 
 def test_open_button_click_shows_opened_workflow_on_the_review_page(qtbot, tmp_path):
@@ -351,7 +352,7 @@ def test_activity_run_click_shows_its_steps(qtbot, tmp_path):
     )
 
     assert "demo-local-workflow" in page._details_label.text()
-    assert "SUCCEEDED" in page._details_label.text()
+    assert "OBSERVATION_ONLY" in page._details_label.text()
 
 
 # --- Layout foundation (B3): structure and honest controls -------------------------------

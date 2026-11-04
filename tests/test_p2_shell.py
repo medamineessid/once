@@ -168,7 +168,9 @@ def test_first_time_user_can_run_demo_and_see_it_recorded(qtbot, tmp_path):
     home = window.home_page
     assert len(home._activity_rows) == 1
     texts = " | ".join(label.text() for label in home._activity_rows[0].findChildren(QLabel))
-    assert "Succeeded" in texts
+    # The demo only reports, so it performed nothing (task B4 gives this a
+    # plain-language label).
+    assert "OBSERVATION_ONLY" in texts
 
     window._show_page(ShellPages.ACTIVITY)
     page = window.activity_page
@@ -177,7 +179,7 @@ def test_first_time_user_can_run_demo_and_see_it_recorded(qtbot, tmp_path):
     assert item.data(Qt.UserRole) == "demo-local-workflow"
     row = page._history_list.itemWidget(item)
     assert row is not None
-    assert "Succeeded" in " ".join(label.text() for label in row.findChildren(QLabel))
+    assert "OBSERVATION_ONLY" in " ".join(label.text() for label in row.findChildren(QLabel))
 
 
 def test_failed_demo_run_shows_attention_and_banner(qtbot, tmp_path, monkeypatch):

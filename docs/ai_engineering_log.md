@@ -1287,3 +1287,31 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   formatting passed, both smoke tests passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+## 2026-11-04 — B1: run truth (reports are not successes)   (commit: pending)
+- Task: stop a REPORT-only workflow from reading as success. Add the
+  `OBSERVED` step status and the `OBSERVATION_ONLY` run status, keep saved
+  workflows and existing history rows loadable, and publish the contract
+  before changing code.
+- AI contribution: `docs/contracts/run-outcomes.md` (committed first, 1d76b5f),
+  `StepStatus.OBSERVED`, `WorkflowStatus.OBSERVATION_ONLY`,
+  `CONTINUING_STEP_STATUSES`/`PERFORMED_STEP_STATUSES`, `_final_status`,
+  an explicit REPORT branch in `_run_once`, `OBSERVED` in
+  `controller.run_events._SUCCESS_STATUSES`, the run-events contract row,
+  `tests/test_b1_run_outcomes.py`, and expectation updates in eight existing
+  test files that asserted a report was a success.
+- Defect found: `_run_once` returned `SUCCEEDED` for a REPORT step, so the
+  run-status decision was "it did not fail, therefore it succeeded". The
+  demo (two REPORT steps) therefore reported Succeeded while changing
+  nothing - the exact claim the product must not make. Also found that
+  `ui/shell.py::_on_demo_finished` hard-codes `status.value == "SUCCEEDED"`
+  and would have shown "Demonstration failed" for that same run; that one
+  branch had to be widened (out of lane B's file list, see report).
+- Verification: `pytest tests/test_b1_run_outcomes.py -q` printed
+  `11 passed`; the full suite printed
+  `3 failed, 508 passed, 2 skipped` of which
+  `test_chrome_devtools::test_launch_refuses_a_non_chrome_endpoint` is
+  pre-existing, and `test_review_ui::test_panel_can_apply_a_recorded_approval_after_a_restart`
+  passed when rerun alone (flaky under the full run). `ruff check .` printed
+  `All checks passed!`.
+- Outcome: PASSED
+- Human review:

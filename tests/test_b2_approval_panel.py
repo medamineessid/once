@@ -389,4 +389,5 @@ def test_read_only_automation_runs_without_the_panel(qtbot, tmp_path) -> None:
     assert desktop.calls == []
     runs = tuple(service.history())
     assert len(runs) == 1
-    assert runs[0].status.value == "SUCCEEDED"
+    # A single report step observed; it did not perform anything.
+    assert runs[0].status.value == "OBSERVATION_ONLY"

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -55,6 +55,19 @@ class StepStatus(StrEnum):
     SKIPPED = "SKIPPED"
     VERIFIED = "VERIFIED"
     INCONCLUSIVE = "INCONCLUSIVE"
+    #: The step recorded an observation only; nothing was performed.
+    OBSERVED = "OBSERVED"
+
+
+#: Step statuses that let a run continue to its next step.
+CONTINUING_STEP_STATUSES: frozenset[StepStatus] = frozenset(
+    {StepStatus.SUCCEEDED, StepStatus.VERIFIED, StepStatus.OBSERVED}
+)
+
+#: Step statuses that prove a step really performed or verified something.
+PERFORMED_STEP_STATUSES: frozenset[StepStatus] = frozenset(
+    {StepStatus.SUCCEEDED, StepStatus.VERIFIED}
+)
 
 
 class WorkflowStatus(StrEnum):
@@ -65,6 +78,8 @@ class WorkflowStatus(StrEnum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
+    #: The run finished, nothing failed, and nothing was performed.
+    OBSERVATION_ONLY = "OBSERVATION_ONLY"
 
 
 @dataclass(frozen=True)
@@ -110,6 +125,19 @@ class WorkflowRun:
     results: tuple[StepResult, ...]
     started_at: datetime
     finished_at: datetime
+
+
+def _final_status(results: Sequence[StepResult], *, performed_any: bool) -> WorkflowStatus:
+    """Decide a finished run's status from its real results (see run-outcomes.md).
+
+    Failures keep priority; otherwise a run that performed nothing is honest
+    about it instead of claiming success.
+    """
+    if any(result.status is StepStatus.FAILED for result in results):
+        return WorkflowStatus.FAILED
+    if not performed_any:
+        return WorkflowStatus.OBSERVATION_ONLY
+    return WorkflowStatus.SUCCEEDED
 
 
 CancelCheck = Callable[[], bool]
@@ -817,6 +845,7 @@ class WorkflowRunner:
         self.validate(workflow)
         started_at = datetime.now(UTC)
         results: list[StepResult] = []
+        performed_any = False
         is_cancelled = cancel_check or (lambda: False)
 
         def completed(status: WorkflowStatus) -> WorkflowRun:
@@ -853,7 +882,9 @@ class WorkflowRunner:
             results.append(result)
             if progress_callback is not None:
                 progress_callback(result)
-            if result.status not in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
+            if result.status in PERFORMED_STEP_STATUSES and step.kind is not StepKind.REPORT:
+                performed_any = True
+            if result.status not in CONTINUING_STEP_STATUSES:
                 results.extend(
                     StepResult(
                         step_id=remaining.step_id,
@@ -868,7 +899,7 @@ class WorkflowRunner:
                     else WorkflowStatus.FAILED
                 )
 
-        return completed(WorkflowStatus.SUCCEEDED)
+        return completed(_final_status(results, performed_any=performed_any))
 
     def _run_with_retries(
         self,
@@ -905,7 +936,7 @@ class WorkflowRunner:
                     desktop_actions,
                     browser_actions,
                 )
-            if result.status in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
+            if result.status in CONTINUING_STEP_STATUSES:
                 if step.postcondition is None:
                     if attempt == 1:
                         return result
@@ -1006,7 +1037,8 @@ class WorkflowRunner:
                 return StepResult(step.step_id, StepStatus.FAILED, str(error))
         if step.kind is StepKind.FAIL:
             return StepResult(step.step_id, StepStatus.FAILED, step.message)
-        return StepResult(step.step_id, StepStatus.SUCCEEDED, step.message)
+        # A report observes; it does not perform, so it cannot claim SUCCEEDED.
+        return StepResult(step.step_id, StepStatus.OBSERVED, step.message)
 
     @staticmethod
     def _run_desktop_step(step: WorkflowStep, actions: DesktopActions) -> StepResult:

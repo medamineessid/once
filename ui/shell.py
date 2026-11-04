@@ -349,7 +349,9 @@ class MainWindow(QMainWindow):
     def _on_demo_finished(self, run: object) -> None:
         status = getattr(run, "status", None)
         self.status_footer.set_state(FOOTER_READY)
-        if status is not None and status.value == "SUCCEEDED":
+        # OBSERVATION_ONLY is a finished demo, not a failed one: the demo only
+        # reports, it never performs anything (docs/contracts/run-outcomes.md).
+        if status is not None and status.value in {"SUCCEEDED", "OBSERVATION_ONLY"}:
             self.banner.show_message(
                 "success",
                 DEMO_FINISHED_TITLE,
