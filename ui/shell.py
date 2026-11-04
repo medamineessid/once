@@ -19,8 +19,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ai.analyze_recording import analyze_recording
 from ai.models import AnalysisRequest, ProviderDraft
-from ai.provider import deterministic_recording_provider
 from controller.recording import RecordingService
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig
@@ -502,7 +502,7 @@ class MainWindow(QMainWindow):
             ),
         )
         draft = build_raw_draft(recording)
-        proposal = deterministic_recording_provider().analyze(AnalysisRequest(draft))
+        proposal = analyze_recording(AnalysisRequest(draft))
         if not isinstance(proposal, ProviderDraft):
             self.create_automation_page.show_not_available(
                 "The recording did not produce a reviewable draft."

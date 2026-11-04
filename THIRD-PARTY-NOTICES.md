@@ -12,7 +12,15 @@ notice is self-contained.
 - Source: microsoft/skill-recorder (MIT)
 - Reference copy used for analysis only:
   `C:\Users\DELL\AppData\Local\SkillRecorder\versions\505c97ae47be5642c0e1b44ebb8d1c1530c298fa`
-- Use in this repository: conceptual analysis for the desktop MVP. No code reused.
+- Use in this repository: conceptual analysis for the desktop MVP, plus the
+  recording-analysis prompt in `ai/analyze_recording.py`. The prompt writer
+  was consulted against the licensed reference file
+  `electron/describer/instructions.ts` and adapts its method — event-first
+  reconstruction of a short recording, grounding every step in captured
+  signals in past tense, an exact structured-output contract, and "output
+  only the schema, no prose" discipline — to Once's own engine step kinds and
+  validation boundaries. No code was copied and no prompt is reproduced
+  verbatim.
 
 ## MIT License
 

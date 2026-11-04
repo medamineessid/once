@@ -32,7 +32,10 @@ class WindowsCredentialManagerSource:
             import win32cred
 
             credential = win32cred.CredRead(name, win32cred.CRED_TYPE_GENERIC)
-        except (ImportError, OSError) as error:
+        except (ImportError, OSError, AttributeError, ValueError) as error:
+            raise AIProviderError("Could not read Windows Credential Manager.") from error
+        except Exception as error:
+            # Translated, not swallowed: the caller always receives the typed error.
             raise AIProviderError("Could not read Windows Credential Manager.") from error
         blob = credential.get("CredentialBlob", b"")
         return blob.decode("utf-8").rstrip("\x00")
@@ -47,4 +50,21 @@ def configured_gemini_key() -> str | None:
             key = None
         if key:
             return key
-    return EnvironmentCredentialSource().get("ONCE_GEMINI_API_KEY")
+    return EnvironmentCredentialSource().get(
+        "ONCE_GEMINI_API_KEY"
+    ) or EnvironmentCredentialSource().get("GEMINI_API_KEY")
+
+
+ANTHROPIC_CREDENTIAL_NAME = "Once/Anthropic"
+
+
+def configured_anthropic_key() -> str | None:
+    """Read Anthropic credentials from Windows storage, then the development fallback."""
+    if os.name == "nt":
+        try:
+            key = WindowsCredentialManagerSource().get(ANTHROPIC_CREDENTIAL_NAME)
+        except AIProviderError:
+            key = None
+        if key:
+            return key
+    return EnvironmentCredentialSource().get("ANTHROPIC_API_KEY")
