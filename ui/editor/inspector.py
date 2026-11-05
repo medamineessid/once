@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from engine.replay import MUTATING_DESKTOP_KINDS
 from engine.workflow import PostconditionKind, StepKind, Workflow, WorkflowStep
+from ui.components.formatting import status_display
 from ui.strings import (
     EDITOR_INSPECTOR_KIND_MUTATING,
     EDITOR_INSPECTOR_KIND_READ_ONLY,
@@ -170,7 +171,8 @@ class InspectorPanel(QScrollArea):
                 lines.append(EDITOR_INSPECTOR_MUTATING_NOTE)
             if result is not None:
                 status = getattr(getattr(result, "status", None), "value", "UNKNOWN")
-                lines.append(f"Run status: {status}")
+                label, _chip = status_display(status)
+                lines.append(f"Run status: {label}")
                 message = getattr(result, "message", "")
                 if message:
                     lines.append(f"Result: {message}")

@@ -374,7 +374,9 @@ class MainWindow(QMainWindow):
     def _on_demo_finished(self, run: object) -> None:
         status = getattr(run, "status", None)
         self.status_footer.set_state(FOOTER_READY)
-        if status is not None and status.value == "SUCCEEDED":
+        # OBSERVATION_ONLY is a finished demo, not a failed one: the demo only
+        # reports, it never performs anything (docs/contracts/run-outcomes.md).
+        if status is not None and status.value in {"SUCCEEDED", "OBSERVATION_ONLY"}:
             self.banner.show_message(
                 "success",
                 DEMO_FINISHED_TITLE,
@@ -445,6 +447,15 @@ class MainWindow(QMainWindow):
         status = getattr(getattr(run, "status", None), "value", "UNKNOWN")
         if status == "SUCCEEDED":
             self.editor_page.show_run_message("success", EDITOR_RUN, EDITOR_RUN_SUCCEEDED)
+        elif status == "OBSERVATION_ONLY":
+            # A report-only run finished (docs/contracts/run-outcomes.md): it
+            # is not a failure, and it must not be worded as a success that
+            # performed something.
+            self.editor_page.show_run_message(
+                "info",
+                EDITOR_RUN,
+                "Automation finished. It only observed and reported; nothing was performed.",
+            )
         elif status == "CANCELLED":
             self.editor_page.show_run_message("warning", EDITOR_RUN, EDITOR_RUN_CANCELLED)
         else:

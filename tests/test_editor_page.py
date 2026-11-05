@@ -8,6 +8,8 @@ automations, Activity, and the review page all show the chosen name.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from PySide6.QtCore import Qt
 
 from controller.service import WorkflowService
@@ -189,8 +191,42 @@ def test_editor_shows_step_result_and_evidence_in_inspector(qtbot, tmp_path) -> 
     window.editor_page.show_step_result(result)
 
     assert window.editor_page._canvas.nodes["step-1"].status == "SUCCEEDED"
-    assert "Run status: SUCCEEDED" in window.editor_page._inspector.summary_text
+    assert "Run status: Succeeded" in window.editor_page._inspector.summary_text
     assert "redacted=true" in window.editor_page._inspector.summary_text
+
+
+def test_observed_step_result_is_worded_as_an_observation(qtbot, tmp_path) -> None:
+    """docs/contracts/run-outcomes.md: an OBSERVED step is not a success."""
+    window = _make_window(qtbot, tmp_path)
+    window._show_editor()
+    qtbot.mouseClick(window.editor_page._add_button, Qt.MouseButton.LeftButton)
+    window.editor_page._canvas.select_node("step-1")
+
+    result = SimpleNamespace(
+        step_id="step-1",
+        status=SimpleNamespace(value="OBSERVED"),
+        message="Reported to the terminal.",
+        evidence=(),
+    )
+    window.editor_page.show_step_result(result)
+
+    assert window.editor_page._canvas.nodes["step-1"].status == "OBSERVED"
+    assert "Run status: Observed — not performed" in window.editor_page._inspector.summary_text
+
+
+def test_observation_only_run_is_not_worded_as_a_failure_or_a_success(qtbot, tmp_path) -> None:
+    """docs/contracts/run-outcomes.md: OBSERVATION_ONLY is finished, not failed."""
+    window = _make_window(qtbot, tmp_path)
+    window._show_editor()
+
+    run = SimpleNamespace(status=SimpleNamespace(value="OBSERVATION_ONLY"), results=())
+    window._on_editor_finished(run)
+
+    banner = window.editor_page._banner
+    assert banner.isVisible()
+    assert banner.property("severity") == "info"
+    assert "nothing was performed" in banner.body_text.lower()
+    assert "finished successfully" not in banner.body_text.lower()
 
 
 def test_editor_cancel_button_requests_run_cancellation(qtbot, tmp_path) -> None:

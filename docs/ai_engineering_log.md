@@ -2,6 +2,27 @@
 
 Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 
+## 2026-11-04 — Editor A3: word observation outcomes in plain language   (commit: this code commit)
+- Task: in the editor inspector and shell banners, show OBSERVED as "Observed —
+  not performed" and OBSERVATION_ONLY as "Observation only — nothing was
+  performed", and keep a report-only run from reading as a success that did
+  something (docs/contracts/run-outcomes.md).
+- AI contribution: added the two labels to ui/components/formatting
+  (_STATUS_DISPLAY, the single source), routed the inspector summary line
+  through status_display, gave the shell's _on_editor_finished an
+  OBSERVATION_ONLY branch, adopted Lane B's widened _on_demo_finished
+  verbatim, documented label routing in show_step_result, and wrote 3
+  pytest-qt tests.
+- Defect found: this branch's engine has no OBSERVED/OBSERVATION_ONLY members
+  yet (they exist only in the once-lane-b clone), so labels are string-keyed
+  and the new tests use duck-typed SimpleNamespace status objects.
+- Verification: focused `pytest tests\test_editor_page.py
+  tests\test_shell.py tests\test_editor_inspector.py -q` printed `71 passed`;
+  `ruff check .` printed `All checks passed!`; `ruff format --check .` printed
+  `175 files already formatted`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-11-04 — Editor A2: live inspector preview validated by the engine only   (commit: this code commit)
 - Task: while a user edits a step in the inspector, the panel emits ONE debounced
   candidate carrying step_id; the page validates it with the existing engine

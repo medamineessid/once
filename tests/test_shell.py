@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import SIGNAL, Qt
@@ -24,6 +25,7 @@ from integrations.recorder import EventSink
 from recorder.models import RecordedEvent, RecordedEventKind
 from ui.components.spacer import Spacer
 from ui.shell import MainWindow, ShellPages
+from ui.strings import DEMO_FINISHED_TITLE
 
 UI_ROOT = Path(__file__).resolve().parents[1] / "ui"
 
@@ -53,6 +55,23 @@ def window(qtbot, app):
     qtbot.addWidget(window)
     window.show()
     yield window
+
+
+def test_demo_observation_only_finishes_like_a_success(qtbot, window) -> None:
+    """Lane B widened _on_demo_finished to accept OBSERVATION_ONLY; kept.
+
+    docs/contracts/run-outcomes.md: a run that only recorded observations
+    (OBSERVATION_ONLY) is a finished run, not a failed one, and it may not be
+    worded as a success that performed something.
+    """
+    run = SimpleNamespace(status=SimpleNamespace(value="OBSERVATION_ONLY"))
+
+    window._on_demo_finished(run)
+
+    banner = window.banner
+    assert banner.isVisible()
+    assert banner.property("severity") == "success"
+    assert banner.title_text == DEMO_FINISHED_TITLE
 
 
 def test_page_navigation_switches_workspace(qtbot, window):

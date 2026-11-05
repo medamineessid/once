@@ -333,7 +333,13 @@ class EditorPage(QWidget):
             self.cancelled.emit()
 
     def show_step_result(self, result: object) -> None:
-        """Render one worker progress result on the canvas and inspector."""
+        """Render one worker progress result on the canvas and inspector.
+
+        Outcome labels (OBSERVED, OBSERVATION_ONLY) are defined once in
+        ui/components/formatting.status_display (docs/contracts/run-outcomes.md)
+        and rendered by the inspector's summary line; the canvas keeps the raw
+        status so its neutral color decides how an observation looks.
+        """
         step_id = getattr(result, "step_id", None)
         if not isinstance(step_id, str) or self._session is None:
             return
