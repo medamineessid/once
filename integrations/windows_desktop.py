@@ -183,6 +183,9 @@ class WindowsApplicationRegistry:
                 "computer, so Once cannot launch it by name. Install Chrome, or "
                 "point the step at an absolute chrome.exe path you approve."
             )
+        if lowered == "charmap":
+            root = Path(os.environ.get("SYSTEMROOT", r"C:\Windows"))
+            return root / "System32" / "charmap.exe"
         raise ExecutionError(
             f"The application registry does not contain {name}. Use an "
             "allow-listed application name or an explicitly approved absolute "
