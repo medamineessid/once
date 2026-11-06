@@ -2,6 +2,14 @@
 
 Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 
+## 2026-11-06 — Lane B follow-up 2: a close step that cannot lie   (commit: pending)
+- Task: close waits for a visible unowned window of the launched pid before asking anything to close, ignores hidden/owned windows, reports success only when that pid exited or has no visible window left, fails when nothing appears or the window ignores the request, and Chrome becomes launch-only.
+- AI contribution: rewritten close loop plus `_visible_windows`, an injected Win32 surface (`is_visible`, `has_owner`, `process_alive`), `LAUNCH_ONLY_APPLICATIONS`, and 21 adapter tests covering late/missing/hidden/owned/sticky windows and an already-exited process.
+- Defect found: the first live Chrome run reported SUCCEEDED with `windows_closed=0` before the window existed, and the second closed 8 hidden windows while the real frame stayed open; a diagnostic dump showed Chrome replacing its startup window with the real one, so pid-only close cannot be proven yet.
+- Verification: `pytest tests/test_close_application.py -q` -> 21 passed; `pytest tests/test_windows_desktop.py -q` -> 24 passed; live charmap -> SUCCEEDED, `windows_closed=1`, `exited=true`; live Chrome -> FAILED then launch-only, measured windows recorded in the lane B handoff.
+- Outcome: PASSED
+- Human review: 
+
 ## 2026-11-04 — B1: run truth (reports are not successes)   (commit: pending)
 - Task: stop a REPORT-only workflow from reading as success. Add the
   `OBSERVED` step status and the `OBSERVATION_ONLY` run status, keep saved

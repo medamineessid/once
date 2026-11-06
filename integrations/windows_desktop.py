@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
 from collections.abc import Callable
@@ -37,9 +38,20 @@ SHORTCUT_CODES: dict[str, str] = {
 }
 
 POLL_INTERVAL_SECONDS = 0.25
-#: Bound on how long one close step may wait for the windows to disappear.
-CLOSE_TIMEOUT_SECONDS = 5.0
+#: Bound on how long one close step may wait for a window to appear or go.
+CLOSE_TIMEOUT_SECONDS = 10.0
 MAX_ARGUMENTS = 16
+
+GW_OWNER = 4
+STILL_ACTIVE = 259
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+#: Applications Once may launch but not close. Measured live on 2026-11-06:
+#: Chrome swaps its startup window for the real browser window, and close
+#: requests left that window and the process running until the deadline, so a
+#: close step could only report a success it cannot prove. Closed only when the
+#: measurement proves a browser window actually goes away.
+LAUNCH_ONLY_APPLICATIONS = frozenset({"chrome"})
 
 CHROME_EXECUTABLE_NAME = "chrome.exe"
 #: Relative location of chrome.exe inside each Windows install root.
@@ -74,6 +86,57 @@ def _chrome_profile_argument() -> tuple[str, Path]:
     """A throwaway --user-data-dir, so this launch is a separate Chrome process."""
     profile = Path(tempfile.gettempdir()) / f"{CHROME_PROFILE_PREFIX}{uuid4().hex}"
     return f"--user-data-dir={profile}", profile
+
+
+def _handle_of(wrapper: Any) -> int:
+    """The Win32 handle of a top-level wrapper, or 0 when it has none."""
+    handle = getattr(getattr(wrapper, "element_info", None), "handle", None)
+    return handle if isinstance(handle, int) else 0
+
+
+def _windows_api() -> Any:
+    if sys.platform != "win32":
+        raise ExecutionError("Reading Windows window state is only supported on Windows.")
+    import ctypes
+
+    return ctypes.windll.user32
+
+
+def _default_is_visible(wrapper: Any) -> bool:
+    """IsWindowVisible: hidden helper windows never count as the application."""
+    handle = _handle_of(wrapper)
+    return bool(handle) and bool(_windows_api().IsWindowVisible(handle))
+
+
+def _default_has_owner(wrapper: Any) -> bool:
+    """Owned windows are popups of another window, not top-level application windows."""
+    handle = _handle_of(wrapper)
+    return bool(handle) and bool(_windows_api().GetWindow(handle, GW_OWNER))
+
+
+def _default_process_alive(pid: int) -> bool:
+    """True while the process exists; a handle-less pid counts as gone."""
+    if sys.platform != "win32":
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return False
+    try:
+        code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            return False
+        return code.value == STILL_ACTIVE
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def _vscode_candidates() -> tuple[Path, ...]:
@@ -148,6 +211,9 @@ class PywinautoDesktopActions:
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         poll_interval: float = POLL_INTERVAL_SECONDS,
+        is_visible: Callable[[Any], bool] | None = None,
+        has_owner: Callable[[Any], bool] | None = None,
+        process_alive: Callable[[int], bool] | None = None,
     ) -> None:
         self._desktop_factory = desktop_factory or self._default_desktop
         self._registry = registry or WindowsApplicationRegistry()
@@ -155,6 +221,9 @@ class PywinautoDesktopActions:
         self._sleep = sleep
         self._clock = clock
         self._poll_interval = poll_interval
+        self._is_visible = is_visible or _default_is_visible
+        self._has_owner = has_owner or _default_has_owner
+        self._process_alive = process_alive or _default_process_alive
         #: application name -> pid of exactly the process this run launched.
         self._launched_processes: dict[str, int] = {}
 
@@ -246,11 +315,14 @@ class PywinautoDesktopActions:
     # ---------------------------------------------------------------- close
 
     def close_application(self, target_json: str) -> StepResult:
-        """Close windows of exactly the process this run launched by name.
+        """Close the application this run launched, by its exact process id.
 
-        Fail-closed: without a registered launch in this same run nothing is
-        closed, and only top-level windows whose process id matches the
-        registered one are touched, one at a time, within the step bound.
+        Bounded and truthful: the step waits for a visible top-level window of
+        the recorded pid to appear before asking anything to close, ignores
+        hidden and owned windows, and reports success only when that pid has
+        exited or has no visible top-level window left. A window that never
+        appears, or ignores the close request, is a failure, never a silent
+        success. Without a launch recorded in this run nothing is closed.
         """
         target = _load_parsed(target_json, "close")
         application = target.get("application")
@@ -271,37 +343,59 @@ class PywinautoDesktopActions:
                 ),
                 evidence=("registered=false",),
             )
+        if application.strip().lower() in LAUNCH_ONLY_APPLICATIONS:
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=(
+                    "Close is not supported for Chrome yet, so Once left it open. "
+                    "Quit Chrome yourself when you are finished."
+                ),
+                evidence=(f"process_id={pid}", "close_supported=false"),
+            )
         deadline = self._clock() + CLOSE_TIMEOUT_SECONDS
         closed = 0
+        requested: set[int] = set()
         while True:
-            members = sorted(
-                (
-                    wrapper
-                    for wrapper in self._desktop_factory().windows()
-                    if window_matches(wrapper, {"process_id": pid})
-                ),
-                key=lambda wrapper: (
-                    getattr(getattr(wrapper, "element_info", None), "handle", 0) or 0
-                ),
-            )
-            if not members:
+            if not self._process_alive(pid):
+                if closed == 0:
+                    return StepResult(
+                        step_id="",
+                        status=StepStatus.SUCCEEDED,
+                        message="The application had already exited.",
+                        evidence=(f"process_id={pid}", "exited=true"),
+                    )
                 return StepResult(
                     step_id="",
                     status=StepStatus.SUCCEEDED,
                     message="The application windows were closed.",
-                    evidence=(f"process_id={pid}", f"windows_closed={closed}"),
+                    evidence=(f"process_id={pid}", f"windows_closed={closed}", "exited=true"),
                 )
-            wrapper = members[0]
-            try:
-                wrapper.close()
-            except (AttributeError, OSError, RuntimeError, ValueError) as error:
-                return StepResult(
-                    step_id="",
-                    status=StepStatus.FAILED,
-                    message=f"The application window did not close: {error}",
-                    evidence=(f"process_id={pid}", f"windows_closed={closed}"),
-                )
-            closed += 1
+            visible = self._visible_windows(pid)
+            if not visible:
+                if closed:
+                    return StepResult(
+                        step_id="",
+                        status=StepStatus.SUCCEEDED,
+                        message="The application windows were closed.",
+                        evidence=(f"process_id={pid}", f"windows_closed={closed}", "exited=false"),
+                    )
+                if self._clock() >= deadline:
+                    return StepResult(
+                        step_id="",
+                        status=StepStatus.FAILED,
+                        message=(
+                            "The application window never appeared within "
+                            f"{CLOSE_TIMEOUT_SECONDS:.0f} seconds."
+                        ),
+                        evidence=(
+                            f"process_id={pid}",
+                            "windows_closed=0",
+                            "window_appeared=false",
+                        ),
+                    )
+                self._sleep(self._poll_interval)
+                continue
             if self._clock() >= deadline:
                 return StepResult(
                     step_id="",
@@ -309,9 +403,38 @@ class PywinautoDesktopActions:
                     message=(
                         f"The application did not close within {CLOSE_TIMEOUT_SECONDS:.0f} seconds."
                     ),
-                    evidence=(f"process_id={pid}", f"windows_closed={closed}"),
+                    evidence=(
+                        f"process_id={pid}",
+                        f"windows_closed={closed}",
+                        f"visible_windows_remaining={len(visible)}",
+                    ),
                 )
+            pending = [wrapper for wrapper in visible if _handle_of(wrapper) not in requested]
+            if pending:
+                wrapper = pending[0]
+                requested.add(_handle_of(wrapper))
+                try:
+                    wrapper.close()
+                except (AttributeError, OSError, RuntimeError, ValueError) as error:
+                    return StepResult(
+                        step_id="",
+                        status=StepStatus.FAILED,
+                        message=f"The application window did not close: {error}",
+                        evidence=(f"process_id={pid}", f"windows_closed={closed}"),
+                    )
+                closed += 1
             self._sleep(self._poll_interval)
+
+    def _visible_windows(self, pid: int) -> list[Any]:
+        """Visible, unowned top-level windows of exactly one process id."""
+        found = [
+            wrapper
+            for wrapper in self._desktop_factory().windows()
+            if window_matches(wrapper, {"process_id": pid})
+            and self._is_visible(wrapper)
+            and not self._has_owner(wrapper)
+        ]
+        return sorted(found, key=_handle_of)
 
     # ---------------------------------------------------------------- wait
 

@@ -441,7 +441,7 @@ def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
     process.wait(timeout=10)
 
 
-def close_provider(windows, *, clock=lambda: 0.0) -> PywinautoDesktopActions:
+def close_provider(windows, *, clock=lambda: 0.0, alive=True) -> PywinautoDesktopActions:
     """Provider bound to one fake desktop surface with launch and close access."""
     desktop = FakeDesktop(windows)
     return PywinautoDesktopActions(
@@ -450,6 +450,9 @@ def close_provider(windows, *, clock=lambda: 0.0) -> PywinautoDesktopActions:
         popen=lambda argv: FakeProcess(),
         sleep=lambda _s: None,
         clock=clock,
+        is_visible=lambda wrapper: getattr(wrapper.element_info, "visible", True),
+        has_owner=lambda wrapper: getattr(wrapper.element_info, "owner", False),
+        process_alive=lambda _pid: alive,
     )
 
 
