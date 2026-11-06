@@ -6,9 +6,7 @@ DB = r"C:\Users\DELL\AppData\Local\Once\once.db"
 
 con = sqlite3.connect(DB)
 con.row_factory = sqlite3.Row
-tables = [
-    t["name"] for t in con.execute("SELECT name FROM sqlite_master WHERE type='table'")
-]
+tables = [t["name"] for t in con.execute("SELECT name FROM sqlite_master WHERE type='table'")]
 print("tables:", tables)
 for table in tables:
     try:

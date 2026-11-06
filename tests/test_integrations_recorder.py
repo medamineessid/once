@@ -203,6 +203,9 @@ def test_win32_window_list_requires_windows() -> None:
         pytest.skip("Window capture needs Windows")
     windows = _win32_windows()
     assert all(
-        isinstance(process_name, str) and isinstance(title, str) and title
-        for process_name, title in windows
+        isinstance(process_name, str)
+        and isinstance(title, str)
+        and isinstance(image_path, str)
+        and title
+        for process_name, title, image_path in windows
     )

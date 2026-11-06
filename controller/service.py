@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import atexit
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
 from ai.approval import ApprovedProposal
+from controller.approvals import (
+    ApplicationApprovalStore,
+    ApplicationIdentity,
+    DatabaseApplicationApprovalStore,
+    launch_identities_from_events,
+)
 from engine.acceptance import load_acceptance_cases
 from engine.agent_change import ApprovedChange, ChangeReview, approve_change
 from engine.desktop import DesktopApproval
@@ -37,6 +43,7 @@ from engine.workflow import (
     WorkflowStep,
 )
 from integrations.coding_agent import GitRepository, WorktreeCheckout, run_agent_for_proposal
+from recorder.models import RecordedEvent
 from storage.database import connect
 from storage.history import (
     AgentProposalRecord,
@@ -61,6 +68,7 @@ class WorkflowService:
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
         layout_connection: sqlite3.Connection | None = None,
+        approval_store: ApplicationApprovalStore | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
@@ -92,6 +100,7 @@ class WorkflowService:
         self._history = history
         self._layout_connection = layout_connection
         self._workflow_directory = workflow_directory
+        self._approval_store = approval_store
         self._allowed_root: Path | None = None
         if workflow_directory is not None:
             workflow_directory.mkdir(parents=True, exist_ok=True)
@@ -134,7 +143,39 @@ class WorkflowService:
             history=history,
             workflow_directory=workflow_directory,
             layout_connection=connection,
+            approval_store=DatabaseApplicationApprovalStore(app_data_dir / "once.db"),
         )
+
+    # ------------------------------------------------- application approvals
+
+    def unapproved_application_identities(
+        self, events: Iterable[RecordedEvent]
+    ) -> tuple[ApplicationIdentity, ...]:
+        """Recorded launch identities the user has not approved even once.
+
+        With no approval store configured (tests, legacy flows) nothing is
+        pending, so existing scripts and reviews keep working unchanged.
+        """
+        if self._approval_store is None:
+            return ()
+        pending: list[ApplicationIdentity] = []
+        for identity in launch_identities_from_events(events):
+            if not identity.describes_something():
+                continue
+            if not self._approval_store.is_approved(identity):
+                pending.append(identity)
+        return tuple(pending)
+
+    def approve_application(self, identity: ApplicationIdentity) -> None:
+        """Write one explicit human approval through the abstraction."""
+        if self._approval_store is not None:
+            self._approval_store.approve(identity)
+
+    def is_application_approved(self, identity: ApplicationIdentity) -> bool:
+        """Whether this identity was approved; true when checks are unconfigured."""
+        if self._approval_store is None:
+            return True
+        return self._approval_store.is_approved(identity)
 
     @staticmethod
     def demo_workflow() -> Workflow:
