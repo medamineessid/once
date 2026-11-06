@@ -124,6 +124,20 @@ def connect(path: Path) -> sqlite3.Connection:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS approved_applications (
+            application_key TEXT PRIMARY KEY,
+            executable TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            approved INTEGER NOT NULL DEFAULT 0,
+            close_supported INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL,
+            approved_at TEXT
+        )
+        """
+    )
     columns = {
         row["name"] for row in connection.execute("PRAGMA table_info(workflow_step_results)")
     }

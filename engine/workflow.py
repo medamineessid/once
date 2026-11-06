@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Protocol
 from uuid import uuid4
 
 from .errors import ExecutionError, WorkflowValidationError
@@ -210,12 +211,25 @@ DESKTOP_PROVIDER_KINDS = frozenset(
     }
 )
 
-#:
-#: The browser launch registry is KNOWN_BROWSERS below.
-KNOWN_APPLICATIONS: frozenset[str] = frozenset({"notepad", "vscode", "chrome"})
+@dataclass(frozen=True)
+class ApprovedApplication:
+    """One application the user approved, identified by its executable path.
 
-#: Browser names the isolated-browser launch action may use via the registry.
-KNOWN_BROWSERS: frozenset[str] = frozenset({"chrome"})
+    The record comes from the approved-application registry in storage, so this
+    module knows no application name, install location, or executable.
+    """
+
+    executable: Path
+    sha256: str
+    display_name: str
+    approved: bool
+    close_supported: bool = True
+
+
+class ApplicationApprovals(Protocol):
+    """Read-only view of the approved-application registry (storage-backed)."""
+
+    def find(self, executable: Path) -> ApprovedApplication | None: ...
 
 
 class DesktopActions:
@@ -377,72 +391,45 @@ def _require_bounded_string(step: WorkflowStep, container: object, field: str) -
     return value
 
 
+def _validate_executable_path(step: WorkflowStep, value: object, what: str) -> Path:
+    """Validate one absolute .exe path, which a recording supplies instead of a name."""
+    if not isinstance(value, str) or not value.strip():
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs the executable path of the application to {what}."
+        )
+    if len(value) > 260:
+        raise WorkflowValidationError(f"Step {step.step_id} executable path is too long.")
+    path = Path(value)
+    if not path.is_absolute():
+        raise WorkflowValidationError(f"Step {step.step_id} executable must be an absolute path.")
+    if path.suffix.lower() != ".exe":
+        raise WorkflowValidationError(f"Step {step.step_id} executable must be a .exe application.")
+    if any(part == ".." for part in path.parts):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} executable path must not traverse parent folders."
+        )
+    return path
+
+
 def _validate_close_target(step: WorkflowStep) -> None:
-    """Closing is registry-directed only: windows of an application this run launched."""
+    """Closing is process-directed only: the pid of the executable this run launched."""
     target = _load_target(step, step.target)
-    unknown = set(target) - {"application"}
+    unknown = set(target) - {"executable"}
     if unknown:
         raise WorkflowValidationError(
             f"Step {step.step_id} has unknown close fields: {', '.join(sorted(unknown))}."
         )
-    application = target.get("application")
-    if not isinstance(application, str) or not application.strip():
-        raise WorkflowValidationError(
-            f"Step {step.step_id} needs exactly one allow-listed application name to close."
-        )
-    if len(application) > 64 or application.lower() not in {
-        name.lower() for name in KNOWN_APPLICATIONS
-    }:
-        raise WorkflowValidationError(
-            f"Step {step.step_id} names an application the registry does not allow: {application}."
-        )
+    _validate_executable_path(step, target.get("executable"), "close")
 
 
 def _validate_launch_target(step: WorkflowStep) -> None:
     target = _load_target(step, step.target)
-    unknown = set(target) - {"application", "executable", "arguments"}
+    unknown = set(target) - {"executable", "arguments"}
     if unknown:
         raise WorkflowValidationError(
             f"Step {step.step_id} has unknown launch fields: {', '.join(sorted(unknown))}."
         )
-    application = target.get("application")
-    executable = target.get("executable")
-    if (application is None) == (executable is None):
-        raise WorkflowValidationError(
-            f"Step {step.step_id} needs exactly one of application or executable."
-        )
-    if application is not None:
-        if not isinstance(application, str) or not application.strip():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} application name must be a non-empty string."
-            )
-        if len(application) > 64 or application.lower() not in {
-            name.lower() for name in KNOWN_APPLICATIONS
-        }:
-            raise WorkflowValidationError(
-                f"Step {step.step_id} names an application the registry does not allow: "
-                f"{application}."
-            )
-    else:
-        if not isinstance(executable, str) or not executable.strip():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} executable must be a non-empty string."
-            )
-        if len(executable) > 260:
-            raise WorkflowValidationError(f"Step {step.step_id} executable path is too long.")
-        executable_path = Path(executable)
-        if not executable_path.is_absolute():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} executable must be an absolute path."
-            )
-        if executable_path.suffix.lower() != ".exe":
-            raise WorkflowValidationError(
-                f"Step {step.step_id} executable must be a .exe application."
-            )
-        if any(part == ".." for part in executable_path.parts):
-            raise WorkflowValidationError(
-                f"Step {step.step_id} executable path must not traverse parent folders."
-            )
+    _validate_executable_path(step, target.get("executable"), "launch")
     arguments = target.get("arguments", [])
     if not isinstance(arguments, list) or len(arguments) > MAX_ARGUMENT_COUNT:
         raise WorkflowValidationError(
@@ -483,54 +470,16 @@ def _validate_browser_target(target: object, step: WorkflowStep) -> dict:
 
 def _validate_launch_browser_target(step: WorkflowStep) -> None:
     target = _load_target(step, step.target)
-    unknown = set(target) - {"application", "executable", "headed"}
+    unknown = set(target) - {"executable", "headed"}
     if unknown:
         raise WorkflowValidationError(
             f"Step {step.step_id} has unknown browser launch fields: {', '.join(sorted(unknown))}."
         )
     if "headed" in target and not isinstance(target["headed"], bool):
         raise WorkflowValidationError(f"Step {step.step_id} headed must be true or false.")
-    application, executable = target.get("application"), target.get("executable")
-    if (application is None) == (executable is None):
-        raise WorkflowValidationError(
-            f"Step {step.step_id} needs exactly one of application or executable."
-        )
-    if application is not None:
-        if not isinstance(application, str) or not application.strip():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser application name must be a non-empty string."
-            )
-        if application.lower() not in {name.lower() for name in KNOWN_BROWSERS}:
-            raise WorkflowValidationError(
-                f"Step {step.step_id} names a browser the registry does not allow: {application}."
-            )
-    else:
-        if not isinstance(executable, str) or not executable.strip():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser executable must be a non-empty string."
-            )
-        if len(executable) > 260:
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser executable path is too long."
-            )
-        executable_path = Path(executable)
-        if not executable_path.is_absolute() or executable_path.suffix.lower() != ".exe":
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser executable must be an absolute .exe path."
-            )
-        if any(part == ".." for part in executable_path.parts):
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser executable must not traverse parent folders."
-            )
-        if not _executable_name_is_chrome(executable):
-            raise WorkflowValidationError(
-                f"Step {step.step_id} launches a browser other than the registered "
-                "Chrome; only Chrome is supported."
-            )
-
-
-def _executable_name_is_chrome(executable: str) -> bool:
-    return Path(executable).name.lower() == "chrome.exe"
+    # Which browser this is (and whether it may be driven) belongs to the
+    # browser provider that owns it, never to a name check in the engine.
+    _validate_executable_path(step, target.get("executable"), "launch")
 
 
 def _validate_page_url(value: object, step: WorkflowStep) -> str:

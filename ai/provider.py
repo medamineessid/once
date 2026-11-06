@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Protocol
 
 from engine.errors import AIProviderError, WorkflowValidationError
@@ -101,64 +102,56 @@ def deterministic_recording_provider() -> AnalysisProvider:
     return RecordingProvider()
 
 
-#: Recorded process names the engine's application registry knows, keyed
-#: case-insensitively. Unknown processes stay review-only observations.
-PROCESS_TO_APPLICATION: dict[str, str] = {
-    "code.exe": "vscode",
-    "notepad.exe": "notepad",
-    "chrome.exe": "chrome",
-}
+def _recorded_executable(action: RawDraftAction) -> str | None:
+    """The executable path the recording captured for this action, if it has one.
+
+    The recording is the only source of application identity: Once never maps a
+    process name to an application it happens to know. Without a recorded path
+    the observation is kept for review and no launch or close is proposed.
+    """
+    recorded = getattr(action, "executable", None)
+    if isinstance(recorded, str) and recorded.strip():
+        return recorded.strip()
+    return None
 
 
 def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> WorkflowStep:
     """Turn one observation into a validated engine step deterministically."""
     step_id = f"observation-{action.sequence}"
     name = f"Observation {index}"
-    if action.source_event is RecordedEventKind.WINDOW_OPEN:
-        application = _application_for_process(action.process_name)
-        if application is not None and application not in launched:
-            launched.add(application)
+    executable = _recorded_executable(action)
+    if action.source_event is RecordedEventKind.WINDOW_OPEN and executable is not None:
+        if executable not in launched:
+            launched.add(executable)
             return WorkflowStep(
                 step_id,
                 name,
                 StepKind.LAUNCH_APPLICATION,
-                f"Launch {application}.",
-                target=json.dumps({"application": application}),
+                f"Launch {Path(executable).stem}.",
+                target=json.dumps({"executable": executable}),
             )
-        if application is not None:
-            return WorkflowStep(
-                step_id,
-                name,
-                StepKind.REPORT,
-                f"{action.description} The application is already part of this draft.",
-            )
-        return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
-    if action.source_event is RecordedEventKind.WINDOW_CLOSE:
-        application = _application_for_process(action.process_name)
-        if application is not None and application in launched:
+        return WorkflowStep(
+            step_id,
+            name,
+            StepKind.REPORT,
+            f"{action.description} The application is already part of this draft.",
+        )
+    if action.source_event is RecordedEventKind.WINDOW_CLOSE and executable is not None:
+        if executable in launched:
             return WorkflowStep(
                 step_id,
                 name,
                 StepKind.CLOSE_APPLICATION,
-                f"Close {application}.",
-                target=json.dumps({"application": application}),
+                f"Close {Path(executable).stem}.",
+                target=json.dumps({"executable": executable}),
             )
-        if application is not None:
-            return WorkflowStep(
-                step_id,
-                name,
-                StepKind.REPORT,
-                (
-                    f"{action.description} This draft does not launch "
-                    f"{application}, so nothing is allowed to close it."
-                ),
-            )
-        return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
+        return WorkflowStep(
+            step_id,
+            name,
+            StepKind.REPORT,
+            (
+                f"{action.description} This draft does not launch "
+                f"{Path(executable).stem}, so nothing is allowed to close it."
+            ),
+        )
     return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
-
-
-def _application_for_process(process_name: str | None) -> str | None:
-    """Map a recorded process name to an allow-listed application name."""
-    if not process_name:
-        return None
-    return PROCESS_TO_APPLICATION.get(process_name.strip().lower())
