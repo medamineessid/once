@@ -1,15 +1,13 @@
-"""Decisive probe: does the real provider close path work on charmap live?
+"""Decisive probe: does the real provider close path work on calc live?
 
 Reproduces launch_application -> close_application with the actual
 PywinautoDesktopActions (uia backend), and separately checks
-window_matches under uia for the launched pid.
-"""
+window_matches under uia for the launched pid."""
 
 from __future__ import annotations
 
 import sys
 import time
-from pathlib import Path
 
 sys.path.insert(0, r"C:\Users\DELL\once")
 
@@ -20,7 +18,7 @@ from integrations.windows_desktop import PywinautoDesktopActions
 
 provider = PywinautoDesktopActions()
 print("launching via provider.launch_application...")
-result = provider.launch_application(json.dumps({"application": "charmap"}))
+result = provider.launch_application(json.dumps({"application": "calc"}))
 print("launch:", result.status.value, list(result.evidence))
 pid = None
 for evidence in result.evidence:
@@ -40,7 +38,7 @@ for wrapper in _D(backend="uia").windows():
 print("window_matches hits:", matched)
 
 print("close via provider.close_application...")
-close = provider.close_application(json.dumps({"application": "charmap"}))
+close = provider.close_application(json.dumps({"application": "calc"}))
 print("close:", close.status.value, close.message[:80], list(close.evidence))
 
 check = subprocess_run = __import__("subprocess").run(

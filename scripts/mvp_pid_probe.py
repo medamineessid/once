@@ -19,7 +19,7 @@ for wrapper in windows:
         pid = info.process_id
         if pid == proc.pid:
             found.append(info.name[:40])
-    except Exception:  # noqa: BLE001 - diagnostic probe only
+    except Exception:
         continue
 print("launched pid:", proc.pid)
 print("top-level windows whose pid == launched pid:", found)

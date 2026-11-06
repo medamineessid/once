@@ -6,13 +6,14 @@ import json
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 sys.path.insert(0, r"C:\Users\DELL\once")
 
-from pywinauto import Desktop  # noqa: E402
-from integrations.uia_targeting import window_matches  # noqa: E402
-from integrations.windows_desktop import PywinautoDesktopActions  # noqa: E402
+from pywinauto import Desktop
+
+from integrations.uia_targeting import window_matches
+from integrations.windows_desktop import PywinautoDesktopActions
+
 
 def kill(pid: int) -> None:
     subprocess.run(["taskkill", "/PID", str(pid)], capture_output=True)
@@ -31,12 +32,10 @@ def first_hit(pid: int, backend: str, budget: float = 12.0) -> float:
 
 # Phase 1: provider-direct launch then IMMEDIATE close (no settle).
 provider = PywinautoDesktopActions()
-result = provider.launch_application(json.dumps({"application": "charmap"}))
-pid1 = int(
-    next(e.split("=", 1)[1] for e in result.evidence if e.startswith("process_id="))
-)
+result = provider.launch_application(json.dumps({"application": "calc"}))
+pid1 = int(next(e.split("=", 1)[1] for e in result.evidence if e.startswith("process_id=")))
 print(f"phase1: launch pid {pid1}; closing IMMEDIATELY...")
-close = provider.close_application(json.dumps({"application": "charmap"}))
+close = provider.close_application(json.dumps({"application": "calc"}))
 print("phase1 close:", close.status.value, list(close.evidence))
 if close.status.value != "SUCCEEDED":
     hit = first_hit(pid1, "uia")
@@ -48,10 +47,8 @@ if close.status.value != "SUCCEEDED":
 kill(pid1)
 
 # Phase 2: measure uia latency curve for a fresh instance (windows polled until seen).
-result = provider.launch_application(json.dumps({"application": "charmap"}))
-pid2 = int(
-    next(e.split("=", 1)[1] for e in result.evidence if e.startswith("process_id="))
-)
+result = provider.launch_application(json.dumps({"application": "calc"}))
+pid2 = int(next(e.split("=", 1)[1] for e in result.evidence if e.startswith("process_id=")))
 print(f"phase2: fresh launch pid {pid2}; polling uia every 0.25s from t=0...")
 t0 = time.monotonic()
 seen_at = None

@@ -20,9 +20,9 @@ for r in rows:
         " WHERE run_id=? ORDER BY position",
         (r["run_id"],),
     ).fetchall()
-    step_text = " ; ".join(
-        "{sid}:{st}".format(sid=s["step_id"], st=s["status"]) for s in steps
-    )[:110]
+    step_text = " ; ".join("{sid}:{st}".format(sid=s["step_id"], st=s["status"]) for s in steps)[
+        :110
+    ]
     print(
         r["workflow_id"][:40].ljust(42),
         r["status"].ljust(18),

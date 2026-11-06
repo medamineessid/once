@@ -441,9 +441,7 @@ def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
     process.wait(timeout=10)
 
 
-def close_provider(
-    windows, *, clock=lambda: 0.0, process_running=None
-) -> PywinautoDesktopActions:
+def close_provider(windows, *, clock=lambda: 0.0, process_running=None) -> PywinautoDesktopActions:
     """Provider bound to one fake desktop surface with launch and close access."""
     desktop = FakeDesktop(windows)
     optional: dict[str, object] = {}

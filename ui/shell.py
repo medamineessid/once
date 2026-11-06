@@ -515,6 +515,9 @@ class MainWindow(QMainWindow):
             )
             return
         self.review_page.load_proposal(proposal)
+        self.review_page.set_application_identities(
+            self._service.unapproved_application_identities(recording.events)
+        )
         self._show_page(ShellPages.REVIEW)
 
     def _open_approved_draft(self, workflow: Workflow) -> None:

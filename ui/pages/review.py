@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from ai.approval import approve_proposal, preview_proposal
 from ai.models import ProviderDraft
+from controller.approvals import ApplicationIdentity
 from controller.service import WorkflowService
 from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
@@ -47,6 +48,7 @@ class ReviewPage(QWidget):
         self._proposal: ProviderDraft | None = None
         self._saved_workflow: Workflow | None = None
         self._steps_list: QListWidget | None = None
+        self._pending_identities: tuple[ApplicationIdentity, ...] = ()
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -62,6 +64,25 @@ class ReviewPage(QWidget):
         self._goal_label = QLabel("No proposal loaded.", self)
         self._goal_label.setObjectName("goalLabel")
         layout.addWidget(self._goal_label, alignment=Qt.AlignHCenter)
+        self._applications_container = QFrame(self)
+        applications_layout = QVBoxLayout(self._applications_container)
+        applications_layout.setContentsMargins(0, 0, 0, 0)
+        applications_layout.setSpacing(SPACING_SM)
+        self._applications_label = QLabel("This task opens:", self._applications_container)
+        actions_row = QHBoxLayout()
+        actions_row.setSpacing(SPACING_SM)
+        self._approve_applications = QPushButton(
+            "Approve to open it with Once (one-time)", self._applications_container
+        )
+        self._approve_applications.setObjectName("secondaryActionButton")
+        self._approve_applications.setMinimumHeight(34)
+        self._approve_applications.clicked.connect(self._approve_applications_once)
+        actions_row.addStretch(1)
+        actions_row.addWidget(self._approve_applications)
+        applications_layout.addWidget(self._applications_label)
+        applications_layout.addLayout(actions_row)
+        self._applications_container.hide()
+        layout.addWidget(self._applications_container, alignment=Qt.AlignHCenter)
         self._steps_list = QListWidget(self)
         self._steps_list.setObjectName("stepsList")
         self._steps_list.setAlternatingRowColors(True)
@@ -108,7 +129,51 @@ class ReviewPage(QWidget):
 
     def _update_action_visibility(self) -> None:
         ready = self._service is not None and self._proposal is not None
-        self._approve_button.setVisible(ready)
+        self._approve_button.setVisible(ready and not self._pending_identities)
+        self._applications_container.setVisible(ready and bool(self._pending_identities))
+
+    def set_application_identities(
+        self, pending: tuple[ApplicationIdentity, ...]
+    ) -> None:
+        """Show which recorded applications still need a one-time approval."""
+        self._pending_identities = tuple(pending)
+        entries = []
+        for identity in self._pending_identities:
+            path = identity.executable_path or "unknown path"
+            entries.append(f"{identity.display_name}  —  {path}")
+        listed = "\n".join(entries) if entries else "unknown application"
+        self._applications_label.setText(f"This task opens:\n{listed}")
+        self._update_action_visibility()
+
+    def application_summary(self, pending: tuple[ApplicationIdentity, ...]) -> str:
+        """One-line plain-language summary of the apps the recording opened.
+
+        Used by the shell and tests to render "This task opens <name>, <path>"
+        from the recorded identity, never from a hardcoded app-name table.
+        """
+        if not pending:
+            return "This task opens: (already approved)"
+        parts = []
+        for identity in pending:
+            name = identity.display_name
+            path = identity.executable_path or "unknown path"
+            parts.append(f"{name}, {path}")
+        joined = "; ".join(parts)
+        return f"This task opens {joined}."
+
+    def set_application_summary(self, summary: str) -> None:
+        """Update the applications label with a pre-rendered summary line."""
+        self._applications_label.setText(summary)
+        self._update_action_visibility()
+
+    def _approve_applications_once(self) -> None:
+        if self._service is None or not self._pending_identities:
+            return
+        for identity in self._pending_identities:
+            self._service.approve_application(identity)
+        self._pending_identities = ()
+        self._applications_label.setText(self.application_summary(()))
+        self._update_action_visibility()
 
     def _cancel_review(self) -> None:
         self.cancelled.emit()
@@ -119,6 +184,19 @@ class ReviewPage(QWidget):
 
     def _approve(self) -> None:
         if self._service is None or self._proposal is None:
+            return
+        unapproved = tuple(
+            identity
+            for identity in self._pending_identities
+            if not self._service.is_application_approved(identity)
+        )
+        if self._pending_identities or unapproved:
+            self._banner.show_message(
+                SEVERITY_ERROR,
+                "One-time approval needed",
+                "Approve the application this task opens before saving it.",
+            )
+            self._update_action_visibility()
             return
         try:
             approved = approve_proposal(self._proposal)
@@ -137,6 +215,7 @@ class ReviewPage(QWidget):
         """Show an opened saved workflow for read-only review, like the old window."""
         self._proposal = None
         self._saved_workflow = workflow
+        self._pending_identities = ()
         # The opened-workflow mode is "Automation details", not a review: the
         # user is looking at a saved automation (UX audit D14).
         self._title_label.setText(REVIEW_TITLE_SAVED)
@@ -159,6 +238,7 @@ class ReviewPage(QWidget):
 
     def load_proposal(self, proposal: ProviderDraft | None) -> None:
         self._saved_workflow = None
+        self._pending_identities = ()
         self._edit_button.hide()
         self._title_label.setText(REVIEW_TITLE_DRAFT)
         self._canvas.set_workflow(None)

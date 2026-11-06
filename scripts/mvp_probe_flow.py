@@ -1,12 +1,11 @@
 """Live MVP probe: record a real task, review, save, run - and verify the run
-really performed the actions (replay-target: charmap.exe, a classic app whose
+really performed the actions (replay-target: calc.exe, a classic app whose
 launched pid owns its own windows).
 
 Real Windows: pynput global hooks + Win32 window monitor capture events while
-Character Map is actually launched and closed. Then the recorded draft follows
+Calculator is actually launched and closed. Then the recorded draft follows
 the same controller path the UI uses (analyze -> approve -> save -> run via the
-desktop approval gate). No network. Isolated app-data directory.
-"""
+desktop approval gate). No network. Isolated app-data directory."""
 
 from __future__ import annotations
 
@@ -32,17 +31,17 @@ recording_service = RecordingService(APPDATA / "recordings")
 recording_service.start("mvp-probe-recording")
 print("1) recording started")
 
-charmap = subprocess.Popen(["charmap.exe"], shell=False)
-print("2) charmap launched, pid", charmap.pid)
+calc = subprocess.Popen(["calc.exe"], shell=False)
+print("2) calc launched, pid", calc.pid)
 time.sleep(2.5)
 
-subprocess.run(["taskkill", "/PID", str(charmap.pid)], capture_output=True)
-print("3) charmap close requested, waiting...")
+subprocess.run(["taskkill", "/PID", str(calc.pid)], capture_output=True)
+print("3) calc close requested, waiting...")
 try:
-    charmap.wait(timeout=5)
+    calc.wait(timeout=5)
 except subprocess.TimeoutExpired:
-    subprocess.run(["taskkill", "/PID", str(charmap.pid), "/F"], capture_output=True)
-    charmap.wait(timeout=5)
+    subprocess.run(["taskkill", "/PID", str(calc.pid), "/F"], capture_output=True)
+    calc.wait(timeout=5)
 time.sleep(1.0)
 
 recording = recording_service.stop()
@@ -92,9 +91,7 @@ print("9) history rows:", len(service.history()))
 # Post-run truth: the launch the RUN performed must really be gone on close.
 if run.status.value == "SUCCEEDED":
     assert pid_seen is not None, "run did not report the launched pid"
-    assert windows_closed >= 1, (
-        f"PROBE FAILURE: windows_closed={windows_closed}, expected >= 1"
-    )
+    assert windows_closed >= 1, f"PROBE FAILURE: windows_closed={windows_closed}, expected >= 1"
     # A closed window exits its process shortly after (proven on this machine):
     # allow a small exit window rather than testing mid-exit.
     for _ in range(6):

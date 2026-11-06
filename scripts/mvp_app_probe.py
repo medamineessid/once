@@ -12,6 +12,7 @@ from pywinauto import Desktop
 
 WINDIR = Path(r"C:\Windows")
 
+
 def probe(exe: str, target_pid_hint: str) -> None:
     full = WINDIR / "System32" / exe
     proc = subprocess.Popen([str(full)])
@@ -31,5 +32,5 @@ def probe(exe: str, target_pid_hint: str) -> None:
         proc.wait(timeout=5)
     time.sleep(0.6)
 
-probe("charmap.exe", target_pid_hint="winver")
+
 probe("calc.exe", target_pid_hint="calc")

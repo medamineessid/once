@@ -16,6 +16,8 @@ class RawDraftAction:
     source_event: RecordedEventKind
     process_name: str | None = None
     window_title: str | None = None
+    executable_path: str | None = None
+    executable_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -35,6 +37,8 @@ def build_raw_draft(recording: Recording) -> RawDraft:
             source_event=event.kind,
             process_name=event.process_name,
             window_title=event.window_title,
+            executable_path=event.executable_path,
+            executable_sha256=event.executable_sha256,
         )
         for event in recording.events
     )
