@@ -107,7 +107,6 @@ PROCESS_TO_APPLICATION: dict[str, str] = {
     "code.exe": "vscode",
     "notepad.exe": "notepad",
     "chrome.exe": "chrome",
-    "charmap.exe": "charmap",
 }
 
 

@@ -6,7 +6,7 @@ import json
 
 from ai.models import AnalysisRequest, ProviderDraft
 from ai.provider import deterministic_recording_provider
-from engine.workflow import StepKind, WorkflowRunner
+from engine.workflow import StepKind
 from recorder.drafts import RawDraft, RawDraftAction
 from recorder.models import RecordedEventKind
 
@@ -61,37 +61,6 @@ def test_window_observations_map_to_launch_and_close_steps() -> None:
     assert kinds == [StepKind.LAUNCH_APPLICATION, StepKind.CLOSE_APPLICATION]
     assert json.loads(targets[0]) == {"application": "vscode"}
     assert json.loads(targets[1]) == {"application": "vscode"}
-
-
-def test_charmap_window_observations_map_to_launch_and_close_steps() -> None:
-    """Classic unpackaged apps like charmap give a launch pid that owns its windows."""
-    draft = _draft(
-        (
-            RawDraftAction(
-                1,
-                "A charmap.exe window opened: Table des caractères.",
-                RecordedEventKind.WINDOW_OPEN,
-                process_name="charmap.exe",
-                window_title="Table des caractères",
-            ),
-            RawDraftAction(
-                2,
-                "The charmap.exe window closed: Table des caractères.",
-                RecordedEventKind.WINDOW_CLOSE,
-                process_name="charmap.exe",
-                window_title="Table des caractères",
-            ),
-        )
-    )
-
-    proposal = deterministic_recording_provider().analyze(AnalysisRequest(draft))
-
-    kinds = [step.kind for step in proposal.workflow.steps]
-    targets = [step.target for step in proposal.workflow.steps]
-    assert kinds == [StepKind.LAUNCH_APPLICATION, StepKind.CLOSE_APPLICATION]
-    assert json.loads(targets[0]) == {"application": "charmap"}
-    assert json.loads(targets[1]) == {"application": "charmap"}
-    WorkflowRunner.validate(proposal.workflow)
 
 
 def test_unknown_processes_stay_report_observations() -> None:
