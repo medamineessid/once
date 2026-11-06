@@ -23,6 +23,7 @@ from ui.shell import MainWindow as ShellMainWindow
 
 SMOKE_TEST_FLAG = "--smoke-test"
 SHELL_FLAG = "--shell"
+CLASSIC_FLAG = "--classic"
 
 
 def setup_logging(app_data_dir: Path) -> Path:
@@ -58,24 +59,42 @@ def build_application(argv: list[str] | None = None) -> QApplication:
     return QApplication(argv if argv is not None else sys.argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Run Once and return the process exit code."""
-    args = list(sys.argv[1:] if argv is None else argv)
+def _app_data_dir() -> Path:
+    """The session's application data directory (never edited by tests here)."""
+    return Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Once"
+
+
+def build_window(
+    args: list[str],
+) -> tuple[QApplication, MainWindow, WorkflowService, RecordingService]:
+    """Build the real application window exactly as the entry point wires it.
+
+    Returns the Qt application, the window, and the two services behind the
+    UI so callers (tests without an event loop) can drive and shut them down.
+    Raises on failure exactly like the inline path used to, for main() to
+    turn into a plain-language message.
+    """
     smoke_test = SMOKE_TEST_FLAG in args
     use_shell = SHELL_FLAG in args
-    qt_args = [sys.argv[0], *(arg for arg in args if arg not in (SMOKE_TEST_FLAG, SHELL_FLAG))]
+    qt_args = [
+        sys.argv[0],
+        *(arg for arg in args if arg not in (SMOKE_TEST_FLAG, SHELL_FLAG, CLASSIC_FLAG)),
+    ]
 
     app = build_application(qt_args)
-    app_data_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "Once"
+    app_data_dir = _app_data_dir()
+    setup_logging(app_data_dir)
+    logging.getLogger(__name__).info(
+        "Once started (smoke_test=%s, shell=%s)", smoke_test, use_shell
+    )
+    service = WorkflowService.for_app_data(app_data_dir)
     try:
-        setup_logging(app_data_dir)
-        logging.getLogger(__name__).info(
-            "Once started (smoke_test=%s, shell=%s)", smoke_test, use_shell
-        )
-        service = WorkflowService.for_app_data(app_data_dir)
         recording_service = RecordingService(app_data_dir / "recordings")
         verifier_config, verifier_note = _load_verifier_setup(app_data_dir)
-        window_cls = ShellMainWindow if use_shell else MainWindow
+        # Default to the redesigned shell (Slice 8 CHECKPOINT 2 lifted by
+        # explicit user request on 2026-11-02); the legacy window remains
+        # reachable explicitly via --classic for one release cycle.
+        window_cls = MainWindow if CLASSIC_FLAG in args else ShellMainWindow
         window = window_cls(
             service,
             recording_service,
@@ -83,6 +102,22 @@ def main(argv: list[str] | None = None) -> int:
             verifier_note=verifier_note,
             app_data_dir=app_data_dir,
         )
+    except Exception:
+        # The service opened its database; nothing else started, so close it
+        # before failing upward so main() can explain and exit cleanly.
+        service.close()
+        raise
+    return app, window, service, recording_service
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run Once and return the process exit code."""
+    args = list(sys.argv[1:] if argv is None else argv)
+    smoke_test = SMOKE_TEST_FLAG in args
+    app_data_dir = _app_data_dir()
+
+    try:
+        app, window, service, _recording_service = build_window(args)
     except OSError as error:
         # The app data directory cannot be used (missing, a file instead of a
         # folder, denied). Nothing else can work, so explain it plainly.

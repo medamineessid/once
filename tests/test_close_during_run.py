@@ -11,12 +11,13 @@ from __future__ import annotations
 import time
 from types import SimpleNamespace
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtTest import QTest
 
 from controller.service import WorkflowService
 from engine.workflow import StepKind, Workflow, WorkflowStep
 from ui.shell import MainWindow, ShellPages
+from ui.workers import WorkflowWorker, cancel_and_join
 
 
 def slow_run_factory(recorder: list[str]):
@@ -59,7 +60,7 @@ def test_close_during_demo_cancels_and_joins_thread(qtbot, tmp_path, monkeypatch
     recorder: list[str] = []
     monkeypatch.setattr(window._service, "run_workflow", slow_run_factory(recorder))
 
-    QTest.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
     qtbot.waitUntil(lambda: window.status_footer.state == "Running…", timeout=5000)
 
     window.close()
@@ -96,6 +97,29 @@ def test_close_during_automation_run_cancels_and_joins_thread(qtbot, tmp_path, m
     assert window.isVisible() is False
 
 
+def test_close_after_cancel_request_is_safe(qtbot, tmp_path, monkeypatch):
+    service = WorkflowService.for_app_data(tmp_path / "appdata")
+    service.save(_saved_workflow())
+    window = MainWindow(service=service)
+    qtbot.addWidget(window)
+    window.show()
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+    monkeypatch.setattr(service, "run_workflow", slow_run_factory([]))
+
+    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: page._thread is not None, timeout=5000)
+    page._worker.cancel()
+    page._worker.cancel()
+    window.close()
+
+    assert page._thread is None
+    assert page._worker is None
+
+
 def test_close_with_no_run_is_harmless(qtbot, tmp_path):
     """Close without any run must not touch threads or fail."""
     window = MainWindow(service=WorkflowService.for_app_data(tmp_path / "appdata"))
@@ -108,3 +132,25 @@ def test_close_with_no_run_is_harmless(qtbot, tmp_path):
     assert window._demo_thread is None
     assert window.my_automations_page._thread is None
     assert window.isVisible() is False
+
+
+def test_cancel_and_join_detaches_worker_that_ignores_cancel(qtbot, monkeypatch):
+    """A stuck worker is detached rather than destroying a running QThread."""
+
+    class IgnoringThread(QThread):
+        def run(self) -> None:
+            time.sleep(0.1)
+
+    class IgnoringWorker:
+        def cancel(self) -> None:
+            return None
+
+    thread = IgnoringThread()
+    worker = IgnoringWorker()
+    monkeypatch.setattr(WorkflowWorker, "THREAD_JOIN_TIMEOUT_MS", 1)
+
+    thread.start()
+    qtbot.waitUntil(thread.isRunning, timeout=1000)
+    assert cancel_and_join(thread, worker) is False
+    assert thread.parent() is None
+    assert thread.wait(1000)

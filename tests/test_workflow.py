@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.errors import WorkflowValidationError
 from engine.workflow import (
     PostconditionKind,
     StepKind,
@@ -40,6 +41,31 @@ def test_workflow_runner_records_reported_steps_as_observations() -> None:
         StepStatus.OBSERVED,
         StepStatus.OBSERVED,
     ]
+
+
+def test_workflow_rejects_more_than_the_bounded_step_limit() -> None:
+    workflow = make_workflow(*([StepKind.REPORT] * 101))
+
+    with pytest.raises(WorkflowValidationError, match="more than 100 steps"):
+        WorkflowRunner.validate(workflow)
+
+
+def test_workflow_rejects_overlong_step_names() -> None:
+    workflow = Workflow(
+        "long-name",
+        "Valid name",
+        (
+            WorkflowStep(
+                "step-1",
+                "x" * 501,
+                StepKind.REPORT,
+                "Message",
+            ),
+        ),
+    )
+
+    with pytest.raises(WorkflowValidationError, match="text that is too long"):
+        WorkflowRunner.validate(workflow)
 
 
 def test_workflow_runner_reports_progress_for_completed_steps() -> None:

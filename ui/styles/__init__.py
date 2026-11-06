@@ -49,7 +49,10 @@ ACCENT_SOFT = "#EEF2FF"
 PRIMARY_BTN = "#111827"
 TEXT_STRONG = "#1D2733"
 TEXT_BODY = "#525A66"
-TEXT_FAINT = "#6B7280"
+TEXT_FAINT = "#525A66"
+TEXT_SIDEBAR = "#3A3A3A"
+TEXT_SIDEBAR_HOVER = "#1D1D1D"
+SIDEBAR_HOVER_BG = "#7E57C2"
 STATUS_OK = "#15803D"
 STATUS_ERROR = "#B91C1C"
 STATUS_WARNING = "#92400E"
@@ -68,8 +71,9 @@ CONTRAST_PAIRS = (
     ("faint on card", TEXT_FAINT, "#FFFFFF"),
     ("body on app", TEXT_BODY, BG_APP),
     ("body on accent tint", TEXT_BODY, ACCENT_SOFT),
-    ("accent text on card", ACCENT_TEXT, "#FFFFFF"),
-    ("accent text on app", ACCENT_TEXT, BG_APP),
+    ("sidebar text on sidebar", TEXT_SIDEBAR, SURFACE),
+    ("sidebar hover text on card", TEXT_SIDEBAR_HOVER, SURFACE),
+    ("sidebar hover bg vs card", SIDEBAR_HOVER_BG, SURFACE_ALT),
     ("button text on primary", "#FFFFFF", PRIMARY_BTN),
     ("status ok text", STATUS_OK, "#FFFFFF"),
     ("status error text", STATUS_ERROR, "#FFFFFF"),
@@ -124,6 +128,9 @@ def _set_stylesheet(app):
         "TEXT_BODY": TEXT_BODY,
         "TEXT_FAINT": TEXT_FAINT,
         "STATUS_OK": STATUS_OK,
+        "TEXT_SIDEBAR": TEXT_SIDEBAR,
+        "TEXT_SIDEBAR_HOVER": TEXT_SIDEBAR_HOVER,
+        "SIDEBAR_HOVER_BG": SIDEBAR_HOVER_BG,
         "STATUS_ERROR": STATUS_ERROR,
         "STATUS_WARNING": STATUS_WARNING,
         "TINT_ACTION": TINT_ACTION,
@@ -196,7 +203,7 @@ _STYLESHEET_TEMPLATE = Template("""
     QToolButton#sidebarActivityButton:hover,
     QToolButton#sidebarSettingsButton:hover,
     QToolButton#sidebarCreateButton:hover {
-        background: #F3F4F6;
+        background: #E1D8F7;
         color: #1D1D1D;
     }
     QToolButton#sidebarHomeButton:focus,
@@ -204,17 +211,18 @@ _STYLESHEET_TEMPLATE = Template("""
     QToolButton#sidebarActivityButton:focus,
     QToolButton#sidebarSettingsButton:focus,
     QToolButton#sidebarCreateButton:focus {
-        font-weight: 600;
+        font-weight: 700;
+        border-left: 3px solid $ACCENT;
     }
     QToolButton#sidebarHomeButton:checked,
     QToolButton#sidebarAutomationsButton:checked,
     QToolButton#sidebarActivityButton:checked,
     QToolButton#sidebarSettingsButton:checked,
     QToolButton#sidebarCreateButton:checked {
-        background: #FFFFFF;
-        border-left: 3px solid $ACCENT;
-        color: #1D1D1D;
-        font-weight: 500;
+        background: $ACCENT_SOFT;
+        border-left: none;
+        color: $ACCENT_TEXT;
+        font-weight: 600;
     }
     QLabel#homeTitle {
         font-size: ${TYPE_HOME_TITLE_PX}px;
@@ -243,16 +251,17 @@ _STYLESHEET_TEMPLATE = Template("""
     }
     QLabel#hintLabel {
         font-size: ${TYPE_CAPTION_PX}px;
-        color: #6B6B6B;
+        color: ${TEXT_FAINT};
     }
     QLabel#activityLabel {
         font-size: ${TYPE_BODY_PX}px;
-        font-weight: 500;
-        color: #3A3A3A;
+        font-weight: 600;
+        color: ${TEXT_STRONG};
     }
     QLabel#activityEmpty {
         font-size: ${TYPE_CAPTION_PX}px;
-        color: #6B6B6B;
+        color: ${TEXT_SIDEBAR};
+        font-weight: 500;
     }
     QLabel#activityItem {
         font-size: ${TYPE_CAPTION_PX}px;
@@ -264,19 +273,19 @@ _STYLESHEET_TEMPLATE = Template("""
     }
     QLabel#goalLabel {
         font-size: ${TYPE_SUBTITLE_PX}px;
-        color: #525252;
+        color: ${TEXT_SIDEBAR};
         margin-top: 4px;
     }
     QLabel#automationDetailsLabel {
         font-size: ${TYPE_CAPTION_PX}px;
-        color: #6B6B6B;
-        border-top: 1px solid #E5E7EB;
+        color: ${TEXT_FAINT};
+        border-top: 1px solid ${BORDER};
         padding-top: 8px;
     }
     QLabel#authorizedLabel,
     QLabel#verifierIntroLabel {
         font-size: ${TYPE_CAPTION_PX}px;
-        color: #525252;
+        color: ${TEXT_SIDEBAR};
     }
     QFrame#actionsPanel {
         background: #FFFFFF;
@@ -320,6 +329,22 @@ _STYLESHEET_TEMPLATE = Template("""
         padding: 6px;
         border: 1px solid #ECECEC;
     }
+    QFrame#approvalPanel {
+        background: ${TINT_ACTION};
+        border: 1px solid #F3C98B;
+        border-radius: 10px;
+    }
+    QLabel#approvalTitle {
+        color: ${TEXT_STRONG};
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 600;
+        font-family: $FONT_STACK;
+    }
+    QLabel#approvalDetails {
+        color: ${TEXT_BODY};
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-family: $FONT_STACK;
+    }
     QFrame#settingsWidget {
         background: #FFFFFF;
         border-radius: 12px;
@@ -331,19 +356,21 @@ _STYLESHEET_TEMPLATE = Template("""
         background: transparent;
     }
     QGroupBox#settingsGroup {
-        border: 1px solid #E5E5E5;
+        border: 1px solid ${BORDER};
         border-radius: 10px;
         margin-top: 8px;
         padding-top: 14px;
         font-size: ${TYPE_BODY_PX}px;
-        font-weight: 500;
-        color: #3A3A3A;
+        font-weight: 600;
+        color: ${TEXT_STRONG};
         font-family: $FONT_STACK;
     }
     QGroupBox#settingsGroup::title {
         subcontrol-origin: margin;
         subcontrol-position: top left;
         padding: 0 6px;
+        font-weight: 700;
+        color: ${TEXT_STRONG};
     }
     QPushButton#primaryActionButton {
         background: $ACCENT;
@@ -477,10 +504,22 @@ _STYLESHEET_TEMPLATE = Template("""
         color: ${TEXT_STRONG};
         font-family: $FONT_STACK;
     }
+    QLabel#cardTitle {
+        font-size: ${TYPE_SUBTITLE_PX}px;
+        font-weight: 700;
+        color: ${TEXT_STRONG};
+        font-family: $FONT_STACK;
+    }
     QLabel#cardBody {
-        font-size: ${TYPE_CAPTION_PX}px;
+        font-size: ${TYPE_BODY_PX}px;
         color: ${TEXT_BODY};
         font-family: $FONT_STACK;
+    }
+    QWidget#erroredRow {
+        background: ${TINT_STOP};
+    }
+    QWidget#erroredRow:focus {
+        background: #FAD4D4;
     }
     QLabel#chip {
         font-size: ${TYPE_CAPTION_PX}px;
@@ -493,14 +532,17 @@ _STYLESHEET_TEMPLATE = Template("""
     QLabel#chip[chipKind="ok"] {
         color: ${STATUS_OK};
         background: ${TINT_VERIFY};
+        font-weight: 600;
     }
     QLabel#chip[chipKind="fail"] {
         color: ${STATUS_ERROR};
         background: ${TINT_STOP};
+        font-weight: 600;
     }
     QLabel#chip[chipKind="warn"] {
         color: ${STATUS_WARNING};
         background: ${TINT_ACTION};
+        font-weight: 600;
     }
     QFrame#banner {
         border-radius: 10px;
@@ -585,12 +627,12 @@ _STYLESHEET_TEMPLATE = Template("""
     }
     QLabel#emptyHeading {
         font-size: ${TYPE_BODY_PX}px;
-        font-weight: 600;
+        font-weight: 700;
         color: ${TEXT_STRONG};
         font-family: $FONT_STACK;
     }
     QLabel#emptyBody {
-        font-size: ${TYPE_CAPTION_PX}px;
+        font-size: ${TYPE_BODY_PX}px;
         color: ${TEXT_BODY};
         font-family: $FONT_STACK;
     }

@@ -19,9 +19,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ai.analyze_recording import analyze_recording
+from ai.models import AnalysisRequest, ProviderDraft
 from controller.recording import RecordingService
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig
+from engine.desktop import DesktopApproval
+from engine.workflow import Workflow
+from recorder.drafts import build_raw_draft
 from ui.components.banner import Banner
 from ui.components.footer import (
     FOOTER_ATTENTION,
@@ -54,6 +59,13 @@ from ui.strings import (
     DEMO_FINISHED_BODY,
     DEMO_FINISHED_TITLE,
     DEMO_STOPPED_TITLE,
+    EDITOR_RUN,
+    EDITOR_RUN_CANCELLED,
+    EDITOR_RUN_FAILED,
+    EDITOR_RUN_OBSERVED,
+    EDITOR_RUN_STARTED,
+    EDITOR_RUN_SUCCEEDED,
+    RECORDING_SAVED_NEXT,
     RUN_CANCELLED_MESSAGE,
     SIDEBAR_ACTIVITY,
     SIDEBAR_AUTOMATIONS,
@@ -149,7 +161,7 @@ class Sidebar(QToolBar):
         ):
             button.setAutoRepeat(False)
         self.addWidget(Spacer())
-        footer = QLabel("Once Assistive Automation")
+        footer = QLabel("Local app")
         footer.setObjectName("sidebarFooter")
         self.addWidget(footer)
 
@@ -189,6 +201,8 @@ class MainWindow(QMainWindow):
         self._app_data_dir = app_data_dir
         self._demo_worker = None
         self._demo_thread: QThread | None = None
+        self._editor_worker: WorkflowWorker | None = None
+        self._editor_thread: QThread | None = None
         apply_theme(self)
         self.sidebar = Sidebar(self)
         self.status_footer = StatusFooter(self)
@@ -212,6 +226,7 @@ class MainWindow(QMainWindow):
         self.my_automations_page.set_service(self._service)
         self.settings_page.set_service(self._service)
         self.editor_page.set_service(self._service)
+        self.review_page.set_service(self._service)
         self.settings_page.configure(
             app_data_dir=self._app_data_dir, verifier_config=self._verifier_config
         )
@@ -245,17 +260,22 @@ class MainWindow(QMainWindow):
         self.sidebar.activityClicked.connect(self._show_page_activity)
         self.sidebar.settingsClicked.connect(self._show_page_settings)
         self._install_page_shortcuts()
-        self.home_page.created_automation.connect(self._show_create_automation)
-        self.home_page.run_demo_requested.connect(self._run_demo_from_home)
+        self.home_page.manual_requested.connect(self._show_editor)
+        self.home_page.record_requested.connect(self._show_recording)
         self.my_automations_page.created_automation.connect(self._show_create_automation)
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)
         self.create_automation_page.editor_requested.connect(self._show_editor)
         self.create_automation_page.record_requested.connect(self._start_recording)
         self.create_automation_page.stop_record_requested.connect(self._stop_recording)
+        self.create_automation_page.cancelled.connect(self._show_page_home)
         self.editor_page.saved.connect(self._editor_saved)
+        self.editor_page.run_requested.connect(self._run_from_editor)
+        self.editor_page.cancel_run_requested.connect(self._cancel_editor_run)
         self.editor_page.cancelled.connect(self._show_create_automation)
         self.review_page.cancelled.connect(self._on_review_cancelled)
+        self.review_page.approved.connect(self._open_approved_draft)
+        self.review_page.edit_requested.connect(self._open_review_workflow_editor)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 
@@ -301,6 +321,12 @@ class MainWindow(QMainWindow):
 
     def _show_create_automation(self) -> None:
         """Enter the create flow through the typed page state, like every page."""
+        self.create_automation_page.show_creation_mode()
+        self._show_page(ShellPages.CREATE)
+
+    def _show_recording(self) -> None:
+        """Enter the dedicated recording flow."""
+        self.create_automation_page.show_recording_mode()
         self._show_page(ShellPages.CREATE)
 
     def _show_editor(self) -> None:
@@ -371,6 +397,74 @@ class MainWindow(QMainWindow):
         self.home_page.refresh()
         self.activity_page.refresh()
 
+    def _run_from_editor(self, workflow: object) -> None:
+        """Run the saved editor definition through the standard worker path."""
+        if self._editor_thread is not None:
+            return
+        self.editor_page.set_running(True)
+        self.editor_page.show_run_message("info", EDITOR_RUN, EDITOR_RUN_STARTED)
+        self.status_footer.set_state(FOOTER_RUNNING)
+        self._editor_thread = QThread(self)
+        approval = workflow if isinstance(workflow, DesktopApproval) else None
+        plain_workflow = approval.workflow if approval is not None else workflow
+        self._editor_worker = WorkflowWorker(
+            self._service,
+            plain_workflow,
+            desktop_approval=approval,
+        )
+        self._editor_worker.moveToThread(self._editor_thread)
+        self._editor_thread.started.connect(self._editor_worker.run)
+        queued = Qt.ConnectionType.QueuedConnection
+        self._editor_worker.progress.connect(self._on_editor_progress, queued)
+        self._editor_worker.finished.connect(self._on_editor_finished, queued)
+        self._editor_worker.failed.connect(self._on_editor_failed, queued)
+        self._editor_worker.finished.connect(self._quit_editor_thread)
+        self._editor_worker.failed.connect(self._quit_editor_thread)
+        self._editor_thread.finished.connect(self._on_editor_thread_finished, queued)
+        self._editor_thread.finished.connect(self._editor_thread.deleteLater)
+        self._editor_thread.start()
+
+    def _on_editor_progress(self, step_result: object) -> None:
+        """Forward one observable engine result to the editor surface."""
+        self.editor_page.show_step_result(step_result)
+
+    def _cancel_editor_run(self) -> None:
+        if self._editor_worker is not None:
+            self._editor_worker.cancel()
+
+    def _quit_editor_thread(self) -> None:
+        if self._editor_thread is not None:
+            self._editor_thread.quit()
+
+    def _on_editor_thread_finished(self) -> None:
+        self.editor_page.set_running(False)
+        self._editor_worker = None
+        self._editor_thread = None
+
+    def _on_editor_finished(self, run: object) -> None:
+        self.status_footer.set_state(FOOTER_READY)
+        for result in getattr(run, "results", ()):
+            self.editor_page.show_step_result(result)
+        status = getattr(getattr(run, "status", None), "value", "UNKNOWN")
+        if status == "SUCCEEDED":
+            self.editor_page.show_run_message("success", EDITOR_RUN, EDITOR_RUN_SUCCEEDED)
+        elif status == "OBSERVATION_ONLY":
+            # The run completed but performed nothing, so it is not a failure.
+            self.editor_page.show_run_message("warning", EDITOR_RUN, EDITOR_RUN_OBSERVED)
+        elif status == "CANCELLED":
+            self.editor_page.show_run_message("warning", EDITOR_RUN, EDITOR_RUN_CANCELLED)
+        else:
+            self.editor_page.show_run_message(
+                "warning", EDITOR_RUN, f"{EDITOR_RUN_FAILED} Status: {status}."
+            )
+        self.activity_page.refresh()
+        self.my_automations_page.refresh()
+
+    def _on_editor_failed(self, message: str) -> None:
+        self.status_footer.set_state(FOOTER_ATTENTION)
+        self.editor_page.show_run_message("error", EDITOR_RUN, f"{EDITOR_RUN_FAILED} {message}")
+        self.activity_page.refresh()
+
     def _open_workflow(self, path: Path) -> None:
         workflow = self._service.load(path)
         self.workspace.setCurrentWidget(self.review_page)
@@ -408,8 +502,33 @@ class MainWindow(QMainWindow):
             return
         self.create_automation_page.set_recording_state(
             False,
-            f"{CREATE_RECORDING_SAVED} ({len(recording.events)} events captured).",
+            (
+                f"{CREATE_RECORDING_SAVED} ({len(recording.events)} events captured). "
+                f"{RECORDING_SAVED_NEXT}"
+            ),
         )
+        draft = build_raw_draft(recording)
+        proposal = analyze_recording(AnalysisRequest(draft))
+        if not isinstance(proposal, ProviderDraft):
+            self.create_automation_page.show_not_available(
+                "The recording did not produce a reviewable draft."
+            )
+            return
+        self.review_page.load_proposal(proposal)
+        self._show_page(ShellPages.REVIEW)
+
+    def _open_approved_draft(self, workflow: Workflow) -> None:
+        if not isinstance(workflow, Workflow):
+            return
+        self.editor_page.open_workflow(workflow)
+        self._show_page(ShellPages.EDITOR)
+
+    def _open_review_workflow_editor(self, workflow: Workflow) -> None:
+        """Open an already-saved automation in the real editor."""
+        if not isinstance(workflow, Workflow):
+            return
+        self.editor_page.open_workflow(workflow)
+        self._show_page(ShellPages.EDITOR)
 
     def _on_review_cancelled(self) -> None:
         self._show_page(ShellPages.HOME)
@@ -419,6 +538,9 @@ class MainWindow(QMainWindow):
         if self._recording_service is not None and self._recording_service.recording:
             self._recording_service.stop()
         self.cancel_run_thread()
+        if self._editor_thread is not None:
+            cancel_and_join(self._editor_thread, self._editor_worker)
+            self._on_editor_thread_finished()
         self.my_automations_page.shutdown_worker()
         self._service.close()
         super().closeEvent(event)

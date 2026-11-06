@@ -37,6 +37,8 @@ SHORTCUT_CODES: dict[str, str] = {
 }
 
 POLL_INTERVAL_SECONDS = 0.25
+#: Bound on how long one close step may wait for the windows to disappear.
+CLOSE_TIMEOUT_SECONDS = 5.0
 MAX_ARGUMENTS = 16
 
 CHROME_EXECUTABLE_NAME = "chrome.exe"
@@ -74,6 +76,17 @@ def _chrome_profile_argument() -> tuple[str, Path]:
     return f"--user-data-dir={profile}", profile
 
 
+def _vscode_candidates() -> tuple[Path, ...]:
+    """Known install locations of VS Code, user-scope install first."""
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    local_root = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
+    program_files = os.environ.get("PROGRAMFILES", r"C:\Program Files")
+    return (
+        local_root / "Programs" / "Microsoft VS Code" / "Code.exe",
+        Path(program_files) / "Microsoft VS Code" / "Code.exe",
+    )
+
+
 class WindowsApplicationRegistry:
     """Controlled expansion of allow-listed application names to executables."""
 
@@ -92,6 +105,12 @@ class WindowsApplicationRegistry:
         if lowered == "notepad":
             root = Path(os.environ.get("SYSTEMROOT", r"C:\Windows"))
             return root / "System32" / "notepad.exe"
+        if lowered == "vscode":
+            candidates = _vscode_candidates()
+            for candidate in candidates:
+                if candidate.is_file():
+                    return candidate
+            return candidates[0]
         if lowered == "chrome":
             for candidate in self._chrome_candidates:
                 if candidate.is_file():
@@ -136,6 +155,8 @@ class PywinautoDesktopActions:
         self._sleep = sleep
         self._clock = clock
         self._poll_interval = poll_interval
+        #: application name -> pid of exactly the process this run launched.
+        self._launched_processes: dict[str, int] = {}
 
     # ------------------------------------------------------------ dispatch
 
@@ -207,6 +228,9 @@ class PywinautoDesktopActions:
                 message=f"The application could not be launched: {error}",
                 evidence=(f"executable={executable}",),
             )
+        application_name = target.get("application")
+        if isinstance(application_name, str) and application_name.strip():
+            self._launched_processes[application_name.strip().lower()] = process.pid
         return StepResult(
             step_id="",
             status=StepStatus.SUCCEEDED,
@@ -218,6 +242,76 @@ class PywinautoDesktopActions:
                 *extra_evidence,
             ),
         )
+
+    # ---------------------------------------------------------------- close
+
+    def close_application(self, target_json: str) -> StepResult:
+        """Close windows of exactly the process this run launched by name.
+
+        Fail-closed: without a registered launch in this same run nothing is
+        closed, and only top-level windows whose process id matches the
+        registered one are touched, one at a time, within the step bound.
+        """
+        target = _load_parsed(target_json, "close")
+        application = target.get("application")
+        if not isinstance(application, str) or not application.strip():
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message="The close target needs an allow-listed application name.",
+            )
+        pid = self._launched_processes.get(application.strip().lower())
+        if pid is None:
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=(
+                    f"This run did not launch {application.strip()}, so it is not "
+                    "allowed to close anything on its behalf."
+                ),
+                evidence=("registered=false",),
+            )
+        deadline = self._clock() + CLOSE_TIMEOUT_SECONDS
+        closed = 0
+        while True:
+            members = sorted(
+                (
+                    wrapper
+                    for wrapper in self._desktop_factory().windows()
+                    if window_matches(wrapper, {"process_id": pid})
+                ),
+                key=lambda wrapper: (
+                    getattr(getattr(wrapper, "element_info", None), "handle", 0) or 0
+                ),
+            )
+            if not members:
+                return StepResult(
+                    step_id="",
+                    status=StepStatus.SUCCEEDED,
+                    message="The application windows were closed.",
+                    evidence=(f"process_id={pid}", f"windows_closed={closed}"),
+                )
+            wrapper = members[0]
+            try:
+                wrapper.close()
+            except (AttributeError, OSError, RuntimeError, ValueError) as error:
+                return StepResult(
+                    step_id="",
+                    status=StepStatus.FAILED,
+                    message=f"The application window did not close: {error}",
+                    evidence=(f"process_id={pid}", f"windows_closed={closed}"),
+                )
+            closed += 1
+            if self._clock() >= deadline:
+                return StepResult(
+                    step_id="",
+                    status=StepStatus.FAILED,
+                    message=(
+                        f"The application did not close within {CLOSE_TIMEOUT_SECONDS:.0f} seconds."
+                    ),
+                    evidence=(f"process_id={pid}", f"windows_closed={closed}"),
+                )
+            self._sleep(self._poll_interval)
 
     # ---------------------------------------------------------------- wait
 

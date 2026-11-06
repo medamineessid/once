@@ -2,6 +2,72 @@
 
 Format per item: id, date, question, options, choice, reason.
 
+## AD-031 — 2026-11-01 — Running from the editor
+
+- Question: How should the editor run action behave when the definition has
+  unsaved changes?
+- Options: (a) execute the unsaved in-memory definition; (b) silently save it;
+  (c) refuse with a clear save-first message.
+- Choice: (c), and run only through the existing `WorkflowWorker` and
+  `WorkflowService.run_workflow` path.
+- Reason: executing unsaved data would make the run irreproducible, while
+  silent saving is an unexpected filesystem change. This preserves the
+  existing saved-workflow and approval boundaries.
+
+## AD-032 — 2026-11-01 — Mutating steps in the editor
+
+- Question: How should a saved editor automation containing desktop-mutating
+  steps reach execution?
+- Options: (a) run it through the ordinary workflow path; (b) add a second UI
+  approval implementation; (c) show the mutating kinds and call the existing
+  desktop approval gate.
+- Choice: (c).
+- Reason: ordinary execution would bypass the policy boundary, while a second
+  approval implementation could drift from engine policy. The editor now uses
+  `approve_desktop_workflow` and only emits its resulting `DesktopApproval`.
+
+## AD-033 — 2026-11-01 — Live run feedback
+
+- Question: Where should execution state and evidence appear while an editor run
+  is active?
+- Options: (a) only Activity after completion; (b) a separate run window; (c)
+  update the existing canvas cards and selected-step inspector from worker
+  progress.
+- Choice: (c).
+- Reason: the canvas is the user's working model, and the worker already emits
+  immutable `StepResult` values. Reusing that signal keeps feedback local,
+  observable, and free of a second execution state model.
+
+## AD-034 — 2026-11-01 — Cancel while running
+
+- Question: What should the editor's Cancel button do during execution?
+- Options: (a) navigate away immediately; (b) disable it; (c) change it to
+  Cancel run and request the worker's existing cooperative cancellation.
+- Choice: (c).
+- Reason: navigating away can hide an active side effect, while disabling the
+  control leaves the user without the promised safety action. The existing
+  worker cancellation and bounded join path are reused.
+
+## AD-035 — 2026-11-01 — Saved review editing
+
+- Question: What should the Edit control do when My automations opens a saved
+  automation on the review page?
+- Options: (a) keep it hidden; (b) treat it as an unapproved recording draft;
+  (c) open the existing saved definition in the editor.
+- Choice: (c); recorded proposals keep the separate approve-then-edit route.
+- Reason: a saved definition already passed persistence validation and is not an
+  AI proposal, so showing it as a proposal would be misleading. The route now
+  uses the same editor service path as the Home build flow.
+
+## AD-036 — 2026-11-01 — Classic entry-point escape hatch
+
+- Question: How can the legacy window remain available while the shell release
+  gate is evaluated?
+- Choice: add `--classic` without changing the current default yet; keep
+  `--shell` explicit until MVP checklist, acceptance, and packaging gates pass.
+- Reason: this is reversible and preserves the current shipped behavior while
+  making the eventual default switch explicit and testable.
+
 ## AD-001 — 2026-10-29 — Where should the authorized folder live?
 
 - Question: P1.4 requires the chosen authorized folder to "persist through the
@@ -408,3 +474,39 @@ Format per item: id, date, question, options, choice, reason.
   into executable steps requires the existing analysis/proposal boundary and
   approval. Fabricating nodes directly from clicks would violate the
   untrusted-draft and safety contract.
+
+## AD-028 — 2026-11-01 — Home screen first-run focus
+
+- Question: what should the first Home screen show while the recorder-to-editor
+  flow is still incomplete?
+- Choice: remove the demo card and redundant header CTA, present only Build it
+  yourself and Record a task, remove the repeated brand footer, and keep demo
+  runs available only through diagnostics and Activity.
+- Reason: the demo looked like the primary product path and persisted demo rows
+  made Recent activity look like user work. The two remaining choices map to
+  real reachable flows and reduce first-time-user ambiguity without changing
+  execution or approval behavior.
+
+## AD-029 — 2026-11-01 — Separate creation routes
+
+- Question: should Build it yourself and Start with a recording share the same
+  create screen?
+- Choice: no. Build it yourself opens the visual editor directly; recording
+  opens a dedicated recording screen with its own title, controls, review
+  message, and back action.
+- Reason: both routes already had different capabilities, but converging them
+  made the buttons misleading and forced users to rediscover their intent.
+  Separate destinations make each action observable without adding a second
+  execution or approval path.
+
+## AD-030 — 2026-11-01 — Recording draft handoff
+
+- Question: what should a completed local recording become before it can enter
+  the editor?
+- Choice: build a deterministic, provider-shaped proposal containing only
+  REPORT observation steps, show it in the existing Review page, require the
+  existing `approve_proposal` gate, then open the approved workflow in the
+  editor.
+- Reason: this gives the user a real reviewable node result without converting
+  raw clicks directly into executable desktop actions. The proposal remains
+  bounded, validated, offline, and explicitly approved before save/edit.

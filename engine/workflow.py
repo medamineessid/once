@@ -31,6 +31,7 @@ class StepKind(StrEnum):
     TYPE_TEXT = "TYPE_TEXT"
     PRESS_SHORTCUT = "PRESS_SHORTCUT"
     VERIFY_FILE_TEXT = "VERIFY_FILE_TEXT"
+    CLOSE_APPLICATION = "CLOSE_APPLICATION"
     LAUNCH_BROWSER = "LAUNCH_BROWSER"
     NAVIGATE_BROWSER = "NAVIGATE_BROWSER"
     INSPECT_PAGE = "INSPECT_PAGE"
@@ -201,6 +202,7 @@ BROWSER_PROVIDER_KINDS = frozenset(
 DESKTOP_PROVIDER_KINDS = frozenset(
     {
         StepKind.LAUNCH_APPLICATION,
+        StepKind.CLOSE_APPLICATION,
         StepKind.WAIT_WINDOW,
         StepKind.CLICK_UI_ELEMENT,
         StepKind.TYPE_TEXT,
@@ -210,7 +212,7 @@ DESKTOP_PROVIDER_KINDS = frozenset(
 
 #:
 #: The browser launch registry is KNOWN_BROWSERS below.
-KNOWN_APPLICATIONS: frozenset[str] = frozenset({"notepad", "chrome"})
+KNOWN_APPLICATIONS: frozenset[str] = frozenset({"notepad", "vscode", "chrome"})
 
 #: Browser names the isolated-browser launch action may use via the registry.
 KNOWN_BROWSERS: frozenset[str] = frozenset({"chrome"})
@@ -225,6 +227,10 @@ class DesktopActions:
     """
 
     def launch_application(self, target_json: str) -> StepResult:
+        raise NotImplementedError
+
+    def close_application(self, target_json: str) -> StepResult:
+        """Close only windows of the process this run launched for that name."""
         raise NotImplementedError
 
     def wait_window(self, target_json: str, timeout_seconds: float) -> StepResult:
@@ -369,6 +375,27 @@ def _require_bounded_string(step: WorkflowStep, container: object, field: str) -
     if len(value) > MAX_TEXT_LENGTH:
         raise WorkflowValidationError(f"Step {step.step_id} {field} is too long.")
     return value
+
+
+def _validate_close_target(step: WorkflowStep) -> None:
+    """Closing is registry-directed only: windows of an application this run launched."""
+    target = _load_target(step, step.target)
+    unknown = set(target) - {"application"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown close fields: {', '.join(sorted(unknown))}."
+        )
+    application = target.get("application")
+    if not isinstance(application, str) or not application.strip():
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs exactly one allow-listed application name to close."
+        )
+    if len(application) > 64 or application.lower() not in {
+        name.lower() for name in KNOWN_APPLICATIONS
+    }:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} names an application the registry does not allow: {application}."
+        )
 
 
 def _validate_launch_target(step: WorkflowStep) -> None:
@@ -803,6 +830,8 @@ class WorkflowRunner:
                 _validate_ui_element_target(step)
             if step.kind is StepKind.LAUNCH_APPLICATION:
                 _validate_launch_target(step)
+            if step.kind is StepKind.CLOSE_APPLICATION:
+                _validate_close_target(step)
             if step.kind is StepKind.LAUNCH_BROWSER:
                 _validate_launch_browser_target(step)
             if step.kind is StepKind.NAVIGATE_BROWSER:
@@ -1047,6 +1076,8 @@ class WorkflowRunner:
             raise AssertionError("desktop_actions must exist here.")
         if step.kind is StepKind.LAUNCH_APPLICATION:
             result = actions.launch_application(step.target or "")
+        elif step.kind is StepKind.CLOSE_APPLICATION:
+            result = actions.close_application(step.target or "")
         elif step.kind is StepKind.WAIT_WINDOW:
             result = actions.wait_window(step.target or "", step.timeout_seconds)
         elif step.kind is StepKind.CLICK_UI_ELEMENT:

@@ -2,6 +2,266 @@
 
 Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 
+## 2026-11-04 — B1: run truth (reports are not successes)   (commit: pending)
+- Task: stop a REPORT-only workflow from reading as success. Add the
+  `OBSERVED` step status and the `OBSERVATION_ONLY` run status, keep saved
+  workflows and existing history rows loadable, and publish the contract
+  before changing code.
+- AI contribution: `docs/contracts/run-outcomes.md` (committed first, 1d76b5f),
+  `StepStatus.OBSERVED`, `WorkflowStatus.OBSERVATION_ONLY`,
+  `CONTINUING_STEP_STATUSES`/`PERFORMED_STEP_STATUSES`, `_final_status`,
+  an explicit REPORT branch in `_run_once`, `OBSERVED` in
+  `controller.run_events._SUCCESS_STATUSES`, the run-events contract row,
+  `tests/test_b1_run_outcomes.py`, and expectation updates in eight existing
+  test files that asserted a report was a success.
+- Defect found: `_run_once` returned `SUCCEEDED` for a REPORT step, so the
+  run-status decision was "it did not fail, therefore it succeeded". The
+  demo (two REPORT steps) therefore reported Succeeded while changing
+  nothing - the exact claim the product must not make. Also found that
+  `ui/shell.py::_on_demo_finished` hard-codes `status.value == "SUCCEEDED"`
+  and would have shown "Demonstration failed" for that same run; that one
+  branch had to be widened (out of lane B's file list, see report).
+- Verification: `pytest tests/test_b1_run_outcomes.py -q` printed
+  `11 passed`; the full suite printed
+  `3 failed, 508 passed, 2 skipped` of which
+  `test_chrome_devtools::test_launch_refuses_a_non_chrome_endpoint` is
+  pre-existing, and `test_review_ui::test_panel_can_apply_a_recorded_approval_after_a_restart`
+  passed when rerun alone (flaky under the full run). `ruff check .` printed
+  `All checks passed!`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-04 — B2: Chrome as a registered desktop application   (commit: pending)
+- Task: let an approved workflow launch Chrome through the desktop registry,
+  on its own disposable profile so the launched process is a separate browser
+  whose PID can be tracked; say plainly what closing it would have to do.
+- AI contribution: `chrome` in `KNOWN_APPLICATIONS`; `chrome_install_candidates`
+  and `WindowsApplicationRegistry.resolve("chrome")` over Program Files,
+  Program Files (x86) and `%LOCALAPPDATA%` (injectable candidates for tests);
+  forced `--user-data-dir` on every Chrome launch with refusal of a
+  step-supplied `--user-data-dir`/`--profile-directory`;
+  `tests/test_b2_chrome_launch.py` (9 tests, 2 `windows_only`).
+- Defect found: the registry only knew notepad, and `launch_application`
+  passed step arguments straight through, so a step could have pointed Chrome
+  at the user's real profile - the hand-off case where Chrome forwards to the
+  running instance and the returned PID is not the browser. The provider now
+  always supplies its own profile and refuses the profile switches. Also
+  found that `close_application` and `ai/provider.py PROCESS_TO_APPLICATION`
+  do not exist in this repository (nor does `ai/analyze_recording.py`), so
+  neither could be extended; recorded in docs/lane_b/questions.md with the
+  PID-matching design that a future close would need.
+- Verification: `pytest tests/test_b2_chrome_launch.py -q` printed `9 passed`;
+  `pytest tests/test_b2_chrome_launch.py tests/test_windows_desktop.py -q`
+  printed `28 passed`; `ruff check .` printed `All checks passed!`. No live
+  Chrome was launched; the real-install resolution is covered by a
+  `windows_only` test that skips when Chrome is absent, and manual steps are
+  in the session report.
+- Outcome: PASSED (close/PROCESS_TO_APPLICATION: NOT IMPLEMENTED - names absent)
+- Human review:
+
+## 2026-11-04 — B3: proposal preview follows the desktop gate policy   (commit: pending)
+- Task: `ai/approval.py::preview_proposal` used a bare `ReplayExecutor()`
+  (read-only policy), so an approved desktop automation was previewed as
+  UNSUPPORTED. It must reflect `DESKTOP_INTERACTION_POLICY`, still never
+  execute, and never be more permissive than the gate.
+- AI contribution: `preview_proposal` now previews with
+  `ReplayExecutor(DESKTOP_INTERACTION_POLICY)` (the same imported object
+  `engine.desktop.approve_desktop_workflow` validates with), and
+  `WorkflowPreview` gained `needs_desktop_approval` (defaulted, so existing
+  callers keep working) fed by `engine.desktop.requires_desktop_approval`.
+  New `tests/test_b3_preview_policy.py` (12 tests).
+- Defect found: the preview and the gate disagreed about the same workflow -
+  the review page could show "permission=UNSUPPORTED" for exactly the desktop
+  automation the panel would gate and run. Fixed by making the policy object
+  shared instead of duplicated.
+- Verification: `pytest tests/test_b3_preview_policy.py -q` printed
+  `12 passed`; neighbours (`test_recording_flow`, `test_b3_review_wiring`,
+  `test_review_ui`, `test_desktop_engine`, `test_desktop_controller`,
+  `test_my_automations_page`) printed `67 passed`; `ruff check .` printed
+  `All checks passed!`. Preview was proven not to execute by patching
+  `subprocess.Popen` to raise before previewing a LAUNCH_APPLICATION proposal.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-04 — B4: plain-language label for observation-only runs   (commit: pending)
+- Task: an observation-only run must not surface as a status code. Label it
+  "Observation only — nothing was performed" in the Activity page and in the
+  Home "recent activity" list, without creating a second source of wording.
+- AI contribution: one entry in `ui/components/formatting._STATUS_DISPLAY`
+  (consumed by both pages through `status_display`), a friendly run-status
+  label in the Activity details header and in `ui/pages/my_automations.py`
+  ("Run <label>: N steps recorded"), and `tests/test_b4_status_labels.py`
+  (5 tests covering the label map, the Activity row, the Activity details and
+  the Home list, plus a guard that Failed/Succeeded keep their own labels).
+- Defect found: after B1 the raw enum value `OBSERVATION_ONLY` was rendered
+  verbatim in three places (Activity row and details, My automations details),
+  which is exactly the jargon the product rules out; the label map is the
+  single place that now decides the wording.
+- Verification: `pytest tests/test_b4_status_labels.py -q` printed `5 passed`;
+  `pytest tests/test_my_automations_page.py tests/test_b2_approval_panel.py
+  tests/test_b4_status_labels.py tests/test_activity_page.py -q` printed
+  `41 passed`; `ruff check .` printed `All checks passed!`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-06 — Lane B follow-up: Chrome is closable   (commit: pending)
+- Task: let an approved workflow close the Chrome instance it launched (exact
+  recorded PID only), fix the non-Chrome endpoint test, and keep the merged
+  tree honest about observation-only runs.
+- AI contribution: added `StepKind.CLOSE_APPLICATION` with a registry-directed
+  `_validate_close_target` (only `application`, never an executable path), the
+  `DesktopActions` contract method, `KNOWN_APPLICATIONS` = notepad/vscode/chrome,
+  `PROCESS_TO_APPLICATION["chrome.exe"] = "chrome"`, and restored the Windows
+  adapter's `close_application` (matches the registered PID only) plus the
+  vscode registry entry that the merge resolution had dropped. Rewrote
+  `tests/test_close_application.py` (12 tests) and made the editor banner
+  report an observation-only run as neutral instead of "could not finish".
+- Defect found: my first merge resolution removed `vscode` from the desktop
+  allow-list and dropped the whole close adapter, so 24 tests failed; the same
+  resolution also lost the B1-B4 log entries, restored above. The B4 label test
+  for Home asserted against a demo run that Home deliberately hides.
+- Verification: `pytest -q` printed `601 passed, 2 skipped in 140.37s`;
+  `ruff check .` printed `All checks passed!`; `ruff format --check .` printed
+  `181 files already formatted`. No live Chrome or desktop automation was run;
+  the adapter tests use fake Windows surfaces and fake `Popen` processes.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-01 — P6: Editor run action   (commit: pending)
+- Task: Add a real saved-definition run action to the visual editor with inline
+  feedback, edit locking, and Activity refresh.
+- AI contribution: wired the editor action to the existing shell worker path and
+  added focused acceptance tests for save-first and successful execution.
+- Defect found: the first focused run exposed a missing shared-string import in
+  the shell handler; Ruff also identified import ordering. Both were corrected
+  before the passing rerun.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests/test_editor_page.py -q`
+  printed `10 passed`; Ruff check printed `All checks passed!` before the final
+  format pass; final full verification is pending.
+- Outcome: IN PROGRESS
+- Human review:
+
+## 2026-11-01 — P9: Verify packaged executable   (commit: pending)
+- Task: build the existing one-folder PyInstaller package and smoke-test its
+  real executable without writing into user data.
+- AI contribution: ran `once.spec` and verified the packaged executable in an
+  isolated `LOCALAPPDATA` directory.
+- Defect found: none in the packaging path; the first output check ran before
+  the process-created database was enumerated, so the isolated directory was
+  inspected separately.
+- Verification: PyInstaller reported `Building COLLECT COLLECT-00.toc
+  completed successfully`; `Once.exe --smoke-test` printed `PACKAGED_EXIT=0`;
+  isolated inspection found `Once\once.db` and `Once\logs\once.log`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-01 — P8/P9: Hardening baseline and release checklist   (commit: pending)
+- Task: Add concrete hardening coverage and document the release gate without
+  switching the default window prematurely.
+- AI contribution: added rejection tests for oversized workflows and text,
+  repeated-cancellation close coverage, the `--classic` entry-point escape
+  hatch, and `docs/MVP_CHECKLIST.md`.
+- Defect found: the first long-name assertion used the wrong validator message;
+  it was corrected to the actual plain-language error.
+- Verification: focused hardening and entry tests printed `23 passed, 1
+  skipped`; Ruff printed `All checks passed!`.
+- Outcome: IN PROGRESS
+- Human review:
+
+## 2026-11-01 — P6: Saved review route complete   (commit: f7b5878)
+- Task: Make saved review editing functional without changing proposal
+  approval semantics.
+- AI contribution: connected Edit automation to the existing editor and reset
+  stale recorded-draft review state when showing saved workflows.
+- Defect found: the full suite was green before the final stale-title regression
+  test; the regression was identified during the adjacent state audit.
+- Verification: `.\.venv\Scripts\python.exe -m pytest -q` printed
+  `478 passed, 2 skipped`; Ruff, both smoke tests, and the engineering-log
+  append-only guard all passed in `scripts\verify.ps1`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-01 — P8: Bounded cancellation detach coverage   (commit: pending)
+- Task: prove that window-close cancellation remains safe when a worker ignores
+  the cooperative cancellation request.
+- AI contribution: added a focused Qt thread regression test for the bounded
+  `cancel_and_join` detach path.
+- Defect found: none in the implementation; the missing evidence was test
+  coverage for the documented timeout branch.
+- Verification: `.\.venv\Scripts\python.exe -m pytest
+  tests\test_close_during_run.py -q` printed `5 passed in 2.14s`.
+- Outcome: IN PROGRESS
+- Human review:
+
+## 2026-11-01 — P6: Functional saved-review editing   (commit: pending)
+- Task: Remove the hidden dead Edit control from saved automation review.
+- AI contribution: wired the saved-workflow review action to the existing editor
+  route and kept recorded proposals behind their explicit approval gate.
+- Defect found: the first focused assertion guessed the fixture name; the test
+  was corrected to assert the actual saved workflow name.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests\test_shell.py
+  tests\test_editor_canvas.py -q` printed `40 passed`; Ruff printed
+  `All checks passed!` and `4 files already formatted`.
+- Outcome: IN PROGRESS
+- Human review:
+
+## 2026-11-01 — P6: Mutating-step approval panel complete   (commit: d085937)
+- Task: Ship the editor approval gate without bypassing the existing desktop
+  policy boundary.
+- AI contribution: completed and committed the inline approval panel and
+  `DesktopApproval` worker path.
+- Defect found: the full suite had one transient review-UI restart failure;
+  its focused rerun passed, and the next full verification passed.
+- Verification: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  scripts\verify.ps1` printed `475 passed, 2 skipped`, `All checks passed!`,
+  `151 files already formatted`, both smoke tests PASS, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-01 — P6: Safe editor cancellation   (commit: pending)
+- Task: Make the editor's Cancel control safe and truthful during an active run.
+- AI contribution: changed the control to emit a cancellation request while
+  running, connected it to `WorkflowWorker.cancel`, and added cancelled-run
+  feedback.
+- Defect found: Ruff caught import ordering and a formatting wrap; both were
+  corrected before the passing focused rerun.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests\test_editor_page.py
+  tests\test_close_during_run.py -q` printed `16 passed in 5.87s`; Ruff check
+  printed `All checks passed!`.
+- Outcome: IN PROGRESS
+- Human review:
+
+## 2026-11-01 — P6: Live step states and evidence   (commit: pending)
+- Task: Show observable execution results on the editor canvas and in the
+  selected-step inspector.
+- AI contribution: connected `WorkflowWorker.progress` to semantic canvas card
+  states and rendered result messages/evidence in the existing inspector.
+- Defect found: the first lint pass caught a long canvas status line; it was
+  split without changing behavior.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests\test_editor_page.py
+  tests\test_editor_canvas.py tests\test_editor_inspector.py -q` printed
+  `37 passed`; `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  scripts\verify.ps1` printed `476 passed, 2 skipped`, `All checks passed!`,
+  `151 files already formatted`, both smoke tests PASS, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-01 — P6: Mutating-step approval panel   (commit: pending)
+- Task: Prevent editor runs from bypassing the existing desktop approval policy
+  and make the approval decision visible before execution.
+- AI contribution: added the inline approval panel, reused
+  `approve_desktop_workflow`, and extended `WorkflowWorker` to execute only the
+  resulting `DesktopApproval`.
+- Defect found: the first approval test used invalid target JSON; the validator
+  correctly rejected it, and the fixture was corrected to the repository's
+  nested window/element target shape.
+- Verification: `.\.venv\Scripts\python.exe -m pytest tests\test_editor_page.py
+  tests\test_close_during_run.py -q` printed `14 passed in 6.84s`; Ruff check
+  printed `All checks passed!` and format check printed `5 files already
+  formatted`.
+- Outcome: IN PROGRESS
+- Human review:
+
 
 ## 2026-10-21 — Step 0: Pre-flight, evidence, decisions   (commit: n/a — git repo not yet initialised; Step 1 runs `git init`)
 
@@ -11,6 +271,8 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: ran locally — `py -0p` (3 interpreters listed), `python --version` (3.14.3), `git --version` (2.55.0.windows.4), `cmd //c ver` (10.0.26300.9550), `st_birthtime` presence check on 3.14.3 and 3.13.5 (True/True), `pip index versions` for pytest/pytest-cov/pytest-qt/ruff/pyinstaller/send2trash (latest: 9.1.1 / 7.1.0 / 4.5.0 / 0.17.1 / 6.22.3 / 2.1.0), `pip install --dry-run send2trash==2.1.0` on 3.14 → "Would install Send2Trash-2.1.0" exit 0. Fetched and cited: devguide.python.org/versions, pypi.org/project/PySide6 (6.12.0, Requires-Python >=3.10,<3.16, win_amd64 abi3 wheel present), learn.microsoft.com naming-a-file (reserved chars/names incl. superscript variants), pypi.org/pypi/send2trash/2.1.0/json (classifiers to 3.14). NOT verified: send2trash 2.1.0 release date (search snippet only), ruff `target-version = "py314"` support (checked at Step 1).
 - Outcome: PASSED
 - Human review: 
+
+
 
 
 
@@ -1287,104 +1549,48 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   formatting passed, both smoke tests passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
-## 2026-11-04 — B1: run truth (reports are not successes)   (commit: pending)
-- Task: stop a REPORT-only workflow from reading as success. Add the
-  `OBSERVED` step status and the `OBSERVATION_ONLY` run status, keep saved
-  workflows and existing history rows loadable, and publish the contract
-  before changing code.
-- AI contribution: `docs/contracts/run-outcomes.md` (committed first, 1d76b5f),
-  `StepStatus.OBSERVED`, `WorkflowStatus.OBSERVATION_ONLY`,
-  `CONTINUING_STEP_STATUSES`/`PERFORMED_STEP_STATUSES`, `_final_status`,
-  an explicit REPORT branch in `_run_once`, `OBSERVED` in
-  `controller.run_events._SUCCESS_STATUSES`, the run-events contract row,
-  `tests/test_b1_run_outcomes.py`, and expectation updates in eight existing
-  test files that asserted a report was a success.
-- Defect found: `_run_once` returned `SUCCEEDED` for a REPORT step, so the
-  run-status decision was "it did not fail, therefore it succeeded". The
-  demo (two REPORT steps) therefore reported Succeeded while changing
-  nothing - the exact claim the product must not make. Also found that
-  `ui/shell.py::_on_demo_finished` hard-codes `status.value == "SUCCEEDED"`
-  and would have shown "Demonstration failed" for that same run; that one
-  branch had to be widened (out of lane B's file list, see report).
-- Verification: `pytest tests/test_b1_run_outcomes.py -q` printed
-  `11 passed`; the full suite printed
-  `3 failed, 508 passed, 2 skipped` of which
-  `test_chrome_devtools::test_launch_refuses_a_non_chrome_endpoint` is
-  pre-existing, and `test_review_ui::test_panel_can_apply_a_recorded_approval_after_a_restart`
-  passed when rerun alone (flaky under the full run). `ruff check .` printed
-  `All checks passed!`.
+
+## 2026-11-01 — A2g: Home first-run UX correction   (commit: pending)
+- Task: remove misleading demo content and make the first Home screen point to
+  the two real creation paths.
+- AI contribution: replaced the demo card with manual-build and recording
+  choices, removed the redundant header action and repeated footer branding,
+  and excluded diagnostic demo runs from Home's recent-run list.
+- Defect found: the Home screenshot presented a safe diagnostic demonstration
+  as the main product action and showed repeated demo history as if it were
+  user activity.
+- Verification: focused tests printed `46 passed`; `scripts/verify.ps1`
+  printed `468 passed, 2 skipped`, Ruff and formatting passed, both smoke tests
+  passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
 
-## 2026-11-04 — B2: Chrome as a registered desktop application   (commit: pending)
-- Task: let an approved workflow launch Chrome through the desktop registry,
-  on its own disposable profile so the launched process is a separate browser
-  whose PID can be tracked; say plainly what closing it would have to do.
-- AI contribution: `chrome` in `KNOWN_APPLICATIONS`; `chrome_install_candidates`
-  and `WindowsApplicationRegistry.resolve("chrome")` over Program Files,
-  Program Files (x86) and `%LOCALAPPDATA%` (injectable candidates for tests);
-  forced `--user-data-dir` on every Chrome launch with refusal of a
-  step-supplied `--user-data-dir`/`--profile-directory`;
-  `tests/test_b2_chrome_launch.py` (9 tests, 2 `windows_only`).
-- Defect found: the registry only knew notepad, and `launch_application`
-  passed step arguments straight through, so a step could have pointed Chrome
-  at the user's real profile - the hand-off case where Chrome forwards to the
-  running instance and the returned PID is not the browser. The provider now
-  always supplies its own profile and refuses the profile switches. Also
-  found that `close_application` and `ai/provider.py PROCESS_TO_APPLICATION`
-  do not exist in this repository (nor does `ai/analyze_recording.py`), so
-  neither could be extended; recorded in docs/lane_b/questions.md with the
-  PID-matching design that a future close would need.
-- Verification: `pytest tests/test_b2_chrome_launch.py -q` printed `9 passed`;
-  `pytest tests/test_b2_chrome_launch.py tests/test_windows_desktop.py -q`
-  printed `28 passed`; `ruff check .` printed `All checks passed!`. No live
-  Chrome was launched; the real-install resolution is covered by a
-  `windows_only` test that skips when Chrome is absent, and manual steps are
-  in the session report.
-- Outcome: PASSED (close/PROCESS_TO_APPLICATION: NOT IMPLEMENTED - names absent)
-- Human review:
-
-## 2026-11-04 — B3: proposal preview follows the desktop gate policy   (commit: pending)
-- Task: `ai/approval.py::preview_proposal` used a bare `ReplayExecutor()`
-  (read-only policy), so an approved desktop automation was previewed as
-  UNSUPPORTED. It must reflect `DESKTOP_INTERACTION_POLICY`, still never
-  execute, and never be more permissive than the gate.
-- AI contribution: `preview_proposal` now previews with
-  `ReplayExecutor(DESKTOP_INTERACTION_POLICY)` (the same imported object
-  `engine.desktop.approve_desktop_workflow` validates with), and
-  `WorkflowPreview` gained `needs_desktop_approval` (defaulted, so existing
-  callers keep working) fed by `engine.desktop.requires_desktop_approval`.
-  New `tests/test_b3_preview_policy.py` (12 tests).
-- Defect found: the preview and the gate disagreed about the same workflow -
-  the review page could show "permission=UNSUPPORTED" for exactly the desktop
-  automation the panel would gate and run. Fixed by making the policy object
-  shared instead of duplicated.
-- Verification: `pytest tests/test_b3_preview_policy.py -q` printed
-  `12 passed`; neighbours (`test_recording_flow`, `test_b3_review_wiring`,
-  `test_review_ui`, `test_desktop_engine`, `test_desktop_controller`,
-  `test_my_automations_page`) printed `67 passed`; `ruff check .` printed
-  `All checks passed!`. Preview was proven not to execute by patching
-  `subprocess.Popen` to raise before previewing a LAUNCH_APPLICATION proposal.
+## 2026-11-01 — A2h: Separate manual and recording routes   (commit: pending)
+- Task: make Home's two creation choices lead to distinct, functional
+  destinations instead of the same intermediate page.
+- AI contribution: routed manual creation directly to the editor, added a
+  dedicated recording mode with a back action and review handoff, and added
+  click-through tests for both destinations.
+- Defect found: the two Home cards had different labels but identical routing,
+  so the interface did not communicate or deliver two different workflows.
+- Verification: focused shell tests printed `29 passed`; `scripts/verify.ps1`
+  printed `469 passed, 2 skipped`, Ruff and formatting passed, both smoke
+  tests passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
 
-## 2026-11-04 — B4: plain-language label for observation-only runs   (commit: pending)
-- Task: an observation-only run must not surface as a status code. Label it
-  "Observation only — nothing was performed" in the Activity page and in the
-  Home "recent activity" list, without creating a second source of wording.
-- AI contribution: one entry in `ui/components/formatting._STATUS_DISPLAY`
-  (consumed by both pages through `status_display`), a friendly run-status
-  label in the Activity details header and in `ui/pages/my_automations.py`
-  ("Run <label>: N steps recorded"), and `tests/test_b4_status_labels.py`
-  (5 tests covering the label map, the Activity row, the Activity details and
-  the Home list, plus a guard that Failed/Succeeded keep their own labels).
-- Defect found: after B1 the raw enum value `OBSERVATION_ONLY` was rendered
-  verbatim in three places (Activity row and details, My automations details),
-  which is exactly the jargon the product rules out; the label map is the
-  single place that now decides the wording.
-- Verification: `pytest tests/test_b4_status_labels.py -q` printed `5 passed`;
-  `pytest tests/test_my_automations_page.py tests/test_b2_approval_panel.py
-  tests/test_b4_status_labels.py tests/test_activity_page.py -q` printed
-  `41 passed`; `ruff check .` printed `All checks passed!`.
+## 2026-11-01 — P5a: Recording to reviewable editor draft   (commit: pending)
+- Task: connect a completed local recording to a reviewable proposal and an
+  approved editable workflow without bypassing validation or approval.
+- AI contribution: added deterministic observation-step analysis, fixed the
+  Review page proposal rendering, wired approval to the existing
+  `approve_proposal`/`save_approved` boundary, and opened the approved result
+  in the editor.
+- Defect found: the shell stopped and persisted recordings but left users on a
+  banner; Review expected a nonexistent `proposal.steps` field and was never
+  service-injected.
+- Verification: focused recording/review tests printed `42 passed`;
+  `scripts/verify.ps1` printed `471 passed, 2 skipped`, Ruff and formatting
+  passed, both smoke tests passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:

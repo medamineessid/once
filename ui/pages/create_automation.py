@@ -27,6 +27,8 @@ from ui.strings import (
     CREATE_RECORD_STOP,
     CREATE_RECORD_TITLE,
     CREATE_TITLE,
+    RECORDING_BACK,
+    RECORDING_PAGE_TITLE,
 )
 from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
@@ -38,6 +40,7 @@ class CreateAutomationPage(QWidget):
     editor_requested = Signal()
     record_requested = Signal()
     stop_record_requested = Signal()
+    cancelled = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -47,6 +50,7 @@ class CreateAutomationPage(QWidget):
         self._scratch_button: QPushButton | None = None
         self._record_button: QPushButton | None = None
         self._stop_record_button: QPushButton | None = None
+        self._back_button: QPushButton | None = None
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -117,6 +121,32 @@ class CreateAutomationPage(QWidget):
         record_actions.addWidget(self._stop_record_button)
         record_layout.addLayout(record_actions)
         layout.addWidget(self._record_card)
+        self._back_button = QPushButton(RECORDING_BACK, self)
+        self._back_button.setObjectName("secondaryActionButton")
+        self._back_button.clicked.connect(self.cancelled.emit)
+        layout.addWidget(self._back_button)
+
+    def show_recording_mode(self) -> None:
+        """Show the dedicated recording route, not the typed-description form."""
+        self._title_label.setText(RECORDING_PAGE_TITLE)
+        self._question_label.hide()
+        self._description_input.hide()
+        self._hint_label.hide()
+        self._create_button.hide()
+        self._scratch_button.hide()
+        self._record_card.show()
+        self._back_button.show()
+
+    def show_creation_mode(self) -> None:
+        """Restore the description page for callers that still use it."""
+        self._title_label.setText(CREATE_TITLE)
+        self._question_label.show()
+        self._description_input.show()
+        self._hint_label.show()
+        self._create_button.show()
+        self._scratch_button.show()
+        self._record_card.show()
+        self._back_button.show()
 
     def set_recording_state(self, active: bool, message: str | None = None) -> None:
         """Reflect the real recorder lifecycle without implying draft execution."""

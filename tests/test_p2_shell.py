@@ -156,7 +156,7 @@ def test_first_time_user_can_run_demo_and_see_it_recorded(qtbot, tmp_path):
     qtbot.wait(30)
     service = window._service
 
-    QTest.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
     assert window.status_footer.state == "Running…"
 
     qtbot.waitUntil(lambda: len(service.history()) == 1, timeout=30_000)
@@ -166,10 +166,7 @@ def test_first_time_user_can_run_demo_and_see_it_recorded(qtbot, tmp_path):
     assert "finished" in window.banner.title_text.casefold()
 
     home = window.home_page
-    assert len(home._activity_rows) == 1
-    texts = " | ".join(label.text() for label in home._activity_rows[0].findChildren(QLabel))
-    # The demo only reports, so the home list says exactly that.
-    assert "Observation only — nothing was performed" in texts
+    assert home._activity_empty.isVisible()
 
     window._show_page(ShellPages.ACTIVITY)
     page = window.activity_page
@@ -178,9 +175,8 @@ def test_first_time_user_can_run_demo_and_see_it_recorded(qtbot, tmp_path):
     assert item.data(Qt.UserRole) == "demo-local-workflow"
     row = page._history_list.itemWidget(item)
     assert row is not None
-    assert "Observation only — nothing was performed" in " ".join(
-        label.text() for label in row.findChildren(QLabel)
-    )
+    # A report-only demo run performs nothing, so it reports observation only.
+    assert "Observation only" in " ".join(label.text() for label in row.findChildren(QLabel))
 
 
 def test_failed_demo_run_shows_attention_and_banner(qtbot, tmp_path, monkeypatch):
@@ -194,7 +190,7 @@ def test_failed_demo_run_shows_attention_and_banner(qtbot, tmp_path, monkeypatch
 
     monkeypatch.setattr(window._service, "run_workflow", boom)
 
-    QTest.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
 
     qtbot.waitUntil(lambda: window.status_footer.state == "Needs attention", timeout=30_000)
     qtbot.waitUntil(lambda: window._demo_thread is None, timeout=30_000)
@@ -210,9 +206,9 @@ def test_double_run_request_starts_exactly_one_demo(qtbot, tmp_path):
     window.show()
     qtbot.wait(30)
 
-    QTest.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
     assert window.status_footer.state == "Running…"
-    QTest.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
 
     qtbot.waitUntil(lambda: len(window._service.history()) == 1, timeout=30_000)
     qtbot.waitUntil(lambda: window._demo_thread is None, timeout=30_000)

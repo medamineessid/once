@@ -66,10 +66,11 @@ def test_home_page_shows_welcome_and_empty_activity(qtbot, window):
     assert window.workspace.currentIndex() == ShellPages.HOME
     title = home._title_label.text()
     subtitle = home._subtitle_label.text()
-    assert "Once" in title
-    assert "personal assistant" in subtitle
+    assert "automate" in title.casefold()
+    assert "choose how" in subtitle.casefold()
     assert home._activity_empty.isVisible() is True
-    assert home._demo_button.parentWidget().minimumHeight() >= 180
+    assert home._record_button.text() == "Start with a recording"
+    assert home.findChildren(QPushButton, "primaryActionButton")
 
 
 def test_create_automation_page_has_description_input(qtbot, window):
@@ -155,9 +156,33 @@ def test_create_page_records_a_task_through_the_real_service(qtbot, tmp_path):
 
     qtbot.mouseClick(page._stop_record_button, Qt.MouseButton.LeftButton)
     assert not recording_service.recording
-    assert page._record_button.isEnabled()
-    assert "Recording saved locally" in page._banner.body_text
+    assert window.workspace.currentWidget() is window.review_page
+    assert window.review_page._approve_button.isVisible()
+    assert window.review_page._approve_button.text() == "Approve draft and edit"
+    assert window.review_page._steps_list.count() == 1
     assert recording_service.list_recordings()
+
+
+def test_recording_review_approval_opens_editable_draft(qtbot, tmp_path):
+    recording_service = RecordingService(
+        tmp_path / "recordings",
+        recorder_factory=FakeRecorder,
+    )
+    window = MainWindow(
+        service=WorkflowService(workflow_directory=tmp_path / "workflows"),
+        recording_service=recording_service,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    window._show_recording()
+
+    qtbot.mouseClick(window.create_automation_page._record_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.create_automation_page._stop_record_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.review_page._approve_button, Qt.MouseButton.LeftButton)
+
+    assert window.workspace.currentWidget() is window.editor_page
+    assert window.editor_page._steps_list.count() == 1
+    assert window.editor_page._name_input.text() == "Recorded task draft"
 
 
 def test_sidebar_active_state_after_sidebar_click(qtbot, window):
@@ -290,16 +315,33 @@ def test_sidebar_click_home_returns_to_home(qtbot, window):
     assert window.sidebar.is_on(ShellPages.HOME)
 
 
-def test_home_create_button_clicks_into_create_flow(qtbot, window):
-    qtbot.mouseClick(window.home_page._create_automation_button, Qt.MouseButton.LeftButton)
+def test_home_build_button_opens_manual_editor(qtbot, window):
+    build_button = next(
+        button
+        for button in window.home_page.findChildren(QPushButton)
+        if button.text() == "Build an automation"
+    )
+    qtbot.mouseClick(build_button, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
-    assert window.workspace.currentWidget() is window.create_automation_page
+    assert window.workspace.currentWidget() is window.editor_page
 
 
-def test_home_demo_button_runs_the_demo_exactly_once(qtbot, tmp_path):
+def test_home_record_button_opens_recording_flow(qtbot, window):
+    record_button = window.home_page._record_button
+    qtbot.mouseClick(record_button, Qt.MouseButton.LeftButton)
+    qtbot.wait(50)
+    page = window.create_automation_page
+    assert window.workspace.currentWidget() is page
+    assert page._title_label.text() == "Record a task"
+    assert page._description_input.isHidden()
+    assert page._record_button.isVisible()
+    assert page._back_button.isVisible()
+
+
+def test_demo_runner_remains_available_for_diagnostics(qtbot, tmp_path):
     window, service = _window_with_service(qtbot, tmp_path)
 
-    qtbot.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
     qtbot.waitUntil(lambda: len(service.history()) == 1, timeout=10_000)
     # Wait for the demo thread to fully finish before teardown: destroying a
     # running QThread aborts the process under the offscreen platform.
@@ -326,6 +368,35 @@ def test_open_button_click_shows_opened_workflow_on_the_review_page(qtbot, tmp_p
     assert window.workspace.currentWidget() is window.review_page
     assert "List invoices" in window.review_page._goal_label.text()
     assert window.review_page._steps_list.count() == 1
+
+
+def test_review_edit_button_opens_saved_workflow_in_editor(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+    service.save(demo_workflow_for_tests())
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+
+    assert window.review_page._edit_button.isVisible()
+    qtbot.mouseClick(window.review_page._edit_button, Qt.MouseButton.LeftButton)
+
+    assert window.workspace.currentWidget() is window.editor_page
+    assert window.editor_page._name_input.text() == "List invoices"
+
+
+def test_saved_review_resets_recording_review_title(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+    window.review_page.load_proposal(None)
+    service.save(demo_workflow_for_tests())
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+
+    assert window.review_page._title_label.text() == "Automation details"
 
 
 def test_review_cancel_button_click_returns_home(qtbot, window):
@@ -363,7 +434,7 @@ def test_sidebar_has_four_nav_items_brand_and_one_footer(qtbot, window):
     buttons = [w for w in widgets if isinstance(w, QToolButton)]
     labels = [w for w in widgets if isinstance(w, QLabel) and not isinstance(w, Spacer)]
     assert [b.text() for b in buttons] == ["Home", "My automations", "Activity", "Settings"]
-    assert [label.text() for label in labels] == ["Once", "Once Assistive Automation"]
+    assert [label.text() for label in labels] == ["Once", "Local app"]
 
 
 def _ui_sources() -> dict[Path, str]:

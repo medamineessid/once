@@ -12,6 +12,7 @@ desktop, browser, or Chrome is touched.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import Qt
@@ -362,7 +363,13 @@ def test_selection_change_hides_a_waiting_panel_and_stops_its_approval(qtbot, tm
     service.save(read_only_workflow())
     service.save(typing_workflow())
     page = make_page(qtbot, service)
-    assert page._workflow_list.item(1).text() == "typing-flow.json"
+    # The redesigned list keeps filenames as row data only: the visible title
+    # lives in the AutomationRow widget (item.setText("")), so identify the
+    # row through its widget title and the stored path, not item text.
+    row = page._workflow_list.itemWidget(page._workflow_list.item(1))
+    assert row is not None
+    assert row._name_label.text() == "Typing flow"
+    assert Path(page._workflow_list.item(1).data(Qt.UserRole)).name == "typing-flow.json"
     page._workflow_list.setCurrentRow(1)
 
     click_run(page)

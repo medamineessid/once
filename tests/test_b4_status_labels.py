@@ -13,7 +13,7 @@ import pytest
 from PySide6.QtWidgets import QApplication, QLabel
 
 from controller.service import WorkflowService
-from engine.workflow import WorkflowStatus
+from engine.workflow import StepKind, Workflow, WorkflowStatus, WorkflowStep
 from storage.database import connect
 from storage.history import ExecutionHistory
 from ui.components.formatting import status_display
@@ -39,6 +39,22 @@ def demo_run_service(tmp_path: Path) -> WorkflowService:
     service = make_service(tmp_path)
     service.run_demo()
     return service
+
+
+def report_only_workflow() -> Workflow:
+    """A non-demo workflow whose REPORT step performs nothing observable."""
+    return Workflow(
+        workflow_id="report-only-workflow",
+        name="Report only",
+        steps=(
+            WorkflowStep(
+                step_id="inspect",
+                name="Inspect workflow",
+                kind=StepKind.REPORT,
+                message="Workflow definition accepted.",
+            ),
+        ),
+    )
 
 
 def test_the_new_run_status_has_one_plain_language_label() -> None:
@@ -77,9 +93,13 @@ def test_activity_details_explain_the_observation_in_plain_language(qtbot, tmp_p
 
 
 def test_home_recent_activity_shows_the_observation_label(qtbot, tmp_path) -> None:
+    # Home hides the demo workflow, so use an ordinary report-only workflow:
+    # it performs nothing, which is exactly what the label must describe.
+    service = make_service(tmp_path)
+    service.run_workflow(report_only_workflow())
     page = HomePage()
     qtbot.addWidget(page)
-    page.set_service(demo_run_service(tmp_path))
+    page.set_service(service)
     page.refresh()
 
     texts = " | ".join(label.text() for label in page._activity_rows[0].findChildren(QLabel))

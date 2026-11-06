@@ -22,10 +22,14 @@ from engine.workflow import Workflow
 from ui.components.banner import SEVERITY_ERROR, SEVERITY_SUCCESS, Banner
 from ui.editor.canvas import CanvasView
 from ui.strings import (
+    REVIEW_APPROVE,
     REVIEW_APPROVED_BODY,
     REVIEW_APPROVED_TITLE,
+    REVIEW_EDIT,
     REVIEW_PREVIEW_PROBLEM_TITLE,
     REVIEW_SAVE_ERROR_TITLE,
+    REVIEW_TITLE_DRAFT,
+    REVIEW_TITLE_SAVED,
 )
 from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
@@ -33,13 +37,15 @@ from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 class ReviewPage(QWidget):
     """Clean review of a proposed workflow before approval."""
 
-    approved = Signal()
+    approved = Signal(object)
     cancelled = Signal()
+    edit_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._service: WorkflowService | None = None
         self._proposal: ProviderDraft | None = None
+        self._saved_workflow: Workflow | None = None
         self._steps_list: QListWidget | None = None
         self._init_ui()
 
@@ -48,7 +54,7 @@ class ReviewPage(QWidget):
         layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
         layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        self._title_label = QLabel("Review automation", self)
+        self._title_label = QLabel(REVIEW_TITLE_DRAFT, self)
         self._title_label.setObjectName("pageTitle")
         layout.addWidget(self._title_label, alignment=Qt.AlignHCenter)
         self._banner = Banner(self)
@@ -72,18 +78,18 @@ class ReviewPage(QWidget):
         actions_layout.setSpacing(SPACING_SM)
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(SPACING_SM)
-        self._edit_button = QPushButton("Edit", self)
+        self._edit_button = QPushButton(REVIEW_EDIT, self)
         self._edit_button.setObjectName("secondaryActionButton")
         self._edit_button.setMinimumHeight(38)
-        # Editing a proposal must go through the shell's editor flow; until the
-        # shell wires that hand-off (lane B task B7), an unhandled control stays
+        self._edit_button.clicked.connect(self._edit_saved_workflow)
+        # An unhandled editor hand-off (lane B task B7) keeps the control
         # invisible per the honest-controls rule.
         self._edit_button.hide()
         self._cancel_button = QPushButton("Cancel", self)
         self._cancel_button.setObjectName("secondaryActionButton")
         self._cancel_button.setMinimumHeight(38)
         self._cancel_button.clicked.connect(self._cancel_review)
-        self._approve_button = QPushButton("Approve and run", self)
+        self._approve_button = QPushButton(REVIEW_APPROVE, self)
         self._approve_button.setObjectName("primaryActionButton")
         self._approve_button.setMinimumHeight(38)
         self._approve_button.clicked.connect(self._approve)
@@ -107,6 +113,10 @@ class ReviewPage(QWidget):
     def _cancel_review(self) -> None:
         self.cancelled.emit()
 
+    def _edit_saved_workflow(self) -> None:
+        if self._saved_workflow is not None:
+            self.edit_requested.emit(self._saved_workflow)
+
     def _approve(self) -> None:
         if self._service is None or self._proposal is None:
             return
@@ -121,11 +131,17 @@ class ReviewPage(QWidget):
             REVIEW_APPROVED_TITLE,
             REVIEW_APPROVED_BODY.format(name=saved_path.name),
         )
-        self.approved.emit()
+        self.approved.emit(approved.workflow)
 
     def show_workflow(self, workflow: Workflow | None) -> None:
         """Show an opened saved workflow for read-only review, like the old window."""
         self._proposal = None
+        self._saved_workflow = workflow
+        # The opened-workflow mode is "Automation details", not a review: the
+        # user is looking at a saved automation (UX audit D14).
+        self._title_label.setText(REVIEW_TITLE_SAVED)
+        self._edit_button.setVisible(workflow is not None)
+        self._approve_button.hide()
         self._goal_label.setText(f"Goal: {workflow.name}" if workflow else "No workflow loaded.")
         self._steps_list.clear()
         self._banner.clear()
@@ -142,6 +158,10 @@ class ReviewPage(QWidget):
         self._update_action_visibility()
 
     def load_proposal(self, proposal: ProviderDraft | None) -> None:
+        self._saved_workflow = None
+        self._edit_button.hide()
+        self._title_label.setText(REVIEW_TITLE_DRAFT)
+        self._canvas.set_workflow(None)
         self._banner.clear()
         self._steps_list.clear()
         if proposal is None:
@@ -166,6 +186,7 @@ class ReviewPage(QWidget):
             self._update_action_visibility()
             return
         self._proposal = proposal
+        self._canvas.set_workflow(proposal.workflow)
         for index, step_text in enumerate(preview.steps, start=1):
             self._steps_list.addItem(f"{index}. {step_text}")
         self._update_action_visibility()

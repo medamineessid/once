@@ -24,25 +24,27 @@ DEMO_STOPPED_TITLE = "Demonstration stopped"
 DEMO_FAILED_TITLE = "Demonstration failed"
 
 # --- Home -------------------------------------------------------------------
-HOME_TITLE = "Welcome to Once"
-HOME_SUBTITLE = "Your personal assistant for automating repetitive computer tasks."
-HOME_CREATE_ACTION = "Create an automation"
-HOME_CARD_DEMO_TITLE = "Try a demonstration"
-HOME_CARD_DEMO_BODY = (
-    "Watch a small, safe automation run on this PC. Nothing is changed on your computer."
-)
-HOME_CARD_CREATE_TITLE = "Create from scratch"
-HOME_CARD_CREATE_BODY = "Build an automation from connected steps on a visual canvas."
+HOME_TITLE = "What do you want to automate?"
+HOME_SUBTITLE = "Choose how to show Once the task. You can build the steps yourself or record them."
+HOME_CARD_CREATE_TITLE = "Build it yourself"
+HOME_CARD_CREATE_BODY = "Add clear steps on a visual canvas, then preview and save the automation."
+HOME_CARD_CREATE_ACTION = "Build an automation"
 HOME_CARD_RECORD_TITLE = "Record a task"
 HOME_CARD_RECORD_BODY = (
-    "Do the task once while Once records your actions, then review and edit the draft."
+    "Show Once the task once. Your recording stays on this PC and needs review before it can run."
 )
-HOME_RECENT_LIST_TITLE = "Recent activity"
-HOME_RECENT_EMPTY = "You haven't run any automations yet. Try the demonstration to get started."
+HOME_CARD_RECORD_ACTION = "Start with a recording"
+HOME_RECENT_LIST_TITLE = "Your recent runs"
+HOME_RECENT_EMPTY = "No runs yet. Save an automation, then run it from My automations."
+RECORDING_PAGE_TITLE = "Record a task"
+RECORDING_PAGE_SUBTITLE = (
+    "Show Once the task once. Recording stays on this PC and becomes a draft for review."
+)
+RECORDING_BACK = "Back to choices"
+RECORDING_SAVED_NEXT = "Next: review the recording before turning it into steps."
 HOME_RUN_SUCCEEDED = "Succeeded"
 HOME_RUN_FAILED = "Failed"
 HOME_RUN_CANCELLED = "Cancelled"
-HOME_CARD_DEMO_ACTION = "Run demonstration"
 
 # --- My automations ----------------------------------------------------------
 MY_TITLE = "My automations"
@@ -127,6 +129,15 @@ EDITOR_UNSAVED_BODY = "Save your changes, discard them, or stay in the editor."
 EDITOR_SAVE = "Save"
 EDITOR_DISCARD = "Discard"
 EDITOR_STAY = "Stay"
+EDITOR_RUN = "Run automation"
+EDITOR_RUN_SAVE_FIRST_TITLE = "Save before running"
+EDITOR_RUN_SAVE_FIRST_BODY = "Save this automation first. Once saved, run it from My automations."
+EDITOR_RUN_STARTED = "Automation is running."
+EDITOR_RUN_SUCCEEDED = "Automation finished successfully."
+EDITOR_RUN_OBSERVED = "Observation only — nothing was performed."
+EDITOR_RUN_FAILED = "Automation could not finish."
+EDITOR_CANCEL_RUN = "Cancel run"
+EDITOR_RUN_CANCELLED = "Automation was cancelled."
 EDITOR_INSPECTOR_STEPS = "step"
 EDITOR_INSPECTOR_NO_TARGET = "no target"
 EDITOR_INSPECTOR_TARGET_UNREADABLE = "target the editor cannot show"
@@ -136,6 +147,11 @@ EDITOR_INSPECTOR_MUTATING_NOTE = (
     "This step changes your computer. Once asks for approval before it can run."
 )
 
+# --- Review -----------------------------------------------------------------
+REVIEW_EDIT = "Edit automation"
+REVIEW_APPROVE = "Approve draft and edit"
+REVIEW_TITLE_DRAFT = "Review recorded draft"
+REVIEW_TITLE_SAVED = "Automation details"
 # --- lane B strings ---
 REVIEW_PREVIEW_PROBLEM_TITLE = "This proposal cannot be reviewed yet"
 REVIEW_SAVE_ERROR_TITLE = "Approval did not finish"

@@ -437,7 +437,7 @@ def test_launch_refuses_a_non_chrome_endpoint() -> None:
         popen=lambda argv: StderrProcess(),
         http_factory=lambda port: FakeHttp(
             [single_page_target()],
-            version={"Browser": "Chrome/141.0.7390.122"},
+            version={"Browser": "Edg/1.0"},
         ),
         ws_factory=lambda url: FakePageWs({}),
         launch_wait_seconds=5.0,

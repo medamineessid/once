@@ -130,15 +130,15 @@ class WorkflowWorker(QObject):
         workflow: Workflow,
         *,
         replay: bool = False,
-        allowed_root: Path | None = None,
         desktop_approval: DesktopApproval | None = None,
+        allowed_root: Path | None = None,
     ) -> None:
         super().__init__()
         self._service = service
         self._workflow = workflow
         self._replay = replay
-        self._allowed_root = allowed_root
         self._desktop_approval = desktop_approval
+        self._allowed_root = allowed_root
         self._cancel_requested = Event()
         self._event_stream: RunEventSource | None = None
 
@@ -161,6 +161,7 @@ class WorkflowWorker(QObject):
             if self._desktop_approval is not None:
                 result = self._service.run_desktop_approved(
                     self._desktop_approval,
+                    allowed_root=self._allowed_root,
                     cancel_check=self._cancel_requested.is_set,
                     progress_callback=on_step_result,  # type: ignore[arg-type]
                 )

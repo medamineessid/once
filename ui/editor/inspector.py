@@ -109,7 +109,7 @@ class InspectorPanel(QScrollArea):
     def field(self, name: str) -> QWidget:
         return self._fields[name]
 
-    def show_step(self, step: WorkflowStep) -> None:
+    def show_step(self, step: WorkflowStep, result: object | None = None) -> None:
         """Populate the panel with validator-backed controls for one step."""
         self.show()
         is_mutating = step.kind in MUTATING_DESKTOP_KINDS
@@ -124,6 +124,15 @@ class InspectorPanel(QScrollArea):
         ]
         if is_mutating:
             lines.append(EDITOR_INSPECTOR_MUTATING_NOTE)
+        if result is not None:
+            status = getattr(getattr(result, "status", None), "value", "UNKNOWN")
+            lines.append(f"Run status: {status}")
+            message = getattr(result, "message", "")
+            if message:
+                lines.append(f"Result: {message}")
+            evidence = tuple(getattr(result, "evidence", ()))
+            if evidence:
+                lines.append("Evidence:\n" + "\n".join(evidence))
         self._summary_label.setText("\n".join(lines))
         self._clear_fields()
         self._add_text_field("name", "Name", step.name)
