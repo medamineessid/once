@@ -441,15 +441,21 @@ def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
     process.wait(timeout=10)
 
 
-def close_provider(windows, *, clock=lambda: 0.0) -> PywinautoDesktopActions:
+def close_provider(
+    windows, *, clock=lambda: 0.0, process_running=None
+) -> PywinautoDesktopActions:
     """Provider bound to one fake desktop surface with launch and close access."""
     desktop = FakeDesktop(windows)
+    optional: dict[str, object] = {}
+    if process_running is not None:
+        optional["process_running"] = process_running
     return PywinautoDesktopActions(
         desktop_factory=lambda: desktop,
         registry=WindowsApplicationRegistry(),
         popen=lambda argv: FakeProcess(),
         sleep=lambda _s: None,
         clock=clock,
+        **optional,
     )
 
 
@@ -507,6 +513,42 @@ def test_close_fails_closed_when_the_window_close_errors() -> None:
     result = provider.close_application(json.dumps({"application": "vscode"}))
     assert result.status is StepStatus.FAILED
     assert "the surface refused" in result.message
+
+
+def test_close_does_not_claim_success_while_the_process_is_alive() -> None:
+    """No matching window while the launched process still runs = FAILED.
+
+    On Windows 11, packaged apps (Notepad, Calculator) launch through a stub
+    process whose windows belong to an existing instance, so a pid-based
+    window scan can legitimately find nothing. The step must say it closed
+    nothing, never claim a success it did not observe.
+    """
+    provider = close_provider([], process_running=lambda _pid: True)
+    provider.launch_application(json.dumps({"application": "vscode"}))
+
+    result = provider.close_application(json.dumps({"application": "vscode"}))
+
+    assert result.status is StepStatus.FAILED
+    assert "still running" in result.message
+    assert "windows_closed=0" in result.evidence
+
+
+def test_close_succeeds_when_the_app_already_exited() -> None:
+    """Nothing to close because the application already left the desktop."""
+    provider = close_provider([], process_running=lambda _pid: False)
+    provider.launch_application(json.dumps({"application": "vscode"}))
+
+    result = provider.close_application(json.dumps({"application": "vscode"}))
+
+    assert result.status is StepStatus.SUCCEEDED
+    assert "windows_closed=0" in result.evidence
+    assert "process_gone=true" in result.evidence
+
+
+def test_registry_resolves_charmap_to_system32() -> None:
+    path = WindowsApplicationRegistry().resolve("charmap")
+    assert path.name == "charmap.exe"
+    assert "System32" in path.parts
 
 
 def test_registry_resolves_vscode_to_a_known_code_executable() -> None:
