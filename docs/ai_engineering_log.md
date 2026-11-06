@@ -2,6 +2,73 @@
 
 Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 
+## 2026-11-05 — Outcomes-engine: port lane B's run-truth outcomes to this branch   (commit: this code commit)
+- Task: make a REPORT step finish OBSERVED and a report-only run finish
+  OBSERVATION_ONLY on this branch too (until now engine/workflow.py claimed
+  SUCCEEDED for both, which made the A3 labels string-keyed predictions and left
+  docs/contracts/run-outcomes.md a dangling reference). Port lane B's
+  ef842d9 + 1d76b5f from the once-lane-b clone into integration/preview: engine
+  enums + `_final_status` decision order, run_events success-continuation,
+  the two contract docs, and the label routing for Activity details,
+  My-automations run line and the classic window's run-level lines.
+- AI contribution: hand-applied the engine half to this tree's much larger
+  workflow.py (verified `_run_once`'s SUCCEEDED fallthrough is
+  REPORT-only: DESKTOP_PROVIDER_KINDS and BROWSER_PROVIDER_KINDS cover the
+  other 12 kinds); ported controller/run_events.py + docs contracts verbatim;
+  ported tests/test_b1_run_outcomes.py verbatim and tests/test_b4_status_labels.py
+  with one adaptation (our Home hides the diagnostic demo row, so its test runs a
+  non-demo report workflow); updated the semantic assertions in test_workflow (7
+  hunks), test_b1_run_events, test_b2_approval_panel, test_activity_page,
+  test_editor_page, test_entry_acceptance, test_p2_shell, test_shell, test_smoke,
+  test_workers; routed three classic-window run-level strings through
+  status_display beyond lane B's literal scope (our default window is the old
+  one); appended the PROGRESS.md queue row.
+- Defect found: naive grep-based porting would have routed desktop/browser step
+  kinds into the REPORT fallthrough — disproved by enumerating StepKind members
+  against both provider collections before editing. Second defect: my first
+  read of lane B's test expectations had test_workers inverted (SUCCEEDED ↔
+  OBSERVATION_ONLY swapped) on the first edit; caught by re-reading the file.
+  Third defect: my focused batches missed one raw run-status assertion in
+  tests/test_my_automations_page.py; the first full verify gate caught it.
+- Verification (this session, Windows venv):
+  - Red first: `pytest tests/test_b1_run_outcomes.py tests/test_b4_status_labels.py
+    tests/test_workflow.py -q` → `20 failed, 9 passed, 1 skipped` (missing enum
+    members — the expected failure reason).
+  - Engine half green: `pytest tests/test_b1_run_outcomes.py tests/test_workflow.py
+    tests/test_b1_run_events.py tests/test_workers.py tests/test_history.py -q` →
+    `40 passed, 1 skipped`.
+  - UI batch: `pytest tests/test_b4_status_labels.py tests/test_activity_page.py
+    tests/test_b2_approval_panel.py tests/test_smoke.py tests/test_p2_shell.py
+    tests/test_workers.py -q` → `52 passed`.
+  - Shell/editor batch (2 pre-existing-assert failures found and updated to the
+    honest wording): `pytest tests/test_shell.py tests/test_editor_page.py
+    tests/test_entry_acceptance.py tests/test_acceptance_journey.py
+    tests/test_recording_service.py -q` → `2 failed, 55 passed` → after the two
+    test-assert updates → see next line.
+  - Engine/browser batch: `pytest tests/test_entry_acceptance.py
+    tests/test_editor_page.py tests/test_recording_flow.py tests/test_desktop_engine.py
+    tests/test_browser_engine.py tests/test_replay.py tests/test_desktop_controller.py
+    -q` → `87 passed`.
+  - Mixed batch: `pytest tests/test_check_mvp.py tests/test_fixtures.py
+    tests/test_workflow_validation.py tests/test_acceptance_journey.py tests/test_loop.py
+    tests/test_workflow_storage.py tests/test_workflow_layouts.py tests/test_review_ui.py
+    tests/test_b1_run_events.py tests/test_b1_run_outcomes.py
+    tests/test_controller_service.py -q` → `75 passed`.
+  - Full gate `scripts/verify.ps1` (run 1) → FAILED only `pytest`, whose full run
+    exposed one more raw-string assertion I had missed in the focused batches
+    (`tests/test_my_automations_page.py::test_run_shows_finished_run_status`
+    expected raw "SUCCEEDED"; the routed text is "Run Succeeded: …"). Updated that
+    one test; `pytest tests/test_my_automations_page.py -q` → `18 passed`.
+  - Full gate `scripts/verify.ps1` (run 2) → `ALL CHECKS PASSED` (all required
+    rows PASS). Full pytest in that gate: 578 passed, 2 skipped (the second
+    standalone full run's reported wall time 12:44:58 spans an overnight machine
+    pause; the count is the result).
+  - `ruff check .` → `All checks passed!`; `ruff format <changed files>` → `1 file
+    reformatted, 8 files left unchanged` (the frozenset line), rerun → `All
+    checks passed!`.
+- Outcome: PASSED
+- Human review:
+
 ## 2026-11-04 — Editor A3: word observation outcomes in plain language   (commit: this code commit)
 - Task: in the editor inspector and shell banners, show OBSERVED as "Observed —
   not performed" and OBSERVATION_ONLY as "Observation only — nothing was

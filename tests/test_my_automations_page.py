@@ -447,7 +447,8 @@ def test_run_shows_finished_run_status(qtbot):
     click_run(page)
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
 
-    assert "SUCCEEDED" in page._details_label.text()
+    # The run line goes through the single status label map (run-outcomes.md).
+    assert "Run Succeeded" in page._details_label.text()
 
 
 def test_shell_injects_service_into_page(qtbot):

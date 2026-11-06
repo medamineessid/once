@@ -85,7 +85,7 @@ def test_first_time_journey_through_entry_point_creates_and_runs(entry_shell, qt
     qtbot.wait(50)
     qtbot.mouseClick(window.my_automations_page._run_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(
-        lambda: "Run SUCCEEDED" in window.my_automations_page._details_label.text(),
+        lambda: "Run Observation only" in window.my_automations_page._details_label.text(),
         timeout=5000,
     )
 

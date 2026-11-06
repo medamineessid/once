@@ -36,6 +36,7 @@ from engine.errors import AIProviderError, WorkflowValidationError
 from engine.replay import ReplayPreview
 from engine.workflow import StepKind, Workflow, WorkflowRun, WorkflowStep
 from recorder.drafts import build_raw_draft
+from ui.components.formatting import status_display
 from ui.review_view import ProposalReviewPanel
 from ui.workers import WorkflowWorker
 
@@ -415,7 +416,10 @@ class MainWindow(QMainWindow):
             self._show_error(str(error))
 
     def _show_run(self, run: WorkflowRun) -> None:
-        self._status_label.setText(f"{run.status.value}: {len(run.results)} steps recorded")
+        # Run-level wording comes from the one label map (run-outcomes.md); the
+        # per-step lines below keep the raw status values.
+        label, _chip_kind = status_display(run.status.value)
+        self._status_label.setText(f"{label}: {len(run.results)} steps recorded")
         self._result_list.clear()
         for result in run.results:
             self._show_step_result(result)
@@ -561,7 +565,8 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _history_text(run: WorkflowRun) -> str:
-        return f"{run.workflow_id} — {run.status.value} — {len(run.results)} steps"
+        label, _chip_kind = status_display(run.status.value)
+        return f"{run.workflow_id} — {label} — {len(run.results)} steps"
 
     def _show_error(self, message: str) -> None:
         self._status_label.setText(f"Error: {message}")

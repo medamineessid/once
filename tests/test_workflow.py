@@ -32,14 +32,14 @@ def make_workflow(*kinds: StepKind) -> Workflow:
     )
 
 
-def test_workflow_runner_records_successful_steps() -> None:
+def test_workflow_runner_records_reported_steps_as_observations() -> None:
     run = WorkflowRunner().run(make_workflow(StepKind.REPORT, StepKind.REPORT), run_id="run-1")
 
     assert run.run_id == "run-1"
-    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.status is WorkflowStatus.OBSERVATION_ONLY
     assert [result.status for result in run.results] == [
-        StepStatus.SUCCEEDED,
-        StepStatus.SUCCEEDED,
+        StepStatus.OBSERVED,
+        StepStatus.OBSERVED,
     ]
 
 
@@ -77,7 +77,7 @@ def test_workflow_runner_reports_progress_for_completed_steps() -> None:
     )
 
     assert [result.step_id for result in progress] == ["step-0", "step-1"]
-    assert all(result.status is StepStatus.SUCCEEDED for result in progress)
+    assert all(result.status is StepStatus.OBSERVED for result in progress)
 
 
 def test_workflow_runner_stops_after_controlled_failure() -> None:
@@ -88,7 +88,7 @@ def test_workflow_runner_stops_after_controlled_failure() -> None:
 
     assert run.status is WorkflowStatus.FAILED
     assert [result.status for result in run.results] == [
-        StepStatus.SUCCEEDED,
+        StepStatus.OBSERVED,
         StepStatus.FAILED,
         StepStatus.SKIPPED,
     ]
@@ -105,7 +105,7 @@ def test_workflow_runner_cancels_before_remaining_steps() -> None:
 
     assert run.status is WorkflowStatus.CANCELLED
     assert [result.status for result in run.results] == [
-        StepStatus.SUCCEEDED,
+        StepStatus.OBSERVED,
         StepStatus.SKIPPED,
     ]
 
@@ -113,7 +113,7 @@ def test_workflow_runner_cancels_before_remaining_steps() -> None:
 def test_workflow_runner_terminates_empty_workflow() -> None:
     run = WorkflowRunner().run(make_workflow(), run_id="run-4")
 
-    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.status is WorkflowStatus.OBSERVATION_ONLY
     assert run.results == ()
 
 
@@ -189,7 +189,8 @@ def test_workflow_runner_retries_and_records_attempt_evidence() -> None:
 
     run = EventuallySuccessfulRunner().run(workflow)
 
-    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.status is WorkflowStatus.OBSERVATION_ONLY
+    assert run.results[0].status is StepStatus.OBSERVED
     assert run.results[0].message.endswith("(attempt 2)")
 
 
@@ -227,8 +228,9 @@ def test_workflow_runner_checks_path_postcondition(tmp_path) -> None:
 
     run = WorkflowRunner().run(workflow, allowed_root=tmp_path)
 
-    assert run.status is WorkflowStatus.SUCCEEDED
-    assert run.results[0].status is StepStatus.SUCCEEDED
+    # A postcondition verifies the observation; it does not turn it into work.
+    assert run.status is WorkflowStatus.OBSERVATION_ONLY
+    assert run.results[0].status is StepStatus.OBSERVED
     assert "size=6" in run.results[0].evidence
 
 
