@@ -8,12 +8,13 @@ launched, never a window title or an image name.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
-from ai.provider import PROCESS_TO_APPLICATION
 from engine.desktop import (
     ReplayExecutor,
     approve_desktop_workflow,
@@ -31,8 +32,11 @@ from engine.workflow import (
 )
 from integrations.windows_desktop import PywinautoDesktopActions
 
-CHROME_CLOSE = json.dumps({"application": "chrome"})
-NOTEPAD_CLOSE = json.dumps({"application": "notepad"})
+APP_TARGET = json.dumps({"executable": str(sys.executable)})
+
+
+CHROME_CLOSE = APP_TARGET
+NOTEPAD_CLOSE = APP_TARGET
 
 
 # --------------------------------------------------------------------- engine
@@ -53,21 +57,20 @@ def test_close_validation_refuses_an_unlisted_application() -> None:
         "Close cmd.",
         target=json.dumps({"application": "cmd"}),
     )
-    with pytest.raises(WorkflowValidationError, match="registry does not allow"):
-        WorkflowRunner.validate(Workflow("w", "w", (step,)))
-
-
-def test_close_validation_refuses_an_executable_target() -> None:
-    """Closing is by allow-listed name only, so it can never target a path."""
-    step = WorkflowStep(
-        "c1",
-        "Close chrome",
-        StepKind.CLOSE_APPLICATION,
-        "Close chrome.",
-        target=json.dumps({"executable": r"C:\Program Files\Google\Chrome\chrome.exe"}),
-    )
     with pytest.raises(WorkflowValidationError, match="unknown close fields"):
         WorkflowRunner.validate(Workflow("w", "w", (step,)))
+
+
+def test_close_validation_accepts_the_executable_path_from_a_recording() -> None:
+    """Closing targets exactly the executable path the recording captured."""
+    step = WorkflowStep(
+        "c1",
+        "Close the application",
+        StepKind.CLOSE_APPLICATION,
+        "Close the application.",
+        target=json.dumps({"executable": str(Path(sys.executable))}),
+    )
+    WorkflowRunner.validate(Workflow("w", "w", (step,)))
 
 
 def test_close_is_a_mutating_step_behind_the_approval_gate() -> None:
@@ -139,16 +142,12 @@ def test_launch_then_close_chrome_runs_through_the_provider() -> None:
         "CLOSE_APPLICATION",
     )
     assert [target for _kind, target in actions.calls] == [
-        {"application": "chrome"},
-        {"application": "chrome"},
+        {"executable": str(sys.executable)},
+        {"executable": str(sys.executable)},
     ]
 
 
 # ------------------------------------------------------------------- recorder
-
-
-def test_recorded_chrome_process_maps_to_the_chrome_application() -> None:
-    assert PROCESS_TO_APPLICATION["chrome.exe"] == "chrome"
 
 
 # -------------------------------------------------------------------- adapter
@@ -225,28 +224,11 @@ def notepad_provider(
         launched.append(argv)
         return FakeProcess()
 
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(desktop, {FakeProcess.pid} if alive is None else alive),
         popen=fake_popen,
     )
     return provider, launched
-
-
-def test_chrome_launch_uses_an_isolated_profile_and_its_own_executable(
-    tmp_path: Path,
-) -> None:
-    executable = tmp_path / "chrome.exe"
-    executable.write_bytes(b"")
-    provider = PywinautoDesktopActions(
-        **fake_surface(FakeDesktop([]), {FakeProcess.pid}),
-        popen=lambda argv: FakeProcess(),
-    )
-
-    result = provider.launch_application(json.dumps({"executable": str(executable)}))
-
-    assert result.status is StepStatus.SUCCEEDED
-    assert "isolated_profile=true" in result.evidence
-    assert any(item.startswith("chrome_profile=") for item in result.evidence)
 
 
 def test_close_touches_only_the_launched_process_id() -> None:
@@ -254,7 +236,7 @@ def test_close_touches_only_the_launched_process_id() -> None:
     foreign = FakeWindow(FakeElementInfo("Chrome — my own browsing", 99))
     provider, _launched = notepad_provider([own, foreign])
 
-    launched = provider.launch_application(json.dumps({"application": "notepad"}))
+    launched = provider.launch_application(APP_TARGET)
     assert launched.status is StepStatus.SUCCEEDED
 
     result = provider.close_application(NOTEPAD_CLOSE)
@@ -287,12 +269,12 @@ def test_close_reports_when_the_window_never_disappears() -> None:
     sticky = StickyWindow(FakeElementInfo("Chrome", FakeProcess.pid))
     ticks = iter(range(1, 400))
     desktop = FakeDesktop([sticky])
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(desktop, {FakeProcess.pid}),
         popen=lambda argv: FakeProcess(),
         clock=lambda: float(next(ticks)),
     )
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -306,7 +288,7 @@ def test_close_reports_a_window_that_raises_on_close() -> None:
             raise RuntimeError("the surface refused")
 
     provider, _launched = notepad_provider([BrokenWindow(FakeElementInfo("Chrome", 4242))])
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -319,14 +301,14 @@ def test_launching_a_second_process_replaces_the_registered_pid() -> None:
     first = FakeWindow(FakeElementInfo("Chrome one", 1111))
     second = FakeWindow(FakeElementInfo("Chrome two", 2222))
     pids = iter((1111, 2222))
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(FakeDesktop([first, second]), {1111, 2222}),
         popen=lambda argv: process_with_pid(next(pids)),
     )
 
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
     assert provider.close_application(NOTEPAD_CLOSE).status is StepStatus.SUCCEEDED
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     assert first.closed is True
     assert second.closed is False
@@ -350,11 +332,11 @@ class LateDesktop:
 def test_close_waits_for_a_window_that_appears_after_the_first_polls() -> None:
     own = FakeWindow(FakeElementInfo("Chrome", FakeProcess.pid))
     desktop = LateDesktop(own, appear_after=2)
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(desktop, {FakeProcess.pid}),  # type: ignore[arg-type]
         popen=lambda argv: FakeProcess(),
     )
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -367,12 +349,12 @@ def test_close_waits_for_a_window_that_appears_after_the_first_polls() -> None:
 def test_close_ignores_hidden_windows_of_the_launched_process() -> None:
     hidden = FakeWindow(FakeElementInfo("Chrome", FakeProcess.pid, visible=False))
     ticks = iter(range(1, 100))
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(FakeDesktop([hidden]), {FakeProcess.pid}),
         popen=lambda argv: FakeProcess(),
         clock=lambda: float(next(ticks)),
     )
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -386,7 +368,7 @@ def test_close_closes_the_visible_window_and_leaves_the_hidden_one_alone() -> No
     hidden = FakeWindow(FakeElementInfo("Chrome", FakeProcess.pid, visible=False, handle=1))
     visible = FakeWindow(FakeElementInfo("Chrome", FakeProcess.pid, handle=2))
     provider, _launched = notepad_provider([hidden, visible])
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -399,12 +381,12 @@ def test_close_closes_the_visible_window_and_leaves_the_hidden_one_alone() -> No
 def test_close_ignores_owned_windows_of_the_launched_process() -> None:
     owned = FakeWindow(FakeElementInfo("Chrome popup", FakeProcess.pid, owner=True))
     ticks = iter(range(1, 100))
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(FakeDesktop([owned]), {FakeProcess.pid}),
         popen=lambda argv: FakeProcess(),
         clock=lambda: float(next(ticks)),
     )
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -415,7 +397,7 @@ def test_close_ignores_owned_windows_of_the_launched_process() -> None:
 
 def test_close_reports_a_process_that_already_exited() -> None:
     provider, _launched = notepad_provider([], alive=set())
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -427,12 +409,12 @@ def test_close_reports_a_process_that_already_exited() -> None:
 
 def test_close_fails_when_no_window_ever_appears() -> None:
     ticks = iter(range(1, 100))
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(FakeDesktop([]), {FakeProcess.pid}),
         popen=lambda argv: FakeProcess(),
         clock=lambda: float(next(ticks)),
     )
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -450,11 +432,11 @@ def test_close_reports_success_when_the_process_exits_after_the_request() -> Non
             self.closed = True
 
     window = ExitingWindow(FakeElementInfo("Chrome", FakeProcess.pid))
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(FakeDesktop([window]), alive),
         popen=lambda argv: FakeProcess(),
     )
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -471,12 +453,12 @@ def test_close_reports_the_windows_that_are_still_visible() -> None:
 
     sticky = StickyWindow(FakeElementInfo("Chrome", FakeProcess.pid))
     ticks = iter(range(1, 400))
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         **fake_surface(FakeDesktop([sticky]), {FakeProcess.pid}),
         popen=lambda argv: FakeProcess(),
         clock=lambda: float(next(ticks)),
     )
-    provider.launch_application(json.dumps({"application": "notepad"}))
+    provider.launch_application(APP_TARGET)
 
     result = provider.close_application(NOTEPAD_CLOSE)
 
@@ -485,15 +467,54 @@ def test_close_reports_the_windows_that_are_still_visible() -> None:
     assert "visible_windows_remaining=1" in result.evidence
 
 
-def test_close_refuses_chrome_because_it_is_launch_only() -> None:
-    """Chrome close stays unsupported rather than reporting a success it cannot prove."""
-    own = FakeWindow(FakeElementInfo("Chrome", FakeProcess.pid))
-    provider, _launched = notepad_provider([own], alive={FakeProcess.pid})
-    provider.launch_application(json.dumps({"application": "chrome"}))
+def test_close_fails_closed_when_the_approved_record_forbids_closing() -> None:
+    """close_supported comes from the approval record, never from a name in code."""
+    own = FakeWindow(FakeElementInfo("Harmless app", FakeProcess.pid))
+    desktop = FakeDesktop([own])
+    provider = approved_provider(
+        **fake_surface(desktop, {FakeProcess.pid}),
+        popen=lambda argv: FakeProcess(),
+        approvals=FakeApprovals(close_supported=False),
+    )
+    assert provider.launch_application(APP_TARGET).status is StepStatus.SUCCEEDED
 
-    result = provider.close_application(CHROME_CLOSE)
+    result = provider.close_application(APP_TARGET)
 
     assert result.status is StepStatus.FAILED
-    assert "not supported for Chrome yet" in result.message
+    assert "cannot close this application" in result.message
     assert "close_supported=false" in result.evidence
     assert own.closed is False, "a fail-closed close must not touch anything"
+
+
+class FakeApprovals:
+    """One approved-application record, standing in for the storage registry."""
+
+    def __init__(
+        self,
+        *,
+        approved: bool = True,
+        close_supported: bool = True,
+        sha256: str | None = None,
+        display_name: str = "Harmless app",
+    ) -> None:
+        self.approved = approved
+        self.close_supported = close_supported
+        self.sha256 = sha256
+        self.display_name = display_name
+
+    def find(self, executable):
+        from engine.workflow import ApprovedApplication
+
+        return ApprovedApplication(
+            executable=executable,
+            sha256=self.sha256 or hashlib.sha256(executable.read_bytes()).hexdigest(),
+            display_name=self.display_name,
+            approved=self.approved,
+            close_supported=self.close_supported,
+        )
+
+
+def approved_provider(**kwargs):
+    """A desktop provider whose approval source is the fake registry above."""
+    kwargs.setdefault("approvals", FakeApprovals())
+    return PywinautoDesktopActions(**kwargs)

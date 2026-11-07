@@ -9,19 +9,23 @@ windows, and never waits or retries without the step's timeout.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from engine.errors import ExecutionError
-from engine.workflow import StepResult, StepStatus
+from engine.workflow import (
+    ApplicationApprovals,
+    ApprovedApplication,
+    StepResult,
+    StepStatus,
+)
 from integrations.uia_targeting import element_matches, window_matches
 
 SHORTCUT_CODES: dict[str, str] = {
@@ -46,46 +50,19 @@ GW_OWNER = 4
 STILL_ACTIVE = 259
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
-#: Applications Once may launch but not close. Measured live on 2026-11-06:
-#: Chrome swaps its startup window for the real browser window, and close
-#: requests left that window and the process running until the deadline, so a
-#: close step could only report a success it cannot prove. Closed only when the
-#: measurement proves a browser window actually goes away.
-LAUNCH_ONLY_APPLICATIONS = frozenset({"chrome"})
 
-CHROME_EXECUTABLE_NAME = "chrome.exe"
-#: Relative location of chrome.exe inside each Windows install root.
-CHROME_RELATIVE_EXECUTABLE = Path("Google", "Chrome", "Application", CHROME_EXECUTABLE_NAME)
-#: (environment variable, documented default) for Chrome's install roots.
-CHROME_INSTALL_ROOTS: tuple[tuple[str, str | None], ...] = (
-    ("ProgramFiles", r"C:\Program Files"),
-    ("ProgramFiles(x86)", r"C:\Program Files (x86)"),
-    ("LOCALAPPDATA", None),
-)
-#: Chrome switches Once refuses to take from a step: it always picks its own
-#: disposable profile so the launched process is separate and its PID is ours.
-CHROME_PROFILE_SWITCHES = frozenset({"--user-data-dir", "--profile-directory"})
-CHROME_PROFILE_PREFIX = "once-chrome-profile-"
+def _file_sha256(path: Path) -> str:
+    """Content hash that proves the executable on disk is the one approved."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1_048_576), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
-def chrome_install_candidates() -> tuple[Path, ...]:
-    """Standard absolute chrome.exe locations, in resolution order."""
-    candidates: list[Path] = []
-    for variable, fallback in CHROME_INSTALL_ROOTS:
-        root = os.environ.get(variable) or fallback
-        if root:
-            candidates.append(Path(root) / CHROME_RELATIVE_EXECUTABLE)
-    return tuple(candidates)
-
-
-def _is_chrome(executable: Path) -> bool:
-    return executable.name.lower() == CHROME_EXECUTABLE_NAME
-
-
-def _chrome_profile_argument() -> tuple[str, Path]:
-    """A throwaway --user-data-dir, so this launch is a separate Chrome process."""
-    profile = Path(tempfile.gettempdir()) / f"{CHROME_PROFILE_PREFIX}{uuid4().hex}"
-    return f"--user-data-dir={profile}", profile
+def _executable_key(executable: Path) -> str:
+    """Case-insensitive identity of one executable path, as Windows sees it."""
+    return os.path.normcase(str(Path(executable).absolute()))
 
 
 def _handle_of(wrapper: Any) -> int:
@@ -139,57 +116,6 @@ def _default_process_alive(pid: int) -> bool:
         kernel32.CloseHandle(handle)
 
 
-def _vscode_candidates() -> tuple[Path, ...]:
-    """Known install locations of VS Code, user-scope install first."""
-    local_app_data = os.environ.get("LOCALAPPDATA")
-    local_root = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
-    program_files = os.environ.get("PROGRAMFILES", r"C:\Program Files")
-    return (
-        local_root / "Programs" / "Microsoft VS Code" / "Code.exe",
-        Path(program_files) / "Microsoft VS Code" / "Code.exe",
-    )
-
-
-class WindowsApplicationRegistry:
-    """Controlled expansion of allow-listed application names to executables."""
-
-    def __init__(self, chrome_candidates: tuple[Path, ...] | None = None) -> None:
-        self._chrome_candidates = (
-            chrome_install_candidates() if chrome_candidates is None else tuple(chrome_candidates)
-        )
-
-    def chrome_candidates(self) -> tuple[Path, ...]:
-        """The chrome.exe locations this registry will consider, in order."""
-        return self._chrome_candidates
-
-    def resolve(self, name: str) -> Path:
-        """Return the executable path for one registered application name."""
-        lowered = name.strip().lower()
-        if lowered == "notepad":
-            root = Path(os.environ.get("SYSTEMROOT", r"C:\Windows"))
-            return root / "System32" / "notepad.exe"
-        if lowered == "vscode":
-            candidates = _vscode_candidates()
-            for candidate in candidates:
-                if candidate.is_file():
-                    return candidate
-            return candidates[0]
-        if lowered == "chrome":
-            for candidate in self._chrome_candidates:
-                if candidate.is_file():
-                    return candidate
-            raise ExecutionError(
-                "Chrome was not found in its standard install locations on this "
-                "computer, so Once cannot launch it by name. Install Chrome, or "
-                "point the step at an absolute chrome.exe path you approve."
-            )
-        raise ExecutionError(
-            f"The application registry does not contain {name}. Use an "
-            "allow-listed application name or an explicitly approved absolute "
-            "executable path."
-        )
-
-
 def _load_parsed(target_json: str, what: str) -> dict:
     try:
         parsed = json.loads(target_json)
@@ -206,7 +132,7 @@ class PywinautoDesktopActions:
     def __init__(
         self,
         desktop_factory: Callable[[], Any] | None = None,
-        registry: WindowsApplicationRegistry | None = None,
+        approvals: ApplicationApprovals | None = None,
         popen: Callable[..., Any] | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
@@ -216,7 +142,8 @@ class PywinautoDesktopActions:
         process_alive: Callable[[int], bool] | None = None,
     ) -> None:
         self._desktop_factory = desktop_factory or self._default_desktop
-        self._registry = registry or WindowsApplicationRegistry()
+        #: Approved applications, injected by the caller (storage-backed).
+        self._approvals = approvals
         self._popen = popen or self._default_popen
         self._sleep = sleep
         self._clock = clock
@@ -224,8 +151,8 @@ class PywinautoDesktopActions:
         self._is_visible = is_visible or _default_is_visible
         self._has_owner = has_owner or _default_has_owner
         self._process_alive = process_alive or _default_process_alive
-        #: application name -> pid of exactly the process this run launched.
-        self._launched_processes: dict[str, int] = {}
+        #: executable path -> (pid, close_supported) of exactly what this run launched.
+        self._launched: dict[str, tuple[int, bool]] = {}
 
     # ------------------------------------------------------------ dispatch
 
@@ -246,13 +173,26 @@ class PywinautoDesktopActions:
     # -------------------------------------------------------------- launch
 
     def launch_application(self, target_json: str) -> StepResult:
-        """Start one approved application; never uses a shell."""
+        """Start one approved application; never uses a shell.
+
+        The recording supplies the executable path, and the approved-application
+        registry decides whether this exact file, unchanged since it was
+        approved, may start. Nothing is launched without that record.
+        """
         target = _load_parsed(target_json, "launch")
         arguments = [str(item) for item in target.get("arguments", [])]
-        if isinstance(target.get("application"), str):
-            executable = self._registry.resolve(target["application"])
-        else:
-            executable = Path(str(target["executable"]))
+        recorded = target.get("executable")
+        if not isinstance(recorded, str) or not recorded.strip():
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=(
+                    "The launch step needs the executable path recorded for the "
+                    "application, and this step has none."
+                ),
+                evidence=("executable_missing=true",),
+            )
+        executable = Path(recorded)
         if not executable.is_file():
             return StepResult(
                 step_id="",
@@ -263,30 +203,9 @@ class PywinautoDesktopActions:
                 ),
                 evidence=("missing=true", f"executable={executable}"),
             )
-        extra_evidence: tuple[str, ...] = ()
-        if _is_chrome(executable):
-            refused = sorted(
-                {
-                    switch
-                    for switch in CHROME_PROFILE_SWITCHES
-                    for argument in arguments
-                    if argument.split("=", 1)[0].strip().lower() == switch
-                }
-            )
-            if refused:
-                return StepResult(
-                    step_id="",
-                    status=StepStatus.FAILED,
-                    message=(
-                        "Once launches Chrome with its own temporary profile, so this "
-                        f"step cannot choose one ({', '.join(refused)}). Remove that "
-                        "argument and run the step again."
-                    ),
-                    evidence=(f"refused_argument={refused[0]}", f"executable={executable}"),
-                )
-            profile_argument, profile = _chrome_profile_argument()
-            arguments = [*arguments, profile_argument]
-            extra_evidence = ("isolated_profile=true", f"chrome_profile={profile}")
+        approval, refusal = self._approval_for(executable)
+        if refusal is not None:
+            return refusal
         argv = [str(executable), *arguments]
         try:
             process = self._popen(argv)
@@ -297,9 +216,7 @@ class PywinautoDesktopActions:
                 message=f"The application could not be launched: {error}",
                 evidence=(f"executable={executable}",),
             )
-        application_name = target.get("application")
-        if isinstance(application_name, str) and application_name.strip():
-            self._launched_processes[application_name.strip().lower()] = process.pid
+        self._launched[_executable_key(executable)] = (process.pid, approval.close_supported)
         return StepResult(
             step_id="",
             status=StepStatus.SUCCEEDED,
@@ -308,9 +225,68 @@ class PywinautoDesktopActions:
                 f"executable={executable}",
                 f"process_id={process.pid}",
                 f"argument_count={len(argv) - 1}",
-                *extra_evidence,
+                f"display_name={approval.display_name}",
+                f"sha256={approval.sha256}",
+                f"close_supported={'true' if approval.close_supported else 'false'}",
             ),
         )
+
+    def _approval_for(
+        self, executable: Path
+    ) -> tuple[ApprovedApplication | None, StepResult | None]:
+        """Return the approval record or the fail-closed refusal for this file."""
+        actual = _file_sha256(executable)
+        record = self._approvals.find(executable) if self._approvals is not None else None
+        if record is None:
+            return None, StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=(
+                    "Once has not been given permission to launch this application "
+                    "yet. Approve it once, then run the step again."
+                ),
+                evidence=(
+                    "approval_needed=true",
+                    "approval_reason=not_recorded",
+                    f"executable={executable}",
+                    f"sha256={actual}",
+                ),
+            )
+        if record.sha256.strip().lower() != actual:
+            return None, StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=(
+                    "The application file changed since it was approved, so Once "
+                    "did not launch it. Review the new version and approve it to "
+                    "continue."
+                ),
+                evidence=(
+                    "approval_needed=true",
+                    "approval_reason=hash_mismatch",
+                    f"executable={executable}",
+                    f"display_name={record.display_name}",
+                    f"approved_sha256={record.sha256}",
+                    f"sha256={actual}",
+                ),
+            )
+        if not record.approved:
+            return None, StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=(
+                    "This application is waiting for your approval, so Once did "
+                    "not launch it. Approve it, then run the step again."
+                ),
+                evidence=(
+                    "approval_needed=true",
+                    "approval_reason=pending_approval",
+                    f"executable={executable}",
+                    f"display_name={record.display_name}",
+                    f"sha256={actual}",
+                ),
+            )
+        return record, None
 
     # ---------------------------------------------------------------- close
 
@@ -325,31 +301,36 @@ class PywinautoDesktopActions:
         success. Without a launch recorded in this run nothing is closed.
         """
         target = _load_parsed(target_json, "close")
-        application = target.get("application")
-        if not isinstance(application, str) or not application.strip():
-            return StepResult(
-                step_id="",
-                status=StepStatus.FAILED,
-                message="The close target needs an allow-listed application name.",
-            )
-        pid = self._launched_processes.get(application.strip().lower())
-        if pid is None:
+        recorded = target.get("executable")
+        if not isinstance(recorded, str) or not recorded.strip():
             return StepResult(
                 step_id="",
                 status=StepStatus.FAILED,
                 message=(
-                    f"This run did not launch {application.strip()}, so it is not "
+                    "The close step needs the executable path recorded for the "
+                    "application, and this step has none."
+                ),
+                evidence=("executable_missing=true",),
+            )
+        launched = self._launched.get(_executable_key(Path(recorded)))
+        if launched is None:
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=(
+                    f"This run did not launch {Path(recorded).name}, so it is not "
                     "allowed to close anything on its behalf."
                 ),
-                evidence=("registered=false",),
+                evidence=("registered=false", f"executable={recorded}"),
             )
-        if application.strip().lower() in LAUNCH_ONLY_APPLICATIONS:
+        pid, close_supported = launched
+        if not close_supported:
             return StepResult(
                 step_id="",
                 status=StepStatus.FAILED,
                 message=(
-                    "Close is not supported for Chrome yet, so Once left it open. "
-                    "Quit Chrome yourself when you are finished."
+                    "Once cannot close this application safely yet, so it was left "
+                    "open. Quit it yourself when you are finished."
                 ),
                 evidence=(f"process_id={pid}", "close_supported=false"),
             )

@@ -211,6 +211,7 @@ DESKTOP_PROVIDER_KINDS = frozenset(
     }
 )
 
+
 @dataclass(frozen=True)
 class ApprovedApplication:
     """One application the user approved, identified by its executable path.
