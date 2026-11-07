@@ -37,8 +37,8 @@ def build_raw_draft(recording: Recording) -> RawDraft:
             source_event=event.kind,
             process_name=event.process_name,
             window_title=event.window_title,
-            executable_path=getattr(event, "executable_path", None),
-            executable_sha256=getattr(event, "executable_sha256", None),
+            executable_path=event.executable_path,
+            executable_sha256=event.executable_sha256,
         )
         for event in recording.events
     )
