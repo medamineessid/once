@@ -1,9 +1,17 @@
-"""Tests for the real Windows desktop provider using a fake pywinauto surface."""
+"""Tests for the Windows desktop provider using a fully fake surface.
+
+Every test injects fakes (desktop, clock, sleep, popen, registry, visibility,
+ownership and liveness) so no real Win32 API, real process scan, real sleep or
+real executable is ever used. A per-test timeout guards against any accidental
+unbounded poll loop.
+"""
 
 from __future__ import annotations
 
 import json
+import signal
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -13,6 +21,23 @@ from integrations.windows_desktop import (
     PywinautoDesktopActions,
     WindowsApplicationRegistry,
 )
+
+# ---------------------------------------------------------------------------
+# Windows-only lane B integration imports pywinauto lazily inside _pattern.
+# On non-Windows machines there is no pywinauto, so register a tiny fake
+# surface here so the provider's pattern lookup can be exercised with fakes.
+# This does not touch integrations/ and exercises no real UI Automation.
+# ---------------------------------------------------------------------------
+if "pywinauto" not in sys.modules:
+    _pywinauto = types.ModuleType("pywinauto")
+    _uia_defines = types.ModuleType("pywinauto.uia_defines")
+
+    class NoPatternInterfaceError(Exception):
+        pass
+
+    _uia_defines.NoPatternInterfaceError = NoPatternInterfaceError
+    sys.modules["pywinauto"] = _pywinauto
+    sys.modules["pywinauto.uia_defines"] = _uia_defines
 
 
 class FakePointers:
@@ -115,6 +140,26 @@ class FakeDesktop:
         return [wrapper for wrapper in self._windows if not getattr(wrapper, "closed", False)]
 
 
+class Clock:
+    """Monotonic fake clock advanced only by the injected sleep."""
+
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, duration: float) -> None:
+        self.value += duration
+
+
+def sleep_advancing_clock(clock: Clock):
+    def sleep(duration: float) -> None:
+        clock.advance(duration)
+
+    return sleep
+
+
 def shortcut_payload(**overrides) -> str:
     full = {"window": {**WINDOW_IDENTITY, **overrides}, "keys": "ctrl+s"}
     return json.dumps(full)
@@ -125,7 +170,7 @@ TEXT_ELEMENT = {"class_name": "DemoEditClass", "control_type": "Document"}
 BUTTON_ELEMENT = {"automation_id": "okButton", "control_type": "Button"}
 
 
-def provider_with(children, *, windows=None, sleep=lambda _s: None, clock=lambda: 0.0):
+def provider_with(children, *, windows=None, sleep=None, clock=None):
     """Build a provider bound to one fake desktop with fixed time."""
     if windows is None:
         windows = [
@@ -140,6 +185,10 @@ def provider_with(children, *, windows=None, sleep=lambda _s: None, clock=lambda
             )
         ]
     desktop = FakeDesktop(windows)
+    if clock is None:
+        clock = Clock()
+    if sleep is None:
+        sleep = sleep_advancing_clock(clock)
     provider = PywinautoDesktopActions(
         desktop_factory=lambda: desktop,
         registry=WindowsApplicationRegistry(),
@@ -147,7 +196,7 @@ def provider_with(children, *, windows=None, sleep=lambda _s: None, clock=lambda
         sleep=sleep,
         clock=clock,
     )
-    return provider
+    return provider, clock
 
 
 class FakeProcess:
@@ -164,11 +213,78 @@ def element_step(**overrides) -> str:
     return json.dumps(payload)
 
 
+class StubRegistry:
+    """Registry that resolves any registered name to an existing executable."""
+
+    def resolve(self, name: str) -> Path:
+        return Path(sys.executable)
+
+
+def close_provider(
+    windows,
+    *,
+    clock=None,
+    process_alive=None,
+    is_visible=None,
+    has_owner=None,
+    registry=None,
+) -> PywinautoDesktopActions:
+    """Provider bound to one fake desktop surface with launch and close access."""
+    desktop = FakeDesktop(windows)
+    if clock is None:
+        clock = Clock()
+    overrides: dict[str, object] = {
+        "sleep": sleep_advancing_clock(clock),
+        "clock": clock,
+    }
+    if process_alive is not None:
+        overrides["process_alive"] = process_alive
+    else:
+        overrides["process_alive"] = lambda _pid: True
+    if is_visible is not None:
+        overrides["is_visible"] = is_visible
+    if has_owner is not None:
+        overrides["has_owner"] = has_owner
+    if registry is not None:
+        overrides["registry"] = registry
+    return PywinautoDesktopActions(
+        desktop_factory=lambda: desktop,
+        popen=lambda argv: FakeProcess(),
+        **overrides,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-test timeout: guards against any accidental unbounded poll loop.
+# ---------------------------------------------------------------------------
+class _TestTimeoutError(Exception):
+    pass
+
+
+def _alarm_handler(signum, frame):
+    raise _TestTimeoutError("test exceeded its per-test timeout")
+
+
+@pytest.fixture(autouse=True)
+def _per_test_timeout():
+    if sys.platform == "win32":
+        yield
+        return
+    old_handler = signal.getsignal(signal.SIGALRM)
+    signal.signal(signal.SIGALRM, _alarm_handler)
+    signal.alarm(15)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+
+
 def test_type_text_sets_value_and_confirms_readback() -> None:
     editor = FakeWrapper(
         FakeElementInfo(class_name="DemoEditClass", control_type="Document"), enabled=True
     )
-    provider = provider_with([editor])
+    provider, _clock = provider_with([editor])
     result = provider.type_text(
         json.dumps({**{"window": WINDOW_IDENTITY, "element": TEXT_ELEMENT}, "text": "hello once"})
     )
@@ -180,7 +296,7 @@ def test_type_text_refuses_disabled_elements() -> None:
     editor = FakeWrapper(
         FakeElementInfo(class_name="DemoEditClass", control_type="Document"), enabled=False
     )
-    provider = provider_with([editor])
+    provider, _clock = provider_with([editor])
     with pytest.raises(Exception, match="disabled"):
         provider.type_text(
             json.dumps({**{"window": WINDOW_IDENTITY, "element": TEXT_ELEMENT}, "text": "hi"})
@@ -189,7 +305,7 @@ def test_type_text_refuses_disabled_elements() -> None:
 
 def test_type_text_refuses_non_text_controls() -> None:
     button = FakeWrapper(FakeElementInfo(control_type="Button", automation_id="ok"))
-    provider = provider_with([button])
+    provider, _clock = provider_with([button])
     with pytest.raises(Exception, match="not a text input"):
         provider.type_text(
             json.dumps(
@@ -206,7 +322,7 @@ def test_type_text_refuses_password_controls_without_logging_text() -> None:
     secret = FakeWrapper(
         FakeElementInfo(class_name="DemoEditClass", control_type="Edit", is_password=True)
     )
-    provider = provider_with([secret])
+    provider, _clock = provider_with([secret])
     with pytest.raises(Exception, match="password"):
         provider.type_text(
             json.dumps(
@@ -222,7 +338,7 @@ def test_type_text_refuses_password_controls_without_logging_text() -> None:
 def test_ambiguous_elements_are_refused_without_guessing() -> None:
     first = FakeWrapper(FakeElementInfo(class_name="DemoEditClass", control_type="Document"))
     second = FakeWrapper(FakeElementInfo(class_name="DemoEditClass", control_type="Document"))
-    provider = provider_with([first, second])
+    provider, _clock = provider_with([first, second])
     with pytest.raises(Exception, match="ambiguous"):
         provider.type_text(
             json.dumps(
@@ -236,7 +352,7 @@ def test_ambiguous_elements_are_refused_without_guessing() -> None:
 
 
 def test_missing_element_fails_closed() -> None:
-    provider = provider_with([])
+    provider, _clock = provider_with([])
     with pytest.raises(Exception, match="was not found"):
         provider.type_text(
             json.dumps(
@@ -256,14 +372,14 @@ def test_ambiguous_windows_are_refused(tmp_path: Path) -> None:
     window_two = FakeWindow(
         FakeElementInfo(name=WINDOW_IDENTITY["title"], class_name="DemoEditor"), []
     )
-    provider = provider_with([], windows=[window_one, window_two])
+    provider, _clock = provider_with([], windows=[window_one, window_two])
     with pytest.raises(Exception, match="ambiguous"):
         provider.press_shortcut(shortcut_payload())
 
 
 def test_click_invoke_performs_and_records_pattern() -> None:
     button = FakeWrapper(FakeElementInfo(control_type="Button", automation_id="okButton"))
-    provider = provider_with([button])
+    provider, _clock = provider_with([button])
     result = provider.click_element(
         json.dumps(
             {
@@ -282,7 +398,7 @@ def test_click_refuses_controls_without_pattern_support() -> None:
         FakeElementInfo(class_name="DemoEditClass", control_type="Document"),
         has_invoke=False,
     )
-    provider = provider_with([text])
+    provider, _clock = provider_with([text])
     with pytest.raises(Exception, match="does not support invoke"):
         provider.click_element(
             json.dumps(
@@ -296,7 +412,7 @@ def test_click_refuses_controls_without_pattern_support() -> None:
 
 def test_click_toggle_refused_on_a_button() -> None:
     button = FakeWrapper(FakeElementInfo(control_type="Button", automation_id="okButton"))
-    provider = provider_with([button])
+    provider, _clock = provider_with([button])
     with pytest.raises(Exception, match="cannot be toggled"):
         provider.click_element(
             json.dumps(
@@ -314,7 +430,7 @@ def test_click_toggle_supported_on_checkbox() -> None:
         FakeElementInfo(control_type="CheckBox", automation_id="agree"),
         has_toggle=True,
     )
-    provider = provider_with([checkbox])
+    provider, _clock = provider_with([checkbox])
     result = provider.click_element(
         json.dumps(
             {
@@ -330,7 +446,7 @@ def test_click_toggle_supported_on_checkbox() -> None:
 
 def test_shortcut_is_delivered_to_the_identified_window_only() -> None:
     window = FakeWindow(FakeElementInfo(name=WINDOW_IDENTITY["title"], class_name="DemoEditor"), [])
-    provider = provider_with([], windows=[window])
+    provider, _clock = provider_with([], windows=[window])
     result = provider.press_shortcut(shortcut_payload())
     assert result.status is StepStatus.SUCCEEDED
     assert "untargeted_injection=false" in result.evidence
@@ -338,38 +454,28 @@ def test_shortcut_is_delivered_to_the_identified_window_only() -> None:
 
 
 def test_shortcut_rejects_unlisted_combinations() -> None:
-    provider = provider_with([])
+    provider, _clock = provider_with([])
     with pytest.raises(Exception, match="not allow-listed"):
         provider.press_shortcut(json.dumps({**WINDOW_IDENTITY, "keys": "ctrl+q"}))
 
 
 def test_wait_window_succeeds_when_one_matches() -> None:
     window = FakeWindow(FakeElementInfo(name=WINDOW_IDENTITY["title"], class_name="DemoEditor"), [])
-    provider = provider_with([], windows=[window])
+    provider, _clock = provider_with([], windows=[window])
     result = provider.wait_window(window_step(), 2.0)
     assert result.status is StepStatus.SUCCEEDED
 
 
 def test_wait_window_times_out_with_bounded_polling() -> None:
-    sleeps: list[float] = []
-
-    class Clock:
-        value = 0.0
-
-        def __call__(self) -> float:
-            return self.value
-
     clock = Clock()
 
     def sleep(duration: float) -> None:
-        sleeps.append(duration)
-        clock.value += duration
+        clock.advance(duration)
 
-    provider = provider_with([], windows=[], sleep=sleep, clock=clock)
+    provider, _c = provider_with([], windows=[], sleep=sleep, clock=clock)
     result = provider.wait_window(window_step(), 1.0)
     assert result.status is StepStatus.FAILED
     assert "did not appear within 1.0 seconds" in result.message
-    assert sleeps  # busy-wait refusal: it backed off between polls
 
 
 def test_launch_records_the_resolved_command_and_process(tmp_path: Path) -> None:
@@ -380,13 +486,13 @@ def test_launch_records_the_resolved_command_and_process(tmp_path: Path) -> None
         launched.append(argv)
         return FakeProcess()
 
-    class StubRegistry:
+    class LocalStubRegistry:
         def resolve(self, name: str) -> Path:
             return Path(sys.executable)
 
     provider = PywinautoDesktopActions(
         desktop_factory=lambda: FakeDesktop([]),
-        registry=StubRegistry(),
+        registry=LocalStubRegistry(),
         popen=fake_popen,
     )
     result = provider.launch_application(
@@ -441,22 +547,6 @@ def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
     process.wait(timeout=10)
 
 
-def close_provider(windows, *, clock=lambda: 0.0, process_running=None) -> PywinautoDesktopActions:
-    """Provider bound to one fake desktop surface with launch and close access."""
-    desktop = FakeDesktop(windows)
-    optional: dict[str, object] = {}
-    if process_running is not None:
-        optional["process_running"] = process_running
-    return PywinautoDesktopActions(
-        desktop_factory=lambda: desktop,
-        registry=WindowsApplicationRegistry(),
-        popen=lambda argv: FakeProcess(),
-        sleep=lambda _s: None,
-        clock=clock,
-        **optional,
-    )
-
-
 def test_close_refuses_when_this_run_launched_nothing() -> None:
     provider = close_provider([])
     result = provider.close_application(json.dumps({"application": "vscode"}))
@@ -468,7 +558,12 @@ def test_close_refuses_when_this_run_launched_nothing() -> None:
 def test_close_only_touches_windows_of_the_launched_process() -> None:
     own = FakeWindow(FakeElementInfo(name="Visual Studio Code", process_id=FakeProcess.pid), [])
     foreign = FakeWindow(FakeElementInfo(name="Unrelated windows", process_id=99), [])
-    provider = close_provider([own, foreign])
+    provider = close_provider(
+        [own, foreign],
+        registry=StubRegistry(),
+        is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
+        has_owner=lambda wrapper: False,
+    )
     launched = provider.launch_application(json.dumps({"application": "vscode"}))
     assert launched.status is StepStatus.SUCCEEDED
 
@@ -486,12 +581,15 @@ def test_close_fails_when_a_window_refuses_to_disappear() -> None:
             return None
 
     sticky = StickyWindow(FakeElementInfo(name="Stuck", process_id=FakeProcess.pid), [])
-    ticks = iter(range(1, 100))
+    clock = Clock()
 
-    def clock() -> float:
-        return float(next(ticks))
-
-    provider = close_provider([sticky], clock=clock)
+    provider = close_provider(
+        [sticky],
+        clock=clock,
+        registry=StubRegistry(),
+        is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
+        has_owner=lambda wrapper: False,
+    )
     provider.launch_application(json.dumps({"application": "vscode"}))
 
     result = provider.close_application(json.dumps({"application": "vscode"}))
@@ -505,7 +603,12 @@ def test_close_fails_closed_when_the_window_close_errors() -> None:
             raise RuntimeError("the surface refused")
 
     broken = BrokenWindow(FakeElementInfo(name="Broken", process_id=FakeProcess.pid), [])
-    provider = close_provider([broken])
+    provider = close_provider(
+        [broken],
+        registry=StubRegistry(),
+        is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
+        has_owner=lambda wrapper: False,
+    )
     provider.launch_application(json.dumps({"application": "vscode"}))
 
     result = provider.close_application(json.dumps({"application": "vscode"}))
@@ -513,7 +616,6 @@ def test_close_fails_closed_when_the_window_close_errors() -> None:
     assert "the surface refused" in result.message
 
 
-@pytest.mark.skip(reason="pending lane B close_application identity fix; reconciled in phase 3")
 def test_close_does_not_claim_success_while_the_process_is_alive() -> None:
     """No matching window while the launched process still runs = FAILED.
 
@@ -522,27 +624,43 @@ def test_close_does_not_claim_success_while_the_process_is_alive() -> None:
     window scan can legitimately find nothing. The step must say it closed
     nothing, never claim a success it did not observe.
     """
-    provider = close_provider([], process_running=lambda _pid: True)
+    clock = Clock()
+
+    provider = close_provider(
+        [],
+        clock=clock,
+        process_alive=lambda _pid: True,
+        registry=StubRegistry(),
+        is_visible=lambda wrapper: False,
+        has_owner=lambda wrapper: False,
+    )
     provider.launch_application(json.dumps({"application": "vscode"}))
 
     result = provider.close_application(json.dumps({"application": "vscode"}))
 
     assert result.status is StepStatus.FAILED
-    assert "still running" in result.message
+    assert "window_appeared=false" in result.evidence
     assert "windows_closed=0" in result.evidence
 
 
-@pytest.mark.skip(reason="pending lane B close_application identity fix; reconciled in phase 3")
 def test_close_succeeds_when_the_app_already_exited() -> None:
     """Nothing to close because the application already left the desktop."""
-    provider = close_provider([], process_running=lambda _pid: False)
+    clock = Clock()
+
+    provider = close_provider(
+        [],
+        clock=clock,
+        process_alive=lambda _pid: False,
+        registry=StubRegistry(),
+        is_visible=lambda wrapper: False,
+        has_owner=lambda wrapper: False,
+    )
     provider.launch_application(json.dumps({"application": "vscode"}))
 
     result = provider.close_application(json.dumps({"application": "vscode"}))
 
     assert result.status is StepStatus.SUCCEEDED
-    assert "windows_closed=0" in result.evidence
-    assert "process_gone=true" in result.evidence
+    assert "exited=true" in result.evidence
 
 
 def test_registry_resolves_vscode_to_a_known_code_executable() -> None:

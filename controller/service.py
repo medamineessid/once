@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import sqlite3
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from engine.errors import AgentIntegrationError, WorkflowValidationError
 from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
 from engine.replay import (
     DESKTOP_INTERACTION_POLICY,
+    MUTATING_DESKTOP_KINDS,
     ReplayExecutor,
     ReplayPreview,
 )
@@ -53,6 +55,68 @@ from storage.history import (
 )
 from storage.layouts import LayoutLoadResult, load_layout, save_layout
 from storage.workflows import load_workflow, save_workflow
+
+
+@dataclass(frozen=True)
+class StepReplayability:
+    """One step's replayability and a plain-language reason."""
+
+    step_id: str
+    kind: str
+    replayable: bool
+    reason: str
+
+
+def classify_workflow_steps(workflow: Workflow) -> tuple[StepReplayability, ...]:
+    """Classify every workflow step as replayable or observation-only.
+
+    A step is replayable when the replay policy allows its kind. Read-only
+    steps replay without mutating anything; mutating desktop steps replay
+    only after the recorded application is approved. Every other step (for
+    example a REPORT observation, or a recorded action the engine cannot
+    convert to a step kind) is observation-only: it is shown to the user but
+    never performed.
+    """
+    results: list[StepReplayability] = []
+    for step in workflow.steps:
+        if step.kind is StepKind.REPORT:
+            results.append(
+                StepReplayability(
+                    step.step_id,
+                    step.kind.value,
+                    False,
+                    "This step only records an observation; nothing is performed.",
+                )
+            )
+        elif step.kind in DESKTOP_INTERACTION_POLICY.allowed_kinds:
+            if step.kind in MUTATING_DESKTOP_KINDS:
+                results.append(
+                    StepReplayability(
+                        step.step_id,
+                        step.kind.value,
+                        True,
+                        "This step performs an action once the application is approved.",
+                    )
+                )
+            else:
+                results.append(
+                    StepReplayability(
+                        step.step_id,
+                        step.kind.value,
+                        True,
+                        "This step is read-only and can be replayed.",
+                    )
+                )
+        else:
+            results.append(
+                StepReplayability(
+                    step.step_id,
+                    step.kind.value,
+                    False,
+                    f"This {step.kind.value} step is not a replayable action.",
+                )
+            )
+    return tuple(results)
 
 
 class WorkflowService:
@@ -236,9 +300,20 @@ class WorkflowService:
         return WorkflowEditorSession(workflow)
 
     def save_approved(self, proposal: ApprovedProposal) -> Path:
-        """Save only a proposal that passed the explicit approval gate."""
+        """Save only a proposal that passed the explicit approval gate.
+
+        Refuses a workflow that has no steps Once can perform: an
+        observation-only recording is not a runnable automation.
+        """
         if not isinstance(proposal, ApprovedProposal):
             raise WorkflowValidationError("Only an explicitly approved proposal can be saved.")
+        replayable = any(step.replayable for step in classify_workflow_steps(proposal.workflow))
+        if not replayable:
+            raise WorkflowValidationError(
+                "This task has no steps Once can perform. It only records observations, "
+                "so there is nothing to save as a runnable automation. Record the task "
+                "again, or remove the observation-only steps."
+            )
         return self.save(proposal.workflow)
 
     def save_layout(
@@ -848,7 +923,7 @@ class WorkflowService:
             return None
         try:
             return load_workflow(candidate).name
-        except WorkflowValidationError, OSError:
+        except (WorkflowValidationError, OSError):
             return None
 
     def history(self) -> tuple[WorkflowRun, ...]:

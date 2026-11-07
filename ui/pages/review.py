@@ -17,10 +17,10 @@ from PySide6.QtWidgets import (
 from ai.approval import approve_proposal, preview_proposal
 from ai.models import ProviderDraft
 from controller.approvals import ApplicationIdentity
-from controller.service import WorkflowService
+from controller.service import WorkflowService, classify_workflow_steps
 from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
-from ui.components.banner import SEVERITY_ERROR, SEVERITY_SUCCESS, Banner
+from ui.components.banner import SEVERITY_ERROR, SEVERITY_INFO, SEVERITY_SUCCESS, Banner
 from ui.editor.canvas import CanvasView
 from ui.strings import (
     REVIEW_APPROVE,
@@ -132,9 +132,7 @@ class ReviewPage(QWidget):
         self._approve_button.setVisible(ready and not self._pending_identities)
         self._applications_container.setVisible(ready and bool(self._pending_identities))
 
-    def set_application_identities(
-        self, pending: tuple[ApplicationIdentity, ...]
-    ) -> None:
+    def set_application_identities(self, pending: tuple[ApplicationIdentity, ...]) -> None:
         """Show which recorded applications still need a one-time approval."""
         self._pending_identities = tuple(pending)
         entries = []
@@ -267,8 +265,21 @@ class ReviewPage(QWidget):
             return
         self._proposal = proposal
         self._canvas.set_workflow(proposal.workflow)
+        replayability = classify_workflow_steps(proposal.workflow)
+        labels = {item.step_id: item for item in replayability}
+        observation_only = [item for item in replayability if not item.replayable]
         for index, step_text in enumerate(preview.steps, start=1):
-            self._steps_list.addItem(f"{index}. {step_text}")
+            step = proposal.workflow.steps[index - 1]
+            info = labels.get(step.step_id)
+            tag = "Replayable" if (info is not None and info.replayable) else "Observation only"
+            reason = info.reason if info else ""
+            self._steps_list.addItem(f"{index}. {step_text}  [{tag}: {reason}]")
+        if observation_only:
+            self._banner.show_message(
+                SEVERITY_INFO,
+                "Some steps are observation only",
+                "Steps marked Observation only will be shown but not performed when the task runs.",
+            )
         self._update_action_visibility()
 
     def set_service(self, service: WorkflowService | None) -> None:
