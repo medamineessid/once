@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import pytest
 
@@ -19,6 +20,8 @@ from recorder.drafts import build_raw_draft
 from recorder.models import RecordedEvent, RecordedEventKind
 from storage.database import connect
 from storage.history import ExecutionHistory
+
+APP_TARGET = json.dumps({"executable": str(sys.executable)})
 
 
 class FakeRecorder:
@@ -121,6 +124,8 @@ class WindowRecordingStub:
                 RecordedEventKind.WINDOW_OPEN,
                 process_name="Code.exe",
                 window_title="Visual Studio Code",
+                executable_path=str(sys.executable),
+                executable_sha256="",
             )
         )
         self._sink.append(
@@ -130,6 +135,8 @@ class WindowRecordingStub:
                 RecordedEventKind.WINDOW_CLOSE,
                 process_name="Code.exe",
                 window_title="Visual Studio Code",
+                executable_path=str(sys.executable),
+                executable_sha256="",
             )
         )
 
@@ -164,7 +171,7 @@ def test_recorded_vscode_open_close_replays_unapproved_free(tmp_path) -> None:
 
     assert run.status.value == "SUCCEEDED"
     assert [(kind, target) for kind, target in desktop.calls] == [
-        ("LAUNCH_APPLICATION", json.dumps({"application": "vscode"})),
-        ("CLOSE_APPLICATION", json.dumps({"application": "vscode"})),
+        ("LAUNCH_APPLICATION", APP_TARGET),
+        ("CLOSE_APPLICATION", APP_TARGET),
     ]
     assert [result.status for result in run.results] == [StepStatus.SUCCEEDED, StepStatus.SUCCEEDED]

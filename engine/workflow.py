@@ -233,6 +233,18 @@ class ApplicationApprovals(Protocol):
     def find(self, executable: Path) -> ApprovedApplication | None: ...
 
 
+class _DummyApprovals:
+    """Dummy registry that always rejects: no applications are approved."""
+
+    def find(self, executable: Path) -> ApprovedApplication | None:
+        return None
+
+
+#: Global read-only registry used when approvals are not explicitly provided
+#: (validation always checks this registry; fail closed unless user approves).
+APPROVALS_REGISTRY: ApplicationApprovals = _DummyApprovals()
+
+
 class DesktopActions:
     """Adapter contract for the desktop interaction provider.
 
@@ -469,7 +481,9 @@ def _validate_browser_target(target: object, step: WorkflowStep) -> dict:
     return target
 
 
-def _validate_launch_browser_target(step: WorkflowStep) -> None:
+def _validate_launch_browser_target(
+    step: WorkflowStep, approvals: ApplicationApprovals | None = None
+) -> None:
     target = _load_target(step, step.target)
     unknown = set(target) - {"executable", "headed"}
     if unknown:
@@ -478,9 +492,31 @@ def _validate_launch_browser_target(step: WorkflowStep) -> None:
         )
     if "headed" in target and not isinstance(target["headed"], bool):
         raise WorkflowValidationError(f"Step {step.step_id} headed must be true or false.")
-    # Which browser this is (and whether it may be driven) belongs to the
-    # browser provider that owns it, never to a name check in the engine.
-    _validate_executable_path(step, target.get("executable"), "launch")
+    # The executable must be registered in the approved-application registry.
+    # If approvals are provided, check those; otherwise fall back to the global registry.
+    executable = target.get("executable")
+    if executable is not None:
+        app_path = Path(executable)
+        # Resolve registry: if approvals is a dict, use dict lookup; otherwise use .find() method
+    if approvals is not None and isinstance(approvals, dict):
+        registry = approvals  # dict mapping executable str -> ApprovedApplication
+    else:
+        registry = APPROVALS_REGISTRY  # ApplicationApprovals protocol with .find() method
+    if isinstance(registry, dict):
+        record = registry.get(app_path)  # dict lookup
+    else:
+        record = registry.find(app_path)  # protocol .find() method
+        if record is None:
+            raise WorkflowValidationError(
+                f"Step {step.step_id} has unregistered browser executable: {app_path}. "
+                "Register the application in the approved-application registry before launching."
+            )
+        if not record.approved:
+            raise WorkflowValidationError(
+                f"Step {step.step_id} has unapproved browser executable: {app_path}. "
+                "Approve the application before launching."
+            )
+    _validate_executable_path(step, executable, "launch")
 
 
 def _validate_page_url(value: object, step: WorkflowStep) -> str:
@@ -698,7 +734,7 @@ class WorkflowRunner:
     """Execute known step kinds in order and retain an inspectable run result."""
 
     @staticmethod
-    def validate(workflow: Workflow) -> None:
+    def validate(workflow: Workflow, approvals: ApplicationApprovals | None = None) -> None:
         """Reject malformed definitions before any step can start."""
         if not workflow.workflow_id.strip():
             raise WorkflowValidationError("Workflow ID must not be empty.")
@@ -783,7 +819,7 @@ class WorkflowRunner:
             if step.kind is StepKind.CLOSE_APPLICATION:
                 _validate_close_target(step)
             if step.kind is StepKind.LAUNCH_BROWSER:
-                _validate_launch_browser_target(step)
+                _validate_launch_browser_target(step, approvals)
             if step.kind is StepKind.NAVIGATE_BROWSER:
                 _validate_navigate_target(step)
             if step.kind is StepKind.INSPECT_PAGE:
@@ -819,9 +855,10 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        approvals: ApplicationApprovals | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
-        self.validate(workflow)
+        self.validate(workflow, approvals=approvals)
         started_at = datetime.now(UTC)
         results: list[StepResult] = []
         performed_any = False
@@ -857,6 +894,7 @@ class WorkflowRunner:
                 ui_element_inspector,
                 desktop_actions,
                 browser_actions,
+                approvals,
             )
             results.append(result)
             if progress_callback is not None:
@@ -889,6 +927,7 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        approvals: ApplicationApprovals | None = None,
     ) -> StepResult:
         attempts: list[str] = []
         for attempt in range(1, step.max_attempts + 1):
@@ -905,7 +944,7 @@ class WorkflowRunner:
                 and desktop_actions is None
                 and browser_actions is None
             ):
-                result = self._run_once(step, allowed_root)
+                result = self._run_once(step, allowed_root, approvals)
             else:
                 result = self._run_once(
                     step,
@@ -914,6 +953,7 @@ class WorkflowRunner:
                     ui_element_inspector,
                     desktop_actions,
                     browser_actions,
+                    approvals,
                 )
             if result.status in CONTINUING_STEP_STATUSES:
                 if step.postcondition is None:
@@ -953,6 +993,7 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        approvals: ApplicationApprovals | None = None,
     ) -> StepResult:
         if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
             return self._run_path_step(step, allowed_root)

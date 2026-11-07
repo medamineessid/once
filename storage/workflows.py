@@ -8,6 +8,7 @@ from typing import Final
 
 from engine.errors import WorkflowValidationError
 from engine.workflow import (
+    APPROVALS_REGISTRY,
     DEFAULT_STEP_TIMEOUT_SECONDS,
     PostconditionKind,
     StepKind,
@@ -34,7 +35,7 @@ def _text(value: object, field: str) -> str:
 
 def workflow_to_dict(workflow: Workflow) -> dict[str, object]:
     """Return the stable, versioned JSON representation of a workflow."""
-    WorkflowRunner.validate(workflow)
+    WorkflowRunner.validate(workflow, approvals=APPROVALS_REGISTRY)
     return {
         "schema_version": SCHEMA_VERSION,
         "workflow_id": workflow.workflow_id,
@@ -115,7 +116,7 @@ def workflow_from_dict(data: object) -> Workflow:
         name=_text(data["name"], "Workflow name"),
         steps=tuple(steps),
     )
-    WorkflowRunner.validate(workflow)
+    WorkflowRunner.validate(workflow, approvals=APPROVALS_REGISTRY)
     return workflow
 
 

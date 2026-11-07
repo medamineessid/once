@@ -109,7 +109,7 @@ def _recorded_executable(action: RawDraftAction) -> str | None:
     process name to an application it happens to know. Without a recorded path
     the observation is kept for review and no launch or close is proposed.
     """
-    recorded = getattr(action, "executable", None)
+    recorded = getattr(action, "executable_path", None)
     if isinstance(recorded, str) and recorded.strip():
         return recorded.strip()
     return None
@@ -154,4 +154,5 @@ def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> 
                 f"{Path(executable).stem}, so nothing is allowed to close it."
             ),
         )
-    return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
+    # No recorded executable path: emit REPORT with reason
+    return WorkflowStep(step_id, name, StepKind.REPORT, "executable path not recorded")

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .errors import ExecutionError
 from .workflow import (
+    APPROVALS_REGISTRY,
     BrowserActions,
     CancelCheck,
     DesktopActions,
@@ -99,7 +100,7 @@ class ReplayExecutor:
 
     def validate(self, workflow: Workflow) -> None:
         """Reject unsupported or oversized replay requests before execution."""
-        WorkflowRunner.validate(workflow)
+        WorkflowRunner.validate(workflow, approvals=APPROVALS_REGISTRY)
         if len(workflow.steps) > self._policy.max_steps:
             raise ExecutionError("Replay contains too many steps.")
         unsupported = [
@@ -142,7 +143,7 @@ class ReplayExecutor:
         browser_actions: BrowserActions | None = None,
     ) -> WorkflowRun:
         """Preview or execute the allowlisted read-only actions."""
-        self.validate(workflow)
+        self.validate(workflow, approvals=APPROVALS_REGISTRY)
         if dry_run:
             from datetime import UTC, datetime
             from uuid import uuid4
@@ -173,4 +174,5 @@ class ReplayExecutor:
             ui_element_inspector=ui_element_inspector,
             desktop_actions=desktop_actions,
             browser_actions=browser_actions,
+            approvals=APPROVALS_REGISTRY,
         )

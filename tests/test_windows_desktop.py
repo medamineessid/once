@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import pathlib
 import sys
 from pathlib import Path
 
@@ -11,8 +13,9 @@ import pytest
 from engine.workflow import StepStatus
 from integrations.windows_desktop import (
     PywinautoDesktopActions,
-    WindowsApplicationRegistry,
 )
+
+APP_TARGET = json.dumps({"executable": str(sys.executable)})
 
 
 class FakePointers:
@@ -140,9 +143,8 @@ def provider_with(children, *, windows=None, sleep=lambda _s: None, clock=lambda
             )
         ]
     desktop = FakeDesktop(windows)
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         desktop_factory=lambda: desktop,
-        registry=WindowsApplicationRegistry(),
         popen=lambda argv: FakeProcess(),
         sleep=sleep,
         clock=clock,
@@ -380,17 +382,12 @@ def test_launch_records_the_resolved_command_and_process(tmp_path: Path) -> None
         launched.append(argv)
         return FakeProcess()
 
-    class StubRegistry:
-        def resolve(self, name: str) -> Path:
-            return Path(sys.executable)
-
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         desktop_factory=lambda: FakeDesktop([]),
-        registry=StubRegistry(),
         popen=fake_popen,
     )
     result = provider.launch_application(
-        json.dumps({"application": "stubbed", "arguments": ["--version"]})
+        json.dumps({"executable": str(sys.executable), "arguments": ["--version"]})
     )
     assert result.status is StepStatus.SUCCEEDED
     assert "process_id=4242" in result.evidence
@@ -405,20 +402,14 @@ def test_launch_fails_closed_for_a_missing_executable(tmp_path: Path) -> None:
         launched.append(argv)
         raise AssertionError("Popen must not be called for a missing executable")
 
-    provider = PywinautoDesktopActions(
+    provider = approved_provider(
         desktop_factory=lambda: FakeDesktop([]),
-        registry=WindowsApplicationRegistry(),
         popen=must_not_launch,
     )
     result = provider.launch_application(json.dumps({"executable": str(tmp_path / "gone.exe")}))
     assert result.status is StepStatus.FAILED
     assert "missing" in result.message
     assert launched == []
-
-
-def test_registry_requires_allow_listed_application_names() -> None:
-    with pytest.raises(Exception, match="registry does not contain"):
-        WindowsApplicationRegistry().resolve("not_a_registered_app")
 
 
 def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
@@ -444,9 +435,8 @@ def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
 def close_provider(windows, *, clock=lambda: 0.0, alive=True) -> PywinautoDesktopActions:
     """Provider bound to one fake desktop surface with launch and close access."""
     desktop = FakeDesktop(windows)
-    return PywinautoDesktopActions(
+    return approved_provider(
         desktop_factory=lambda: desktop,
-        registry=WindowsApplicationRegistry(),
         popen=lambda argv: FakeProcess(),
         sleep=lambda _s: None,
         clock=clock,
@@ -458,7 +448,7 @@ def close_provider(windows, *, clock=lambda: 0.0, alive=True) -> PywinautoDeskto
 
 def test_close_refuses_when_this_run_launched_nothing() -> None:
     provider = close_provider([])
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(APP_TARGET)
     assert result.status is StepStatus.FAILED
     assert "did not launch" in result.message
     assert "registered=false" in result.evidence
@@ -468,10 +458,10 @@ def test_close_only_touches_windows_of_the_launched_process() -> None:
     own = FakeWindow(FakeElementInfo(name="Visual Studio Code", process_id=FakeProcess.pid), [])
     foreign = FakeWindow(FakeElementInfo(name="Unrelated windows", process_id=99), [])
     provider = close_provider([own, foreign])
-    launched = provider.launch_application(json.dumps({"application": "vscode"}))
+    launched = provider.launch_application(APP_TARGET)
     assert launched.status is StepStatus.SUCCEEDED
 
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(APP_TARGET)
     assert result.status is StepStatus.SUCCEEDED
     assert own.closed is True
     assert foreign.closed is False
@@ -491,9 +481,9 @@ def test_close_fails_when_a_window_refuses_to_disappear() -> None:
         return float(next(ticks))
 
     provider = close_provider([sticky], clock=clock)
-    provider.launch_application(json.dumps({"application": "vscode"}))
+    provider.launch_application(APP_TARGET)
 
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(APP_TARGET)
     assert result.status is StepStatus.FAILED
     assert "did not close" in result.message
 
@@ -505,14 +495,51 @@ def test_close_fails_closed_when_the_window_close_errors() -> None:
 
     broken = BrokenWindow(FakeElementInfo(name="Broken", process_id=FakeProcess.pid), [])
     provider = close_provider([broken])
-    provider.launch_application(json.dumps({"application": "vscode"}))
+    provider.launch_application(APP_TARGET)
 
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(APP_TARGET)
     assert result.status is StepStatus.FAILED
     assert "the surface refused" in result.message
 
 
-def test_registry_resolves_vscode_to_a_known_code_executable() -> None:
-    path = WindowsApplicationRegistry().resolve("vscode")
-    assert path.name == "Code.exe"
-    assert "Microsoft VS Code" in path.parts
+def test_close_summary_reports_only_what_was_measured() -> None:
+    """The adapter holds no application names or install locations at all."""
+    import integrations.windows_desktop as adapter
+
+    source = pathlib.Path(adapter.__file__).read_text(encoding="utf-8").lower()
+    for name in ("chrome.exe", "notepad.exe", "code.exe", "charmap"):
+        assert name not in source
+
+
+class FakeApprovals:
+    """One approved-application record, standing in for the storage registry."""
+
+    def __init__(
+        self,
+        *,
+        approved: bool = True,
+        close_supported: bool = True,
+        sha256: str | None = None,
+        display_name: str = "Harmless app",
+    ) -> None:
+        self.approved = approved
+        self.close_supported = close_supported
+        self.sha256 = sha256
+        self.display_name = display_name
+
+    def find(self, executable):
+        from engine.workflow import ApprovedApplication
+
+        return ApprovedApplication(
+            executable=executable,
+            sha256=self.sha256 or hashlib.sha256(executable.read_bytes()).hexdigest(),
+            display_name=self.display_name,
+            approved=self.approved,
+            close_supported=self.close_supported,
+        )
+
+
+def approved_provider(**kwargs):
+    """A desktop provider whose approval source is the fake registry above."""
+    kwargs.setdefault("approvals", FakeApprovals())
+    return PywinautoDesktopActions(**kwargs)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from ai.models import AnalysisRequest, ProviderDraft
 from ai.provider import deterministic_recording_provider
@@ -15,8 +16,20 @@ def test_recording_provider_creates_reviewable_observation_steps() -> None:
     draft = RawDraft(
         "capture-1",
         (
-            RawDraftAction(1, "Click at (10, 20).", RecordedEventKind.MOUSE_CLICK),
-            RawDraftAction(2, "Key press observed.", RecordedEventKind.KEY_PRESS),
+            RawDraftAction(
+                1,
+                "Click at (10, 20).",
+                RecordedEventKind.MOUSE_CLICK,
+                executable_path=None,
+                executable_sha256=None,
+            ),
+            RawDraftAction(
+                2,
+                "Key press observed.",
+                RecordedEventKind.KEY_PRESS,
+                executable_path=None,
+                executable_sha256=None,
+            ),
         ),
     )
 
@@ -25,8 +38,8 @@ def test_recording_provider_creates_reviewable_observation_steps() -> None:
     assert isinstance(proposal, ProviderDraft)
     assert proposal.workflow.workflow_id == "recording-capture-1"
     assert [step.message for step in proposal.workflow.steps] == [
-        "Click at (10, 20).",
-        "Key press observed.",
+        "executable path not recorded",
+        "executable path not recorded",
     ]
 
 
@@ -43,6 +56,8 @@ def test_window_observations_map_to_launch_and_close_steps() -> None:
                 RecordedEventKind.WINDOW_OPEN,
                 process_name="Code.exe",
                 window_title="Visual Studio Code",
+                executable_path=str(sys.executable),
+                executable_sha256="",
             ),
             RawDraftAction(
                 2,
@@ -50,6 +65,8 @@ def test_window_observations_map_to_launch_and_close_steps() -> None:
                 RecordedEventKind.WINDOW_CLOSE,
                 process_name="Code.exe",
                 window_title="Visual Studio Code",
+                executable_path=str(sys.executable),
+                executable_sha256="",
             ),
         )
     )
@@ -59,8 +76,8 @@ def test_window_observations_map_to_launch_and_close_steps() -> None:
     kinds = [step.kind for step in proposal.workflow.steps]
     targets = [step.target for step in proposal.workflow.steps]
     assert kinds == [StepKind.LAUNCH_APPLICATION, StepKind.CLOSE_APPLICATION]
-    assert json.loads(targets[0]) == {"application": "vscode"}
-    assert json.loads(targets[1]) == {"application": "vscode"}
+    assert json.loads(targets[0]) == {"executable": str(sys.executable)}
+    assert json.loads(targets[1]) == {"executable": str(sys.executable)}
 
 
 def test_unknown_processes_stay_report_observations() -> None:
@@ -72,6 +89,8 @@ def test_unknown_processes_stay_report_observations() -> None:
                 RecordedEventKind.WINDOW_OPEN,
                 process_name="spotify.exe",
                 window_title="Spotify",
+                executable_path=None,
+                executable_sha256=None,
             ),
         )
     )
@@ -91,6 +110,8 @@ def test_close_without_a_launch_stays_a_report() -> None:
                 RecordedEventKind.WINDOW_CLOSE,
                 process_name="Code.exe",
                 window_title="Visual Studio Code",
+                executable_path=None,
+                executable_sha256=None,
             ),
         )
     )
@@ -99,7 +120,7 @@ def test_close_without_a_launch_stays_a_report() -> None:
 
     step = proposal.workflow.steps[0]
     assert step.kind is StepKind.REPORT
-    assert "does not launch" in step.message
+    assert "executable path not recorded" in step.message
 
 
 def test_repeated_launches_collapse_into_one_launch() -> None:
@@ -111,6 +132,8 @@ def test_repeated_launches_collapse_into_one_launch() -> None:
                 RecordedEventKind.WINDOW_OPEN,
                 process_name="Code.exe",
                 window_title="Visual Studio Code",
+                executable_path=str(sys.executable),
+                executable_sha256="",
             ),
             RawDraftAction(
                 2,
@@ -118,6 +141,8 @@ def test_repeated_launches_collapse_into_one_launch() -> None:
                 RecordedEventKind.WINDOW_OPEN,
                 process_name="Code.exe",
                 window_title="another window",
+                executable_path=None,
+                executable_sha256=None,
             ),
         )
     )

@@ -23,6 +23,10 @@ from integrations.chrome_devtools import (
     DevtoolsHttp,
 )
 
+BROWSER_EXECUTABLE = "C:/fake/chrome.exe"
+APP_TARGET = json.dumps({"executable": BROWSER_EXECUTABLE})
+
+
 TEST_PORT = 51922
 PAGE_WS = f"ws://127.0.0.1:{TEST_PORT}/devtools/page/abcdef"
 
@@ -442,7 +446,7 @@ def test_launch_refuses_a_non_chrome_endpoint() -> None:
         ws_factory=lambda url: FakePageWs({}),
         launch_wait_seconds=5.0,
     )
-    result = actions.launch_browser(json.dumps({"application": "chrome"}))
+    result = actions.launch_browser(APP_TARGET)
     assert result.status is StepStatus.FAILED
     assert "does not belong to Chrome" in result.message
 
@@ -472,7 +476,7 @@ def test_launch_succeeds_and_registers_the_session() -> None:
         ),
         ws_factory=lambda url: FakePageWs({}),
     )
-    result = actions.launch_browser(json.dumps({"application": "chrome"}))
+    result = actions.launch_browser(APP_TARGET)
     assert result.status is StepStatus.SUCCEEDED
     assert "cdp_port=51922" in result.evidence
     assert "process_id=8" in result.evidence
@@ -520,7 +524,7 @@ def test_launch_fails_closed_without_a_endpoint_line() -> None:
             sleep=advance,
             launch_wait_seconds=1.0,
         )
-        result = actions.launch_browser(json.dumps({"application": "chrome"}))
+        result = actions.launch_browser(APP_TARGET)
         assert result.status is StepStatus.FAILED
         assert "did not report a DevTools endpoint" in result.message
         assert killed["count"] == 1
@@ -619,7 +623,7 @@ def test_runner_launch_registers_session_through_real_provider() -> None:
         ),
         ws_factory=lambda url: FakePageWs({}),
     )
-    target = json.dumps({"application": "chrome"})
+    target = APP_TARGET
     run = WorkflowRunner().run(
         Workflow(
             "launch-flow",

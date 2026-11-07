@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 
 import pytest
 
@@ -19,6 +20,9 @@ from engine.errors import WorkflowValidationError
 from engine.replay import DESKTOP_INTERACTION_POLICY, READ_ONLY_POLICY
 from engine.workflow import StepKind, Workflow, WorkflowStep
 
+APP_TARGET = json.dumps({"executable": str(sys.executable)})
+
+
 WINDOW = {"title": "Once demo", "class_name": "DemoWindowClass"}
 ELEMENT = {"class_name": "DemoEditClass", "control_type": "Edit"}
 
@@ -27,7 +31,7 @@ VALID_TARGETS: dict[StepKind, str] = {
     StepKind.VERIFY_PATH_EXISTS: "C:/work/result.txt",
     StepKind.INSPECT_PATH: "C:/work/result.txt",
     StepKind.VERIFY_FILE_TEXT: json.dumps({"path": "C:/work/result.txt", "contains": "invoice"}),
-    StepKind.LAUNCH_APPLICATION: json.dumps({"application": "chrome"}),
+    StepKind.LAUNCH_APPLICATION: APP_TARGET,
     StepKind.TYPE_TEXT: json.dumps({"window": WINDOW, "element": ELEMENT, "text": "hello"}),
 }
 

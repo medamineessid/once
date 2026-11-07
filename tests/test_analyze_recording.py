@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from ai.analyze_recording import (
     GEMINI_MODEL,
@@ -12,6 +13,9 @@ from ai.models import AnalysisRequest, ProviderDraft
 from engine.workflow import StepKind
 from recorder.drafts import RawDraft, RawDraftAction
 from recorder.models import RecordedEventKind
+
+APP_TARGET = json.dumps({"executable": str(sys.executable)})
+
 
 VALID_ANSWER = json.dumps(
     {
@@ -25,14 +29,14 @@ VALID_ANSWER = json.dumps(
                     "name": "Open editor",
                     "kind": "LAUNCH_APPLICATION",
                     "message": "Launch vscode.",
-                    "target": json.dumps({"application": "vscode"}),
+                    "target": APP_TARGET,
                 },
                 {
                     "step_id": "s2",
                     "name": "Close editor",
                     "kind": "CLOSE_APPLICATION",
                     "message": "Close vscode.",
-                    "target": json.dumps({"application": "vscode"}),
+                    "target": APP_TARGET,
                 },
             ],
         },

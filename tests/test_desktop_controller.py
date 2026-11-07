@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import pytest
 
@@ -13,6 +14,9 @@ from engine.workflow import StepKind, StepStatus, Workflow, WorkflowStep
 from storage.database import connect
 from storage.history import ExecutionHistory
 from tests.test_desktop_engine import FakeDesktopActions
+
+APP_TARGET = json.dumps({"executable": str(sys.executable)})
+
 
 WINDOW = {"title": "Once demo", "class_name": "DemoWindowClass"}
 TYPE_TARGET = {
@@ -84,7 +88,7 @@ def launch_workflow() -> Workflow:
         "Launch",
         StepKind.LAUNCH_BROWSER,
         "An isolated browser is running.",
-        target=json.dumps({"application": "chrome"}),
+        target=APP_TARGET,
     )
     return Workflow("browser-launch", "Browser launch", (launch,))
 

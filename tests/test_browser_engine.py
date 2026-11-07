@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import pytest
 
@@ -69,9 +70,9 @@ class FakeBrowserActions:
         return self._record("WAIT_PAGE")
 
 
-def run_with(actions: FakeBrowserActions, steps: tuple[WorkflowStep, ...]):
+def run_with(actions: FakeBrowserActions, steps: tuple[WorkflowStep, ...], approvals=None):
     workflow = Workflow("browser-flow", "Browser flow", steps)
-    run = WorkflowRunner().run(workflow, browser_actions=actions)
+    run = WorkflowRunner().run(workflow, browser_actions=actions, approvals=approvals)
     return run, actions
 
 
@@ -79,13 +80,23 @@ def run_with(actions: FakeBrowserActions, steps: tuple[WorkflowStep, ...]):
 
 
 def test_launch_browser_requires_registered_chrome() -> None:
-    ok = step("launch", StepKind.LAUNCH_BROWSER, {"application": "chrome"})
-    WorkflowRunner.validate(Workflow("w", "w", (ok,)))
+    # The ok case now requires an approved executable in the registry (fail-closed)
+    from engine.workflow import ApprovedApplication
+
+    approved = {
+        str(sys.executable): ApprovedApplication(
+            executable=str(sys.executable), sha256="dummy", display_name="Chrome", approved=True
+        )
+    }
+    ok = step("launch", StepKind.LAUNCH_BROWSER, {"executable": str(sys.executable)})
+    WorkflowRunner.validate(Workflow("w", "w", (ok,)), approvals=approved)
+    # unknown fields should still be rejected
     unknown_app = step("bad", StepKind.LAUNCH_BROWSER, {"application": "edge"})
-    with pytest.raises(WorkflowValidationError, match="registry does not allow"):
+    with pytest.raises(WorkflowValidationError, match="unknown browser launch fields"):
         WorkflowRunner.validate(Workflow("w2", "w2", (unknown_app,)))
+    # unregistered executable should raise registry error
     bad_exe = step("bad2", StepKind.LAUNCH_BROWSER, {"executable": "C:/tools/browser.exe"})
-    with pytest.raises(WorkflowValidationError, match="other than the registered"):
+    with pytest.raises(WorkflowValidationError, match="unregistered browser executable"):
         WorkflowRunner.validate(Workflow("w3", "w3", (bad_exe,)))
 
 
@@ -220,14 +231,21 @@ def test_wait_page_selector_condition_is_rejected_at_validation() -> None:
 
 
 def test_browser_flow_runs_through_provider_and_records_step_ids() -> None:
+    from engine.workflow import ApprovedApplication
+
     actions = FakeBrowserActions()
+    approved = {
+        str(sys.executable): ApprovedApplication(
+            executable=str(sys.executable), sha256="dummy", display_name="Chrome", approved=True
+        )
+    }
     steps = (
-        step("launch", StepKind.LAUNCH_BROWSER, {"application": "chrome"}),
+        step("launch", StepKind.LAUNCH_BROWSER, {"executable": str(sys.executable)}),
         step("navigate", StepKind.NAVIGATE_BROWSER, NAVIGATE_TARGET),
         step("inspect", StepKind.INSPECT_PAGE, INSPECT_TARGET),
         step("wait", StepKind.WAIT_PAGE, WAIT_TARGET),
     )
-    run, actions = run_with(actions, steps)
+    run, actions = run_with(actions, steps, approvals=approved)
     assert run.status.value == "SUCCEEDED"
     assert [r.step_id for r in run.results] == ["launch", "navigate", "inspect", "wait"]
     kinds = [kind for kind, _ in actions.calls]
@@ -235,14 +253,21 @@ def test_browser_flow_runs_through_provider_and_records_step_ids() -> None:
 
 
 def test_missing_browser_provider_is_inconclusive() -> None:
+    from engine.workflow import ApprovedApplication
+
     launch = WorkflowStep(
         "launch",
         "Launch",
         StepKind.LAUNCH_BROWSER,
         "Launched",
-        target=json.dumps({"application": "chrome"}),
+        target=json.dumps({"executable": str(sys.executable)}),
     )
-    run = WorkflowRunner().run(Workflow("x", "x", (launch,)))
+    approved = {
+        str(sys.executable): ApprovedApplication(
+            executable=str(sys.executable), sha256="dummy", display_name="Chrome", approved=True
+        )
+    }
+    run = WorkflowRunner().run(Workflow("x", "x", (launch,)), approvals=approved)
     assert run.status.value == "FAILED"
     assert run.results[0].status is StepStatus.INCONCLUSIVE
     assert "Nothing was changed in any browser" in run.results[0].message
@@ -288,8 +313,15 @@ def test_approval_gate_covers_browser_mutations() -> None:
 
 
 def test_browser_step_cancellation_before_a_pending_step() -> None:
+    from engine.workflow import ApprovedApplication
+
     actions = FakeBrowserActions()
-    launched = step("launch", StepKind.LAUNCH_BROWSER, {"application": "chrome"})
+    approved = {
+        str(sys.executable): ApprovedApplication(
+            executable=str(sys.executable), sha256="dummy", display_name="Chrome", approved=True
+        )
+    }
+    launched = step("launch", StepKind.LAUNCH_BROWSER, {"executable": str(sys.executable)})
     next_step = step("nav2", StepKind.NAVIGATE_BROWSER, NAVIGATE_TARGET)
     # False before "launch" runs, True before "nav2" starts.
     checks = iter((False, True))
@@ -297,6 +329,7 @@ def test_browser_step_cancellation_before_a_pending_step() -> None:
         Workflow("cancel-flow", "Cancel flow", (launched, next_step)),
         cancel_check=lambda: next(checks),
         browser_actions=actions,
+        approvals=approved,
     )
     assert run.status is WorkflowStatus.CANCELLED
     assert run.results[0].status is StepStatus.SUCCEEDED

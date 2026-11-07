@@ -173,13 +173,15 @@ def test_workflow_runner_retries_and_records_attempt_evidence() -> None:
         def __init__(self) -> None:
             self.calls = 0
 
-        def _run_once(self, step, allowed_root):
+        def _run_once(self, step, allowed_root, approvals=None):
             self.calls += 1
             if self.calls < 2:
                 return super()._run_once(
-                    WorkflowStep(step.step_id, step.name, StepKind.FAIL, "temporary"), allowed_root
+                    WorkflowStep(step.step_id, step.name, StepKind.FAIL, "temporary"),
+                    allowed_root,
+                    approvals,
                 )
-            return super()._run_once(step, allowed_root)
+            return super()._run_once(step, allowed_root, approvals)
 
     workflow = Workflow(
         "retry",

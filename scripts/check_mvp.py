@@ -99,14 +99,15 @@ def _split_workflow(document: dict, demo_url: str) -> tuple[list, list]:
     return steps[:1], steps[1:]
 
 
-def _workflow_object(steps: list, name: str) -> Workflow:
+def _workflow_object(steps: list, name: str, approvals=None) -> Workflow:
     return workflow_from_dict(
         {
             "schema_version": 3,
             "workflow_id": "mvp-chrome-demo-flow",
             "name": name,
             "steps": steps,
-        }
+        },
+        approvals=approvals,
     )
 
 
