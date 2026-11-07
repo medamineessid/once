@@ -39,6 +39,7 @@ class RecordedEvent:
     process_name: str | None = None
     executable_path: str | None = None
     executable_sha256: str | None = None
+    executable_signer: str | None = None
     element: UIElementInfo | None = None
     x: int | None = None
     y: int | None = None
