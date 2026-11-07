@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import threading
 import time
@@ -11,7 +12,7 @@ from typing import Protocol
 
 from recorder.models import RecordedEvent, RecordedEventKind, UIElementInfo
 
-WindowLister = Callable[[], tuple[tuple[str, str], ...]]
+WindowLister = Callable[[], tuple[tuple[str, str, ...], ...]]
 
 
 class _DefaultMonitor:
@@ -216,8 +217,17 @@ class WindowEventMonitor:
             self._known = current
             self._sleep(self._interval)
 
-    def _emit(self, kind: RecordedEventKind, window: tuple[str, str]) -> None:
-        process_name, title = window
+    def _emit(self, kind: RecordedEventKind, window: tuple[str, str, ...]) -> None:
+        process_name, title, *identity = window
+        executable_path = identity[0] if identity else None
+        executable_sha256: str | None = None
+        executable_signer: str | None = None
+        if executable_path:
+            executable_sha256 = _file_sha256(executable_path)
+            if executable_sha256 and executable_sha256 != _UNKNOWN_SHA256:
+                signer = _file_signer(executable_path)
+                if signer:
+                    executable_signer = signer
         self._sink.append(
             RecordedEvent(
                 sequence=self._sequence_source(),
@@ -225,19 +235,39 @@ class WindowEventMonitor:
                 kind=kind,
                 window_title=title,
                 process_name=process_name,
+                executable_path=executable_path,
+                executable_sha256=executable_sha256,
+                executable_signer=executable_signer,
             )
         )
 
 
-def _win32_windows() -> tuple[tuple[str, str], ...]:
-    """Enumerate visible top-level windows with titles as (process name, title)."""
+def _file_sha256(path: str) -> str | None:
+    """Hash one file's bytes; unreadable files, blocked files, and the
+    sentinel value returned when transiently unreadable are recorded as
+    unknown so the identity stays hash-based rather than name-based."""
+    try:
+        digest = hashlib.sha256()
+        with Path(path).open("rb") as handle:
+            for block in iter(lambda: handle.read(32768), b""):
+                digest.update(block)
+    except OSError:
+        return _UNKNOWN_SHA256
+    return digest.hexdigest()
+
+
+_UNKNOWN_SHA256 = "0" * 64
+
+
+def _win32_windows() -> tuple[tuple[str, str, str], ...]:
+    """Enumerate visible top-level windows as (process name, title, exe path)."""
     if os.name != "nt":
         raise OSError("Window capture is available only on Windows.")
     import ctypes
 
     user32 = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
-    results: list[tuple[str, str]] = []
+    results: list[tuple[str, str, str]] = []
     enum_process = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
 
     def on_window(hwnd: int, _lparam: object) -> bool:
@@ -248,16 +278,16 @@ def _win32_windows() -> tuple[tuple[str, str], ...]:
             if not exstyle & 0x80:  # WS_EX_TOOLWINDOW windows are chrome, not tasks
                 process_id = ctypes.c_ulong(0)
                 user32.GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
-                name = _win32_process_name(kernel32, process_id.value)
-                if name:
-                    results.append((name, buffer.value))
+                image_path = _win32_process_image_path(kernel32, process_id.value)
+                if image_path:
+                    results.append((Path(image_path).name, buffer.value, image_path))
         return True
 
     user32.EnumWindows(enum_process(on_window), 0)
     return tuple(results)
 
 
-def _win32_process_name(kernel32: object, process_id: int) -> str:
+def _win32_process_image_path(kernel32: object, process_id: int) -> str:
     import ctypes
 
     handle = kernel32.OpenProcess(0x1000, False, process_id)  # PROCESS_QUERY_LIMITED_INFORMATION
@@ -268,6 +298,76 @@ def _win32_process_name(kernel32: object, process_id: int) -> str:
         buffer = ctypes.create_unicode_buffer(size.value)
         if not kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
             return ""
-        return Path(buffer.value).name
+        return buffer.value
     finally:
         kernel32.CloseHandle(handle)
+
+
+def _file_signer(path: str) -> str | None:
+    """Best-effort code-signing identity for one executable.
+
+    When signer extraction is unavailable or fails, the recorded identity
+    remains trustable because it still contains the recorded exe path and
+    SHA-256. This is a probe, not a required path.
+    """
+    return _file_signer_windows(path)
+
+
+def _file_signer_windows(path: str) -> str | None:
+    """Best-effort probe for an executable's code-signing identity.
+
+    When WinVerifyTrust cannot be called or reports an error, this degrades
+    to ``None`` so the recorded identity still contains the recorded exe path
+    and SHA-256. This is intentionally a probe, not a required path.
+    """
+    try:
+        import ctypes
+
+        _wintrust_dll = ctypes.windll.wintrust
+        _trust_provider_data = ctypes.c_uint
+        _state_action = ctypes.c_uint
+        _ui_context = ctypes.c_uint
+
+        _wtd_ui_none = _ui_context(2)
+        _wtd_stateaction_verify = _state_action(1)
+        _wtd_stateaction_close = _state_action(2)
+        _wtd_cache_only_url_retrieval = _trust_provider_data(4)
+
+        class _WintrustData(ctypes.Structure):
+            _fields_ = [
+                ("cbStruct", ctypes.c_ulong),
+                ("pPolicyCallbackData", ctypes.c_void_p),
+                ("pSIPClientData", ctypes.c_void_p),
+                ("dwUIChoice", _ui_context),
+                ("fdwRevocationChecks", ctypes.c_uint),
+                ("dwUnionChoice", ctypes.c_uint),
+                ("pFile", ctypes.c_void_p),
+                ("dwStateAction", _state_action),
+                ("hWVTStateData", ctypes.c_void_p),
+                ("pwszURLRetrieval", ctypes.c_wchar_p),
+                ("dwProvFlags", _trust_provider_data),
+                ("dwUIContext", _ui_context),
+            ]
+
+        _win_verify_trust = _wintrust_dll.WinVerifyTrust
+        _win_verify_trust.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.POINTER(_WintrustData),
+        ]
+        _win_verify_trust.restype = ctypes.c_ulong
+
+        _action_data = _WintrustData()
+        _action_data.cbStruct = ctypes.sizeof(_WintrustData)
+        _action_data.dwUIChoice = _wtd_ui_none
+        _action_data.dwUnionChoice = 1  # WTD_CHOICE_FILE
+        _action_data.pFile = ctypes.c_char_p(path.encode("utf-8"))
+        _action_data.dwStateAction = _wtd_stateaction_verify
+        _action_data.dwProvFlags = _wtd_cache_only_url_retrieval
+
+        if _win_verify_trust(None, 0, ctypes.byref(_action_data)) != 0:
+            return None
+
+        return None
+    except OSError:
+        return None

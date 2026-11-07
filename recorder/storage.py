@@ -45,6 +45,9 @@ class RecordingStore:
                     kind=RecordedEventKind(item["kind"]),
                     window_title=item["window_title"],
                     process_name=item.get("process_name"),
+                    executable_path=item.get("executable_path"),
+                    executable_sha256=item.get("executable_sha256"),
+                    executable_signer=item.get("executable_signer"),
                     element=(
                         UIElementInfo(**item["element"]) if item["element"] is not None else None
                     ),

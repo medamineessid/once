@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import atexit
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from ai.approval import ApprovedProposal
+from controller.approvals import (
+    ApplicationApprovalStore,
+    ApplicationIdentity,
+    DatabaseApplicationApprovalStore,
+    launch_identities_from_events,
+)
 from engine.acceptance import load_acceptance_cases
 from engine.agent_change import ApprovedChange, ChangeReview, approve_change
 from engine.desktop import DesktopApproval
@@ -16,6 +23,7 @@ from engine.errors import AgentIntegrationError, WorkflowValidationError
 from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
 from engine.replay import (
     DESKTOP_INTERACTION_POLICY,
+    MUTATING_DESKTOP_KINDS,
     ReplayExecutor,
     ReplayPreview,
 )
@@ -37,6 +45,7 @@ from engine.workflow import (
     WorkflowStep,
 )
 from integrations.coding_agent import GitRepository, WorktreeCheckout, run_agent_for_proposal
+from recorder.models import RecordedEvent
 from storage.database import connect
 from storage.history import (
     AgentProposalRecord,
@@ -46,6 +55,68 @@ from storage.history import (
 )
 from storage.layouts import LayoutLoadResult, load_layout, save_layout
 from storage.workflows import load_workflow, save_workflow
+
+
+@dataclass(frozen=True)
+class StepReplayability:
+    """One step's replayability and a plain-language reason."""
+
+    step_id: str
+    kind: str
+    replayable: bool
+    reason: str
+
+
+def classify_workflow_steps(workflow: Workflow) -> tuple[StepReplayability, ...]:
+    """Classify every workflow step as replayable or observation-only.
+
+    A step is replayable when the replay policy allows its kind. Read-only
+    steps replay without mutating anything; mutating desktop steps replay
+    only after the recorded application is approved. Every other step (for
+    example a REPORT observation, or a recorded action the engine cannot
+    convert to a step kind) is observation-only: it is shown to the user but
+    never performed.
+    """
+    results: list[StepReplayability] = []
+    for step in workflow.steps:
+        if step.kind is StepKind.REPORT:
+            results.append(
+                StepReplayability(
+                    step.step_id,
+                    step.kind.value,
+                    False,
+                    "This step only records an observation; nothing is performed.",
+                )
+            )
+        elif step.kind in DESKTOP_INTERACTION_POLICY.allowed_kinds:
+            if step.kind in MUTATING_DESKTOP_KINDS:
+                results.append(
+                    StepReplayability(
+                        step.step_id,
+                        step.kind.value,
+                        True,
+                        "This step performs an action once the application is approved.",
+                    )
+                )
+            else:
+                results.append(
+                    StepReplayability(
+                        step.step_id,
+                        step.kind.value,
+                        True,
+                        "This step is read-only and can be replayed.",
+                    )
+                )
+        else:
+            results.append(
+                StepReplayability(
+                    step.step_id,
+                    step.kind.value,
+                    False,
+                    f"This {step.kind.value} step is not a replayable action.",
+                )
+            )
+    return tuple(results)
 
 
 class WorkflowService:
@@ -61,6 +132,7 @@ class WorkflowService:
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
         layout_connection: sqlite3.Connection | None = None,
+        approval_store: ApplicationApprovalStore | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
@@ -92,6 +164,7 @@ class WorkflowService:
         self._history = history
         self._layout_connection = layout_connection
         self._workflow_directory = workflow_directory
+        self._approval_store = approval_store
         self._allowed_root: Path | None = None
         if workflow_directory is not None:
             workflow_directory.mkdir(parents=True, exist_ok=True)
@@ -134,7 +207,39 @@ class WorkflowService:
             history=history,
             workflow_directory=workflow_directory,
             layout_connection=connection,
+            approval_store=DatabaseApplicationApprovalStore(app_data_dir / "once.db"),
         )
+
+    # ------------------------------------------------- application approvals
+
+    def unapproved_application_identities(
+        self, events: Iterable[RecordedEvent]
+    ) -> tuple[ApplicationIdentity, ...]:
+        """Recorded launch identities the user has not approved even once.
+
+        With no approval store configured (tests, legacy flows) nothing is
+        pending, so existing scripts and reviews keep working unchanged.
+        """
+        if self._approval_store is None:
+            return ()
+        pending: list[ApplicationIdentity] = []
+        for identity in launch_identities_from_events(events):
+            if not identity.describes_something():
+                continue
+            if not self._approval_store.is_approved(identity):
+                pending.append(identity)
+        return tuple(pending)
+
+    def approve_application(self, identity: ApplicationIdentity) -> None:
+        """Write one explicit human approval through the abstraction."""
+        if self._approval_store is not None:
+            self._approval_store.approve(identity)
+
+    def is_application_approved(self, identity: ApplicationIdentity) -> bool:
+        """Whether this identity was approved; true when checks are unconfigured."""
+        if self._approval_store is None:
+            return True
+        return self._approval_store.is_approved(identity)
 
     @staticmethod
     def demo_workflow() -> Workflow:
@@ -195,9 +300,20 @@ class WorkflowService:
         return WorkflowEditorSession(workflow)
 
     def save_approved(self, proposal: ApprovedProposal) -> Path:
-        """Save only a proposal that passed the explicit approval gate."""
+        """Save only a proposal that passed the explicit approval gate.
+
+        Refuses a workflow that has no steps Once can perform: an
+        observation-only recording is not a runnable automation.
+        """
         if not isinstance(proposal, ApprovedProposal):
             raise WorkflowValidationError("Only an explicitly approved proposal can be saved.")
+        replayable = any(step.replayable for step in classify_workflow_steps(proposal.workflow))
+        if not replayable:
+            raise WorkflowValidationError(
+                "This task has no steps Once can perform. It only records observations, "
+                "so there is nothing to save as a runnable automation. Record the task "
+                "again, or remove the observation-only steps."
+            )
         return self.save(proposal.workflow)
 
     def save_layout(
@@ -807,7 +923,7 @@ class WorkflowService:
             return None
         try:
             return load_workflow(candidate).name
-        except WorkflowValidationError, OSError:
+        except (WorkflowValidationError, OSError):
             return None
 
     def history(self) -> tuple[WorkflowRun, ...]:
