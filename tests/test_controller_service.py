@@ -78,7 +78,7 @@ def test_classify_workflow_steps_marks_replayable_and_observation_only() -> None
                 "Launch",
                 StepKind.LAUNCH_APPLICATION,
                 "launch",
-                '{"application": "vscode"}',
+                '{"executable": "C:/work/app.exe"}',
             ),
             WorkflowStep("observe", "Observe", StepKind.REPORT, "just a note", None),
         ),

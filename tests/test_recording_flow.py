@@ -108,7 +108,9 @@ class FakeLaunchCloseDesktopActions:
 
 
 class WindowRecordingStub:
-    """Recorder fake: emits VS Code open then close observations."""
+    """Recorder fake: emits application open then close observations."""
+
+    EXECUTABLE = r"C:\Program Files\Example\app.exe"
 
     def __init__(self, sink: EventSink) -> None:
         self._sink = sink
@@ -119,8 +121,9 @@ class WindowRecordingStub:
                 1,
                 10,
                 RecordedEventKind.WINDOW_OPEN,
-                process_name="Code.exe",
-                window_title="Visual Studio Code",
+                process_name="app.exe",
+                window_title="Example App",
+                executable_path=self.EXECUTABLE,
             )
         )
         self._sink.append(
@@ -128,8 +131,9 @@ class WindowRecordingStub:
                 2,
                 20,
                 RecordedEventKind.WINDOW_CLOSE,
-                process_name="Code.exe",
-                window_title="Visual Studio Code",
+                process_name="app.exe",
+                window_title="Example App",
+                executable_path=self.EXECUTABLE,
             )
         )
 
@@ -164,7 +168,7 @@ def test_recorded_vscode_open_close_replays_unapproved_free(tmp_path) -> None:
 
     assert run.status.value == "SUCCEEDED"
     assert [(kind, target) for kind, target in desktop.calls] == [
-        ("LAUNCH_APPLICATION", json.dumps({"application": "vscode"})),
-        ("CLOSE_APPLICATION", json.dumps({"application": "vscode"})),
+        ("LAUNCH_APPLICATION", json.dumps({"executable": WindowRecordingStub.EXECUTABLE})),
+        ("CLOSE_APPLICATION", json.dumps({"executable": WindowRecordingStub.EXECUTABLE})),
     ]
     assert [result.status for result in run.results] == [StepStatus.SUCCEEDED, StepStatus.SUCCEEDED]

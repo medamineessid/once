@@ -9,15 +9,16 @@ storage: the UI and controller ask only the Protocol.
 from __future__ import annotations
 
 import json
-import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from engine.workflow import StepKind
+from engine.workflow import ApprovedApplication, StepKind
 from recorder.models import RecordedEvent
+from storage.app_registry import application_key, executable_sha256
+from storage.database import connect
 
 CREATE_APPROVALS_TABLE = """
 CREATE TABLE IF NOT EXISTS app_approvals (
@@ -71,7 +72,7 @@ class DatabaseApplicationApprovalStore:
     """SQLite-backed approvals; the key is the recorded exe hash and path."""
 
     def __init__(self, database_path: Path) -> None:
-        self._connection = sqlite3.connect(database_path)
+        self._connection = connect(database_path)
         self._connection.execute(CREATE_APPROVALS_TABLE)
         self._connection.commit()
 
@@ -80,23 +81,91 @@ class DatabaseApplicationApprovalStore:
             "SELECT 1 FROM app_approvals WHERE executable_sha256 = ? AND executable_path = ?",
             (identity.executable_sha256 or "", identity.executable_path or ""),
         ).fetchone()
-        return row is not None
+        if row is not None:
+            return True
+        if identity.executable_path:
+            reg = self.find(Path(identity.executable_path))
+            if (
+                reg is not None
+                and reg.approved
+                and (not identity.executable_sha256 or reg.sha256 == identity.executable_sha256)
+            ):
+                return True
+        return False
 
     def approve(self, identity: ApplicationIdentity) -> None:
         approved_at = datetime.now(UTC).isoformat(timespec="seconds")
+        sha256 = identity.executable_sha256 or ""
+        if not sha256 and identity.executable_path:
+            exe = Path(identity.executable_path)
+            if exe.is_file():
+                sha256 = executable_sha256(exe)
         self._connection.execute(
             "INSERT OR REPLACE INTO app_approvals "
             "(executable_path, executable_sha256, name, signer, approved_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (
                 identity.executable_path or "",
-                identity.executable_sha256 or "",
+                sha256,
                 identity.name or "",
                 identity.signer,
                 approved_at,
             ),
         )
+        if identity.executable_path:
+            exe = Path(identity.executable_path)
+            display = identity.display_name
+            self._connection.execute(
+                """
+                INSERT INTO approved_applications (
+                    application_key, executable, sha256, display_name,
+                    approved, close_supported, created_at, approved_at
+                ) VALUES (?, ?, ?, ?, 1, 1, ?, ?)
+                ON CONFLICT(application_key) DO UPDATE SET
+                    executable = excluded.executable,
+                    sha256 = excluded.sha256,
+                    display_name = excluded.display_name,
+                    approved = 1,
+                    approved_at = excluded.approved_at
+                """,
+                (
+                    application_key(exe),
+                    str(exe),
+                    sha256,
+                    display,
+                    approved_at,
+                    approved_at,
+                ),
+            )
         self._connection.commit()
+
+    def find(self, executable: Path) -> ApprovedApplication | None:
+        """Implement ApplicationApprovals.find for the desktop adapter."""
+        key = application_key(executable)
+        row = self._connection.execute(
+            "SELECT * FROM approved_applications WHERE application_key = ?",
+            (key,),
+        ).fetchone()
+        if row is not None:
+            return ApprovedApplication(
+                executable=Path(row["executable"]),
+                sha256=row["sha256"],
+                display_name=row["display_name"],
+                approved=bool(row["approved"]),
+                close_supported=bool(row["close_supported"]),
+            )
+        # Fallback: check app_approvals by case-insensitive path
+        for app_row in self._connection.execute("SELECT * FROM app_approvals").fetchall():
+            stored_path = app_row["executable_path"]
+            if stored_path and application_key(Path(stored_path)) == key:
+                return ApprovedApplication(
+                    executable=Path(stored_path),
+                    sha256=app_row["executable_sha256"],
+                    display_name=app_row["name"] or Path(stored_path).stem,
+                    approved=True,
+                    close_supported=True,
+                )
+        return None
 
     def close(self) -> None:
         self._connection.close()

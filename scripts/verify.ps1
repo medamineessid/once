@@ -115,6 +115,13 @@ if ($LASTEXITCODE -ne 0) {
         $targetRef = 'main'
     }
 }
+& git merge-base $targetRef HEAD >$null 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $shallowRoot = (git rev-list --max-parents=0 HEAD | Select-Object -First 1)
+    if ($shallowRoot) {
+        $targetRef = $shallowRoot.Trim()
+    }
+}
 $logNumstat = git diff --numstat "$targetRef...HEAD" -- docs/ai_engineering_log.md 2>&1
 $logCommandFailed = ($LASTEXITCODE -ne 0)
 $logDeleted = 0

@@ -151,6 +151,7 @@ class MyAutomationsPage(QWidget):
         self._workflow_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._workflow_list.setMaximumHeight(320)
         self._workflow_list.itemSelectionChanged.connect(self._on_selection_changed)
+        self._workflow_list.itemDoubleClicked.connect(lambda _item: self._open_selected())
         layout.addWidget(self._workflow_list, stretch=1)
 
         actions_row = QHBoxLayout()

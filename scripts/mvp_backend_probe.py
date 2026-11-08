@@ -28,8 +28,8 @@ for backend in ("uia", "win32"):
             print(f"   pid={info.process_id} class={cls} title={name}")
 
 # Also: who owns the window per Win32 native API?
-import ctypes  # noqa: E402
-from ctypes import wintypes  # noqa: E402
+import ctypes
+from ctypes import wintypes
 
 user32 = ctypes.windll.user32
 

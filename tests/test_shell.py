@@ -164,9 +164,29 @@ def test_create_page_records_a_task_through_the_real_service(qtbot, tmp_path):
 
 
 def test_recording_review_approval_opens_editable_draft(qtbot, tmp_path):
+    class ReplayableFakeRecorder:
+        def __init__(self, sink: EventSink) -> None:
+            self._sink = sink
+
+        def start(self) -> None:
+            self._sink.append(
+                RecordedEvent(
+                    1,
+                    1,
+                    RecordedEventKind.WINDOW_OPEN,
+                    process_name="app.exe",
+                    window_title="Example App",
+                    executable_path="C:/work/app.exe",
+                    executable_sha256="a" * 64,
+                )
+            )
+
+        def stop(self) -> None:
+            return None
+
     recording_service = RecordingService(
         tmp_path / "recordings",
-        recorder_factory=FakeRecorder,
+        recorder_factory=ReplayableFakeRecorder,
     )
     window = MainWindow(
         service=WorkflowService(workflow_directory=tmp_path / "workflows"),
@@ -178,6 +198,7 @@ def test_recording_review_approval_opens_editable_draft(qtbot, tmp_path):
 
     qtbot.mouseClick(window.create_automation_page._record_button, Qt.MouseButton.LeftButton)
     qtbot.mouseClick(window.create_automation_page._stop_record_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.review_page._approve_applications, Qt.MouseButton.LeftButton)
     qtbot.mouseClick(window.review_page._approve_button, Qt.MouseButton.LeftButton)
 
     assert window.workspace.currentWidget() is window.editor_page

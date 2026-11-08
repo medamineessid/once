@@ -15,8 +15,20 @@ def window_matches(wrapper: Any, target: object) -> bool:
     if not isinstance(target, dict):
         return False
     info = wrapper.element_info
-    if "title" in target and info.name != target["title"]:
-        return False
+    if "title" in target:
+        expected = target["title"]
+        actual = getattr(info, "name", None)
+        if not isinstance(actual, str) or not isinstance(expected, str):
+            return False
+        if actual != expected:
+            clean_expected = expected.lstrip("*• ")
+            clean_actual = actual.lstrip("*• ")
+            if clean_actual != clean_expected and not (
+                " - " in clean_expected
+                and " - " in clean_actual
+                and clean_actual.rsplit(" - ", 1)[-1] == clean_expected.rsplit(" - ", 1)[-1]
+            ):
+                return False
     for field, attribute in (
         ("process_id", "process_id"),
         ("class_name", "class_name"),
@@ -32,7 +44,7 @@ def element_matches(wrapper: Any, target: object) -> bool:
     if not isinstance(target, dict):
         return False
     info = wrapper.element_info
-    for field in ("automation_id", "control_type", "class_name"):
+    for field in ("automation_id", "control_type", "class_name", "name"):
         if field in target and getattr(info, field, None) != target[field]:
             return False
     return True

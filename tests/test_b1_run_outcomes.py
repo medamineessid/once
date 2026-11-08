@@ -50,17 +50,32 @@ def test_read_only_inspection_still_counts_as_success(tmp_path) -> None:
     assert run.results[0].status is StepStatus.VERIFIED
 
 
-def test_a_report_after_real_work_stays_succeeded(tmp_path) -> None:
+def test_a_report_after_real_work_is_partially_performed(tmp_path) -> None:
     target = tmp_path / "invoice.txt"
     target.write_bytes(b"invoice")
     step = WorkflowStep("check", "Check", StepKind.INSPECT_PATH, "Found", str(target))
 
     run = WorkflowRunner().run(workflow_of(step, report_step()), allowed_root=tmp_path)
 
-    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.status is WorkflowStatus.PARTIALLY_PERFORMED
     assert [result.status for result in run.results] == [
         StepStatus.VERIFIED,
         StepStatus.OBSERVED,
+    ]
+
+
+def test_all_performed_steps_report_succeeded(tmp_path) -> None:
+    target = tmp_path / "invoice.txt"
+    target.write_bytes(b"invoice")
+    s1 = WorkflowStep("c1", "Check 1", StepKind.INSPECT_PATH, "Found", str(target))
+    s2 = WorkflowStep("c2", "Check 2", StepKind.VERIFY_PATH_EXISTS, "Exists", str(target))
+
+    run = WorkflowRunner().run(workflow_of(s1, s2), allowed_root=tmp_path)
+
+    assert run.status is WorkflowStatus.SUCCEEDED
+    assert [result.status for result in run.results] == [
+        StepStatus.VERIFIED,
+        StepStatus.VERIFIED,
     ]
 
 

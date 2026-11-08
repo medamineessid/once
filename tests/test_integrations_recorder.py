@@ -209,3 +209,44 @@ def test_win32_window_list_requires_windows() -> None:
         and title
         for process_name, title, image_path in windows
     )
+
+
+def test_window_monitor_emits_open_and_close_with_executable_path(tmp_path) -> None:
+    exe_file = tmp_path / "app.exe"
+    exe_file.write_bytes(b"MZ-test-binary")
+    collector = EventCollector()
+    pending: list[tuple[tuple[str, str, str], ...]] = [
+        (),
+        (("app.exe", "Sample App", str(exe_file)),),
+        (),
+    ]
+    last: tuple[tuple[str, str, str], ...] = ()
+
+    def snapshots() -> tuple[tuple[str, str, str], ...]:
+        nonlocal last
+        if pending:
+            last = pending.pop(0)
+        return last
+
+    monitor = WindowEventMonitor(
+        collector,
+        window_lister=snapshots,
+        interval_seconds=0.0,
+        sleep=lambda _seconds: None,
+    )
+    import time
+
+    monitor.start()
+    for _ in range(500):
+        if len(collector.events) >= 2:
+            break
+        time.sleep(0.002)
+    monitor.stop()
+
+    assert [event.kind for event in collector.events] == [
+        RecordedEventKind.WINDOW_OPEN,
+        RecordedEventKind.WINDOW_CLOSE,
+    ]
+    assert collector.events[0].executable_path == str(exe_file)
+    assert collector.events[0].executable_sha256 is not None
+    assert len(collector.events[0].executable_sha256) == 64

@@ -17,10 +17,19 @@ from engine.replay import (
     DESKTOP_INTERACTION_POLICY,
     MUTATING_DESKTOP_KINDS,
     ReplayExecutor,
+    ReplayPolicy,
 )
-from engine.workflow import StepKind, Workflow
+from engine.workflow import MAX_WORKFLOW_STEPS, StepKind, Workflow
 
 MAX_DESKTOP_STEPS = 20
+
+#: Policy used at desktop approval and execution time: allows all desktop/read
+#: steps plus non-executing REPORT observation steps so recorded drafts with
+#: observation-only steps can run and report PARTIALLY_PERFORMED honestly.
+DESKTOP_EXECUTION_POLICY = ReplayPolicy(
+    allowed_kinds=DESKTOP_INTERACTION_POLICY.allowed_kinds | frozenset({StepKind.REPORT}),
+    max_steps=MAX_WORKFLOW_STEPS,
+)
 
 
 @dataclass(frozen=True)
@@ -31,11 +40,14 @@ class DesktopApproval:
     approved_at: datetime
 
 
-def approve_desktop_workflow(workflow: Workflow) -> DesktopApproval:
+def approve_desktop_workflow(
+    workflow: Workflow, *, allow_observations: bool = False
+) -> DesktopApproval:
     """Validate and approve one desktop workflow for exactly these steps."""
     if not isinstance(workflow, Workflow):
         raise WorkflowValidationError("Only a real desktop workflow can be approved.")
-    executor = ReplayExecutor(DESKTOP_INTERACTION_POLICY)
+    policy = DESKTOP_EXECUTION_POLICY if allow_observations else DESKTOP_INTERACTION_POLICY
+    executor = ReplayExecutor(policy)
     executor.validate(workflow)
     return DesktopApproval(workflow, datetime.now(UTC))
 

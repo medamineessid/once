@@ -28,7 +28,7 @@ from engine.desktop import (
     mutating_kind_names,
     requires_desktop_approval,
 )
-from engine.errors import WorkflowValidationError
+from engine.errors import OnceError, WorkflowValidationError
 from engine.workflow import Workflow
 from ui.components.banner import Banner
 from ui.editor.canvas import CanvasView
@@ -95,6 +95,7 @@ class EditorPage(QWidget):
         layout.addWidget(self._dirty_panel)
         self._dirty_panel.hide()
         self._name_input = QLineEdit(self)
+        self._name_input.setObjectName("descriptionInput")
         self._name_input.installEventFilter(self)
         self._name_input.setPlaceholderText("Automation name")
         self._name_input.setText("New automation")
@@ -141,11 +142,17 @@ class EditorPage(QWidget):
         layout.addLayout(canvas_and_inspector)
         self._steps_list = QListWidget(self)
         self._steps_list.setObjectName("editorStepsList")
+        self._steps_list.setWordWrap(True)
+        self._steps_list.setAlternatingRowColors(True)
+        self._steps_list.itemClicked.connect(self._on_step_item_clicked)
         layout.addWidget(self._steps_list)
         actions = QHBoxLayout()
         self._add_button = QPushButton("Add step", self)
         self._add_button.setObjectName("primaryActionButton")
         self._add_button.clicked.connect(self._add_step)
+        self._delete_button = QPushButton("Delete step", self)
+        self._delete_button.setObjectName("secondaryActionButton")
+        self._delete_button.clicked.connect(self._delete_selected_step)
         self._undo_button = QPushButton("Undo", self)
         self._undo_button.setObjectName("secondaryActionButton")
         self._undo_button.clicked.connect(self._undo)
@@ -163,6 +170,7 @@ class EditorPage(QWidget):
         self._run_button.clicked.connect(self._run)
         for button in (
             self._add_button,
+            self._delete_button,
             self._undo_button,
             self._redo_button,
             self._save_button,
@@ -228,6 +236,19 @@ class EditorPage(QWidget):
         self._session.add_step_after(
             self._session.workflow().steps[-1].step_id if self._session.workflow().steps else None
         )
+        self._refresh()
+
+    def _delete_selected_step(self) -> None:
+        if self._session is None:
+            return
+        selected = self._canvas.selected_id
+        if not isinstance(selected, str) or self._canvas.is_terminal(selected):
+            return
+        try:
+            self._session.delete_step(selected)
+        except WorkflowValidationError as error:
+            self._banner.show_message("error", EDITOR_EDIT_ERROR_TITLE, str(error))
+            return
         self._refresh()
 
     def _undo(self) -> None:
@@ -314,8 +335,8 @@ class EditorPage(QWidget):
         if self._session is None:
             return
         try:
-            approval = approve_desktop_workflow(self._session.workflow())
-        except WorkflowValidationError as error:
+            approval = approve_desktop_workflow(self._session.workflow(), allow_observations=True)
+        except OnceError as error:
             self._banner.show_message("error", "Approval could not be completed", str(error))
             return
         self._approval_panel.hide()
@@ -347,6 +368,7 @@ class EditorPage(QWidget):
         self._cancel_button.setText(EDITOR_CANCEL_RUN if running else "Cancel")
         for button in (
             self._add_button,
+            self._delete_button,
             self._undo_button,
             self._redo_button,
             self._save_button,
@@ -378,6 +400,12 @@ class EditorPage(QWidget):
         self._show_inspector_for(self._canvas.selected_id, workflow)
         for field_name in self._inspector.field_names:
             self._inspector.field(field_name).installEventFilter(self)
+        has_deletable_step = (
+            isinstance(self._canvas.selected_id, str)
+            and not self._canvas.is_terminal(self._canvas.selected_id)
+            and any(s.step_id == self._canvas.selected_id for s in workflow.steps)
+        )
+        self._delete_button.setEnabled(has_deletable_step and not self._running)
         self._undo_button.setEnabled(self._session.can_undo)
         self._redo_button.setEnabled(self._session.can_redo)
         self._sync_name_input()
@@ -389,10 +417,36 @@ class EditorPage(QWidget):
         """Show the selected step's summary, or the automation summary."""
         if self._session is None:
             return
+        workflow = self._session.workflow()
+        has_deletable_step = (
+            isinstance(node_id, str)
+            and not self._canvas.is_terminal(node_id)
+            and any(s.step_id == node_id for s in workflow.steps)
+        )
+        self._delete_button.setEnabled(has_deletable_step and not self._running)
+        self._steps_list.blockSignals(True)
+        matched_row = -1
+        if isinstance(node_id, str):
+            for idx, step in enumerate(workflow.steps):
+                if step.step_id == node_id:
+                    matched_row = idx
+                    break
+        self._steps_list.setCurrentRow(matched_row)
+        self._steps_list.blockSignals(False)
         if isinstance(node_id, str) and self._canvas.is_terminal(node_id):
             self._inspector.show_terminal("Start" if node_id == "__start__" else "Finish")
             return
-        self._show_inspector_for(node_id, self._session.workflow())
+        self._show_inspector_for(node_id, workflow)
+
+    def _on_step_item_clicked(self, item: object) -> None:
+        if self._session is None or item is None:
+            return
+        row = self._steps_list.row(item)
+        steps = self._session.workflow().steps
+        if 0 <= row < len(steps):
+            target_id = steps[row].step_id
+            if self._canvas.selected_id != target_id:
+                self._canvas.select_node(target_id)
 
     def _apply_inspector_changes(self, changes: dict[str, object]) -> None:
         if self._session is None or self._canvas.selected_id is None:

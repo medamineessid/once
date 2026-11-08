@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -79,6 +80,7 @@ class ActivityPage(QWidget):
         details_layout.setSpacing(SPACING_SM)
         self._details_label = QLabel(ACTIVITY_DETAILS_EMPTY, self._details_container)
         self._details_label.setObjectName("activityDetailsLabel")
+        self._details_label.setWordWrap(True)
         details_layout.addWidget(self._details_label)
         layout.addWidget(self._details_container)
         self._refresh()
@@ -124,11 +126,13 @@ class ActivityPage(QWidget):
             name, workflow_id, label, kind, when = self._row_facts(run)
             summary = f"{name} — {label}" + (f" — {when}" if when else "")
             item = QListWidgetItem(summary)
+            item.setForeground(QColor(0, 0, 0, 0))
             item.setData(Qt.UserRole, workflow_id)
             item.setToolTip(f"{workflow_id} — {label} — {when}")
             row = RunRow(name, label, kind, when, parent=self._history_list)
             hint = row.sizeHint()
-            hint.setHeight(52)
+            hint.setHeight(56)
+            item.setSizeHint(hint)
             self._history_list.addItem(item)
             self._history_list.setItemWidget(item, row)
         self._details_label.setText(ACTIVITY_DETAILS_EMPTY)

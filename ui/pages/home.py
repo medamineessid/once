@@ -57,7 +57,7 @@ class HomePage(QWidget):
         layout.addWidget(self._header)
 
         cards_row = QHBoxLayout()
-        cards_row.setSpacing(SPACING_SM)
+        cards_row.setSpacing(SPACING_LG)
         create_card = Card(
             HOME_CARD_CREATE_TITLE,
             HOME_CARD_CREATE_BODY,
@@ -74,6 +74,7 @@ class HomePage(QWidget):
             HOME_CARD_RECORD_ACTION,
             parent=self,
         )
+        record_card.action_button.setObjectName("primaryActionButton")
         self._record_button = record_card.action_button
         record_card.action_requested.connect(self.record_requested.emit)
         cards_row.addWidget(record_card)

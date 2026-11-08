@@ -7,9 +7,18 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import RLock
 
-from integrations.recorder import EventSink, PynputRecorder
+from integrations.recorder import EventSink, PynputRecorder, UIAElementProvider
 from recorder.models import RecordedEvent, Recording
 from recorder.storage import RecordingStore
+
+
+def _default_recorder(sink: EventSink) -> PynputRecorder:
+    """Build the default Windows recorder with semantic UI Automation and keyboard capture."""
+    return PynputRecorder(
+        sink,
+        element_provider=UIAElementProvider(),
+        keyboard_enabled=True,
+    )
 
 
 class RecordingService(EventSink):
@@ -22,7 +31,7 @@ class RecordingService(EventSink):
         recorder_factory: Callable[[EventSink], PynputRecorder] | None = None,
     ) -> None:
         self._store = RecordingStore(directory)
-        self._recorder_factory = recorder_factory or PynputRecorder
+        self._recorder_factory = recorder_factory or _default_recorder
         self._lock = RLock()
         self._events: list[RecordedEvent] = []
         self._recording_id: str | None = None

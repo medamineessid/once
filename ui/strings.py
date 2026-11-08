@@ -166,6 +166,7 @@ DESKTOP_APPROVAL_STEPS_HEADING = (
     "The approved run may perform exactly these actions, in this order:"
 )
 DESKTOP_APPROVAL_KIND_LAUNCH_APPLICATION = "Launch an application"
+DESKTOP_APPROVAL_KIND_CLOSE_APPLICATION = "Close the application launched by this run"
 DESKTOP_APPROVAL_KIND_CLICK_UI_ELEMENT = "Click an item on screen"
 DESKTOP_APPROVAL_KIND_TYPE_TEXT = "Type text"
 DESKTOP_APPROVAL_KIND_PRESS_SHORTCUT = "Press a keyboard shortcut"

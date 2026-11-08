@@ -15,6 +15,7 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QFrame,
+    QHBoxLayout,
     QLabel,
     QListWidget,
     QPushButton,
@@ -35,6 +36,7 @@ from ui.strings import (
     DESKTOP_APPROVAL_BINDING_NOTE,
     DESKTOP_APPROVAL_CANCEL,
     DESKTOP_APPROVAL_KIND_CLICK_UI_ELEMENT,
+    DESKTOP_APPROVAL_KIND_CLOSE_APPLICATION,
     DESKTOP_APPROVAL_KIND_FALLBACK,
     DESKTOP_APPROVAL_KIND_INTERACT_PAGE_ELEMENT,
     DESKTOP_APPROVAL_KIND_LAUNCH_APPLICATION,
@@ -48,10 +50,11 @@ from ui.strings import (
     DESKTOP_APPROVAL_STEPS_HEADING,
     DESKTOP_APPROVAL_TITLE,
 )
-from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM
+from ui.styles import SPACING_LG, SPACING_SM
 
 _KIND_NAMES: dict[StepKind, str] = {
     StepKind.LAUNCH_APPLICATION: DESKTOP_APPROVAL_KIND_LAUNCH_APPLICATION,
+    StepKind.CLOSE_APPLICATION: DESKTOP_APPROVAL_KIND_CLOSE_APPLICATION,
     StepKind.CLICK_UI_ELEMENT: DESKTOP_APPROVAL_KIND_CLICK_UI_ELEMENT,
     StepKind.TYPE_TEXT: DESKTOP_APPROVAL_KIND_TYPE_TEXT,
     StepKind.PRESS_SHORTCUT: DESKTOP_APPROVAL_KIND_PRESS_SHORTCUT,
@@ -112,8 +115,8 @@ class DesktopApprovalPanel(QWidget):
         self._rejection_label.hide()
         panel_layout.addWidget(self._rejection_label)
 
-        buttons = QVBoxLayout()
-        buttons.setSpacing(SPACING_MD)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(SPACING_SM)
         self._approve_button = QPushButton(DESKTOP_APPROVAL_APPROVE, frame)
         self._approve_button.setObjectName("primaryActionButton")
         self._approve_button.setMinimumHeight(38)
@@ -124,6 +127,7 @@ class DesktopApprovalPanel(QWidget):
         self._cancel_button.setMinimumHeight(38)
         self._cancel_button.clicked.connect(self._on_cancel_clicked)
         buttons.addWidget(self._cancel_button)
+        buttons.addStretch(1)
         panel_layout.addLayout(buttons)
 
         self.reset()

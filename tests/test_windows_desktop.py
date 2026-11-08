@@ -8,6 +8,7 @@ unbounded poll loop.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import signal
 import sys
@@ -16,11 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from engine.workflow import StepStatus
-from integrations.windows_desktop import (
-    PywinautoDesktopActions,
-    WindowsApplicationRegistry,
-)
+from engine.workflow import ApprovedApplication, StepStatus
+from integrations.windows_desktop import PywinautoDesktopActions
 
 # ---------------------------------------------------------------------------
 # Windows-only lane B integration imports pywinauto lazily inside _pattern.
@@ -28,7 +26,9 @@ from integrations.windows_desktop import (
 # surface here so the provider's pattern lookup can be exercised with fakes.
 # This does not touch integrations/ and exercises no real UI Automation.
 # ---------------------------------------------------------------------------
-if "pywinauto" not in sys.modules:
+try:
+    import pywinauto as _real_pywinauto  # noqa: F401
+except ImportError:
     _pywinauto = types.ModuleType("pywinauto")
     _uia_defines = types.ModuleType("pywinauto.uia_defines")
 
@@ -105,7 +105,7 @@ class FakeWrapper:
     def set_focus(self) -> None:
         self.focused_keys.append("focus")
 
-    def type_keys(self, code: str) -> None:
+    def type_keys(self, code: str, **_kwargs: object) -> None:
         self.focused_keys.append(code)
 
     def is_selected(self) -> bool:
@@ -170,6 +170,32 @@ TEXT_ELEMENT = {"class_name": "DemoEditClass", "control_type": "Document"}
 BUTTON_ELEMENT = {"automation_id": "okButton", "control_type": "Button"}
 
 
+class FakeApprovals:
+    """Fake application approval store for testing PywinautoDesktopActions."""
+
+    def __init__(
+        self,
+        *,
+        approved: bool = True,
+        close_supported: bool = True,
+        sha256: str | None = None,
+        display_name: str = "Approved app",
+    ) -> None:
+        self.approved = approved
+        self.close_supported = close_supported
+        self.sha256 = sha256
+        self.display_name = display_name
+
+    def find(self, executable: Path) -> ApprovedApplication:
+        return ApprovedApplication(
+            executable=executable,
+            sha256=self.sha256 or hashlib.sha256(executable.read_bytes()).hexdigest(),
+            display_name=self.display_name,
+            approved=self.approved,
+            close_supported=self.close_supported,
+        )
+
+
 def provider_with(children, *, windows=None, sleep=None, clock=None):
     """Build a provider bound to one fake desktop with fixed time."""
     if windows is None:
@@ -191,7 +217,7 @@ def provider_with(children, *, windows=None, sleep=None, clock=None):
         sleep = sleep_advancing_clock(clock)
     provider = PywinautoDesktopActions(
         desktop_factory=lambda: desktop,
-        registry=WindowsApplicationRegistry(),
+        approvals=FakeApprovals(),
         popen=lambda argv: FakeProcess(),
         sleep=sleep,
         clock=clock,
@@ -213,13 +239,6 @@ def element_step(**overrides) -> str:
     return json.dumps(payload)
 
 
-class StubRegistry:
-    """Registry that resolves any registered name to an existing executable."""
-
-    def resolve(self, name: str) -> Path:
-        return Path(sys.executable)
-
-
 def close_provider(
     windows,
     *,
@@ -227,7 +246,7 @@ def close_provider(
     process_alive=None,
     is_visible=None,
     has_owner=None,
-    registry=None,
+    approvals=None,
 ) -> PywinautoDesktopActions:
     """Provider bound to one fake desktop surface with launch and close access."""
     desktop = FakeDesktop(windows)
@@ -236,6 +255,7 @@ def close_provider(
     overrides: dict[str, object] = {
         "sleep": sleep_advancing_clock(clock),
         "clock": clock,
+        "approvals": approvals if approvals is not None else FakeApprovals(),
     }
     if process_alive is not None:
         overrides["process_alive"] = process_alive
@@ -245,8 +265,6 @@ def close_provider(
         overrides["is_visible"] = is_visible
     if has_owner is not None:
         overrides["has_owner"] = has_owner
-    if registry is not None:
-        overrides["registry"] = registry
     return PywinautoDesktopActions(
         desktop_factory=lambda: desktop,
         popen=lambda argv: FakeProcess(),
@@ -486,17 +504,13 @@ def test_launch_records_the_resolved_command_and_process(tmp_path: Path) -> None
         launched.append(argv)
         return FakeProcess()
 
-    class LocalStubRegistry:
-        def resolve(self, name: str) -> Path:
-            return Path(sys.executable)
-
     provider = PywinautoDesktopActions(
         desktop_factory=lambda: FakeDesktop([]),
-        registry=LocalStubRegistry(),
+        approvals=FakeApprovals(),
         popen=fake_popen,
     )
     result = provider.launch_application(
-        json.dumps({"application": "stubbed", "arguments": ["--version"]})
+        json.dumps({"executable": sys.executable, "arguments": ["--version"]})
     )
     assert result.status is StepStatus.SUCCEEDED
     assert "process_id=4242" in result.evidence
@@ -513,7 +527,7 @@ def test_launch_fails_closed_for_a_missing_executable(tmp_path: Path) -> None:
 
     provider = PywinautoDesktopActions(
         desktop_factory=lambda: FakeDesktop([]),
-        registry=WindowsApplicationRegistry(),
+        approvals=FakeApprovals(),
         popen=must_not_launch,
     )
     result = provider.launch_application(json.dumps({"executable": str(tmp_path / "gone.exe")}))
@@ -522,9 +536,16 @@ def test_launch_fails_closed_for_a_missing_executable(tmp_path: Path) -> None:
     assert launched == []
 
 
-def test_registry_requires_allow_listed_application_names() -> None:
-    with pytest.raises(Exception, match="registry does not contain"):
-        WindowsApplicationRegistry().resolve("not_a_registered_app")
+def test_launch_refuses_unapproved_executable() -> None:
+    """An executable without an approval record is refused."""
+    provider = PywinautoDesktopActions(
+        desktop_factory=lambda: FakeDesktop([]),
+        approvals=None,
+        popen=lambda _argv: FakeProcess(),
+    )
+    result = provider.launch_application(json.dumps({"executable": sys.executable}))
+    assert result.status is StepStatus.FAILED
+    assert "approval_needed=true" in result.evidence
 
 
 def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
@@ -549,25 +570,24 @@ def test_default_launch_never_uses_a_shell(monkeypatch) -> None:
 
 def test_close_refuses_when_this_run_launched_nothing() -> None:
     provider = close_provider([])
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
     assert result.status is StepStatus.FAILED
     assert "did not launch" in result.message
     assert "registered=false" in result.evidence
 
 
 def test_close_only_touches_windows_of_the_launched_process() -> None:
-    own = FakeWindow(FakeElementInfo(name="Visual Studio Code", process_id=FakeProcess.pid), [])
+    own = FakeWindow(FakeElementInfo(name="Launched App", process_id=FakeProcess.pid), [])
     foreign = FakeWindow(FakeElementInfo(name="Unrelated windows", process_id=99), [])
     provider = close_provider(
         [own, foreign],
-        registry=StubRegistry(),
         is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
         has_owner=lambda wrapper: False,
     )
-    launched = provider.launch_application(json.dumps({"application": "vscode"}))
+    launched = provider.launch_application(json.dumps({"executable": sys.executable}))
     assert launched.status is StepStatus.SUCCEEDED
 
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
     assert result.status is StepStatus.SUCCEEDED
     assert own.closed is True
     assert foreign.closed is False
@@ -586,13 +606,12 @@ def test_close_fails_when_a_window_refuses_to_disappear() -> None:
     provider = close_provider(
         [sticky],
         clock=clock,
-        registry=StubRegistry(),
         is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
         has_owner=lambda wrapper: False,
     )
-    provider.launch_application(json.dumps({"application": "vscode"}))
+    provider.launch_application(json.dumps({"executable": sys.executable}))
 
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
     assert result.status is StepStatus.FAILED
     assert "did not close" in result.message
 
@@ -605,13 +624,12 @@ def test_close_fails_closed_when_the_window_close_errors() -> None:
     broken = BrokenWindow(FakeElementInfo(name="Broken", process_id=FakeProcess.pid), [])
     provider = close_provider(
         [broken],
-        registry=StubRegistry(),
         is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
         has_owner=lambda wrapper: False,
     )
-    provider.launch_application(json.dumps({"application": "vscode"}))
+    provider.launch_application(json.dumps({"executable": sys.executable}))
 
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
     assert result.status is StepStatus.FAILED
     assert "the surface refused" in result.message
 
@@ -630,13 +648,12 @@ def test_close_does_not_claim_success_while_the_process_is_alive() -> None:
         [],
         clock=clock,
         process_alive=lambda _pid: True,
-        registry=StubRegistry(),
         is_visible=lambda wrapper: False,
         has_owner=lambda wrapper: False,
     )
-    provider.launch_application(json.dumps({"application": "vscode"}))
+    provider.launch_application(json.dumps({"executable": sys.executable}))
 
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
 
     assert result.status is StepStatus.FAILED
     assert "window_appeared=false" in result.evidence
@@ -651,19 +668,61 @@ def test_close_succeeds_when_the_app_already_exited() -> None:
         [],
         clock=clock,
         process_alive=lambda _pid: False,
-        registry=StubRegistry(),
         is_visible=lambda wrapper: False,
         has_owner=lambda wrapper: False,
     )
-    provider.launch_application(json.dumps({"application": "vscode"}))
+    provider.launch_application(json.dumps({"executable": sys.executable}))
 
-    result = provider.close_application(json.dumps({"application": "vscode"}))
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
 
     assert result.status is StepStatus.SUCCEEDED
     assert "exited=true" in result.evidence
 
 
-def test_registry_resolves_vscode_to_a_known_code_executable() -> None:
-    path = WindowsApplicationRegistry().resolve("vscode")
-    assert path.name == "Code.exe"
-    assert "Microsoft VS Code" in path.parts
+def test_launch_refuses_when_hash_changes() -> None:
+    provider = PywinautoDesktopActions(
+        desktop_factory=lambda: FakeDesktop([]),
+        approvals=FakeApprovals(sha256="0" * 64),
+        popen=lambda _argv: FakeProcess(),
+    )
+    result = provider.launch_application(json.dumps({"executable": sys.executable}))
+    assert result.status is StepStatus.FAILED
+    assert "approval_reason=hash_mismatch" in result.evidence
+
+
+def test_type_text_falls_back_to_keyboard_entry_when_value_pattern_missing() -> None:
+    editor = FakeWrapper(
+        FakeElementInfo(class_name="RichEditD2DPT", control_type="Document"),
+        enabled=True,
+        value=None,
+    )
+    provider, _clock = provider_with([editor])
+    result = provider.type_text(
+        json.dumps(
+            {
+                "window": WINDOW_IDENTITY,
+                "element": {"class_name": "RichEditD2DPT", "control_type": "Document"},
+                "text": "typed via fallback",
+            }
+        )
+    )
+    assert result.status is StepStatus.SUCCEEDED
+    assert "readback_confirmed=true" in result.evidence
+    assert "typed via fallback" in editor.focused_keys
+
+
+def test_window_matches_tolerates_modified_title_prefix() -> None:
+    dirty_window = FakeWindow(
+        FakeElementInfo(
+            name="*Untitled - Notepad",
+            class_name="Notepad",
+            control_type="Window",
+            process_id=99,
+        ),
+        [],
+    )
+    provider, _clock = provider_with([], windows=[dirty_window])
+    result = provider.press_shortcut(
+        json.dumps({"window": {"title": "Untitled - Notepad"}, "keys": "ctrl+s"})
+    )
+    assert result.status is StepStatus.SUCCEEDED

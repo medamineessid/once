@@ -61,7 +61,7 @@ class InspectorPanel(QScrollArea):
         super().__init__(parent)
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.setFixedWidth(240)
+        self.setFixedWidth(264)
         # Enter on a selected node focuses this panel (page wiring), so it
         # must accept keyboard focus.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -79,16 +79,18 @@ class InspectorPanel(QScrollArea):
         self._form_layout.setSpacing(SPACING_SM)
         self._content_layout.addWidget(self._form)
         self._apply_button = QPushButton("Apply changes", self._content)
-        self._apply_button.setObjectName("inspectorApply")
+        self._apply_button.setObjectName("primaryActionButton")
         self._apply_button.clicked.connect(self._on_apply)
         self._content_layout.addWidget(self._apply_button)
         self._content_layout.addStretch(1)
         self._close_button = QPushButton("Close", self._content)
-        self._close_button.setObjectName("inspectorClose")
+        self._close_button.setObjectName("secondaryActionButton")
         self._close_button.clicked.connect(self._on_close)
         self._content_layout.addWidget(self._close_button)
         self.setWidget(self._content)
         self._fields: dict[str, QWidget] = {}
+        self._kind_combo: QComboBox | None = None
+        self._current_kind: StepKind | None = None
         self._apply_button.hide()
 
     # ------------------------------------------------------------ content
@@ -135,6 +137,8 @@ class InspectorPanel(QScrollArea):
                 lines.append("Evidence:\n" + "\n".join(evidence))
         self._summary_label.setText("\n".join(lines))
         self._clear_fields()
+        self._current_kind = step.kind
+        self._add_kind_selector(step.kind)
         self._add_text_field("name", "Name", step.name)
         self._add_text_field("message", "Message", step.message)
         if _has_target(step.kind):
@@ -172,11 +176,51 @@ class InspectorPanel(QScrollArea):
 
     def _clear_fields(self) -> None:
         self._fields.clear()
+        self._kind_combo = None
+        self._current_kind = None
         while self._form_layout.count():
             item = self._form_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
+
+    def _add_kind_selector(self, value: StepKind) -> None:
+        combo = QComboBox(self._form)
+        combo.setObjectName("inspectorKindSelector")
+        for kind in (
+            StepKind.REPORT,
+            StepKind.LAUNCH_APPLICATION,
+            StepKind.WAIT_WINDOW,
+            StepKind.CLICK_UI_ELEMENT,
+            StepKind.TYPE_TEXT,
+            StepKind.PRESS_SHORTCUT,
+            StepKind.CLOSE_APPLICATION,
+            StepKind.INSPECT_PATH,
+            StepKind.VERIFY_PATH_EXISTS,
+        ):
+            combo.addItem(kind.value, kind)
+        index = combo.findData(value)
+        if index < 0:
+            combo.addItem(value.value, value)
+            index = combo.findData(value)
+        combo.setCurrentIndex(index)
+        combo.currentIndexChanged.connect(self._on_kind_changed)
+        self._kind_combo = combo
+        self._form_layout.addRow("Kind", combo)
+
+    def _on_kind_changed(self, _index: int) -> None:
+        if self._kind_combo is None:
+            return
+        selected = self._kind_combo.currentData()
+        if not isinstance(selected, StepKind):
+            return
+        if _has_target(selected):
+            default_target = _default_target_for_kind(selected) or ""
+            target_widget = self._fields.get("target")
+            if isinstance(target_widget, QLineEdit):
+                target_widget.setText(default_target)
+            else:
+                self._add_text_field("target", "Target", default_target)
 
     def _add_text_field(self, name: str, label: str, value: str) -> None:
         field = QLineEdit(self._form)
@@ -222,6 +266,14 @@ class InspectorPanel(QScrollArea):
                 changes[name] = field.value()
             elif isinstance(field, QComboBox):
                 changes[name] = field.currentData()
+        if self._kind_combo is not None:
+            selected_kind = self._kind_combo.currentData()
+            if isinstance(selected_kind, StepKind) and selected_kind != self._current_kind:
+                changes["kind"] = selected_kind
+                if not _has_target(selected_kind):
+                    changes["target"] = None
+                elif not str(changes.get("target") or "").strip():
+                    changes["target"] = _default_target_for_kind(selected_kind)
         self.changes_applied.emit(changes)
 
     # ------------------------------------------------------------ closing
@@ -233,3 +285,43 @@ class InspectorPanel(QScrollArea):
 
 def _has_target(kind: StepKind) -> bool:
     return kind not in (StepKind.REPORT, StepKind.FAIL)
+
+
+def _default_target_for_kind(kind: StepKind) -> str | None:
+    if kind in (StepKind.LAUNCH_APPLICATION, StepKind.CLOSE_APPLICATION):
+        return json.dumps({"executable": "C:/path/to/app.exe"}, sort_keys=True)
+    if kind is StepKind.WAIT_WINDOW:
+        return json.dumps({"window": {"title": "Window Title"}}, sort_keys=True)
+    if kind is StepKind.CLICK_UI_ELEMENT:
+        return json.dumps(
+            {
+                "element": {
+                    "class_name": "Button",
+                    "control_type": "Button",
+                    "name": "OK",
+                },
+                "interaction": "invoke",
+                "window": {"title": "Window Title"},
+            },
+            sort_keys=True,
+        )
+    if kind is StepKind.TYPE_TEXT:
+        return json.dumps(
+            {
+                "element": {
+                    "class_name": "Edit",
+                    "control_type": "Edit",
+                },
+                "text": "Sample text",
+                "window": {"title": "Window Title"},
+            },
+            sort_keys=True,
+        )
+    if kind is StepKind.PRESS_SHORTCUT:
+        return json.dumps(
+            {"keys": "enter", "window": {"title": "Window Title"}},
+            sort_keys=True,
+        )
+    if kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
+        return "sample.txt"
+    return None

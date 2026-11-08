@@ -72,7 +72,7 @@ class NodeCard(QGraphicsPathItem):
         self.status = "PENDING" if not terminal else ""
 
         title_item = QGraphicsTextItem(self)
-        title_item.setDefaultTextColor(QColor(TEXT_STRONG if terminal else BORDER_STRONG))
+        title_item.setDefaultTextColor(QColor(TEXT_STRONG))
         title_font = QFont()
         title_font.setPointSize(10)
         title_font.setBold(True)
@@ -97,6 +97,8 @@ class NodeCard(QGraphicsPathItem):
         colors = {
             "RUNNING": ACCENT,
             "SUCCEEDED": "#15803D",
+            "VERIFIED": "#15803D",
+            "OBSERVED": "#92400E",
             "FAILED": "#B91C1C",
             "SKIPPED": "#92400E",
             "CANCELLED": "#92400E",

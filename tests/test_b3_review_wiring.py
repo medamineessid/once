@@ -30,7 +30,13 @@ def sample_draft(workflow_id: str = "review-demo") -> ProviderDraft:
         name="Tidy the notes",
         steps=(
             WorkflowStep(step_id="s1", name="Say hello", kind=StepKind.REPORT, message="Hello."),
-            WorkflowStep(step_id="s2", name="Report done", kind=StepKind.REPORT, message="Done."),
+            WorkflowStep(
+                step_id="s2",
+                name="Check notes",
+                kind=StepKind.VERIFY_PATH_EXISTS,
+                message="Done.",
+                target="C:/work/notes.txt",
+            ),
         ),
     )
     return ProviderDraft(goal="Run a small demo", workflow=workflow)

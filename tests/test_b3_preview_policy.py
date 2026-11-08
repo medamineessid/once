@@ -27,7 +27,7 @@ VALID_TARGETS: dict[StepKind, str] = {
     StepKind.VERIFY_PATH_EXISTS: "C:/work/result.txt",
     StepKind.INSPECT_PATH: "C:/work/result.txt",
     StepKind.VERIFY_FILE_TEXT: json.dumps({"path": "C:/work/result.txt", "contains": "invoice"}),
-    StepKind.LAUNCH_APPLICATION: json.dumps({"application": "chrome"}),
+    StepKind.LAUNCH_APPLICATION: json.dumps({"executable": "C:/work/app.exe"}),
     StepKind.TYPE_TEXT: json.dumps({"window": WINDOW, "element": ELEMENT, "text": "hello"}),
 }
 

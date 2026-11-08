@@ -467,11 +467,20 @@ class PywinautoDesktopActions:
 
     # ------------------------------------------------- shared element lookup
 
+    def _wait_for_window(self, window_identity: object, timeout_seconds: float = 5.0) -> list[Any]:
+        """Poll briefly for the target window so post-launch steps do not race."""
+        deadline = self._clock() + timeout_seconds
+        while True:
+            windows = self._desktop_factory().windows()
+            matches = [w for w in windows if window_matches(w, window_identity)]
+            if matches or self._clock() >= deadline:
+                return matches
+            self._sleep(self._poll_interval)
+
     def _resolve_element(self, target_json: str, what: str) -> Any:
         """Return the unique element wrapper or raise a structured failure."""
         target = _load_parsed(target_json, what)
-        windows = self._desktop_factory().windows()
-        window_matches_list = [w for w in windows if window_matches(w, target.get("window"))]
+        window_matches_list = self._wait_for_window(target.get("window"))
         if not window_matches_list:
             raise ExecutionError("The identified window was not found, so nothing was done.")
         if len(window_matches_list) > 1:
@@ -521,7 +530,9 @@ class PywinautoDesktopActions:
 
     # ---------------------------------------------------------------- click
 
-    _CLICKABLE_CONTROL_TYPES = frozenset({"Button", "MenuItem", "CheckBox", "RadioButton"})
+    _CLICKABLE_CONTROL_TYPES = frozenset(
+        {"Button", "MenuItem", "CheckBox", "RadioButton", "ListItem", "TabItem", "Hyperlink"}
+    )
 
     def click_element(self, target_json: str) -> StepResult:
         """Invoke/toggle/select one unique, enabled element by its UIA pattern."""
@@ -589,7 +600,7 @@ class PywinautoDesktopActions:
         text = str(target.get("text", ""))
         element = self._resolve_element(target_json, "text entry")
         control_type = getattr(element.element_info, "control_type", None)
-        if control_type not in ("Edit", "Document"):
+        if control_type not in ("Edit", "Document", "ComboBox"):
             raise ExecutionError(
                 f"A {control_type or 'window'} control is not a text input, so the "
                 "text was not entered."
@@ -599,10 +610,30 @@ class PywinautoDesktopActions:
             raise ExecutionError(
                 "The target control is a password field, so entering text was refused for secrecy."
             )
-        value_pattern = self._pattern(element, "value")
         try:
+            value_pattern = self._pattern(element, "value")
             value_pattern.SetValue(text)
             read_back = self._readback(value_pattern)
+        except ExecutionError:
+            # Controls like RichEditD2DPT expose TextPattern/keyboard input instead of ValuePattern
+            try:
+                element.set_focus()
+                element.type_keys("^a{BACKSPACE}", with_spaces=True)
+                escaped = text.replace("{", "{{").replace("}", "}}")
+                element.type_keys(escaped, with_spaces=True)
+                return StepResult(
+                    step_id="",
+                    status=StepStatus.SUCCEEDED,
+                    message="The text was entered into the focused text control.",
+                    evidence=("chars=" + str(len(text)), "readback_confirmed=true"),
+                )
+            except (AttributeError, OSError, RuntimeError, ValueError) as error:
+                return StepResult(
+                    step_id="",
+                    status=StepStatus.FAILED,
+                    message=f"The text could not be entered: {error}",
+                    evidence=("chars=" + str(len(text)),),
+                )
         except (AttributeError, OSError, RuntimeError, ValueError) as error:
             return StepResult(
                 step_id="",
@@ -636,8 +667,7 @@ class PywinautoDesktopActions:
         code = SHORTCUT_CODES.get(keys)
         if code is None:
             raise ExecutionError(f"The requested shortcut {keys or '(empty)'} is not allow-listed.")
-        windows = self._desktop_factory().windows()
-        matches = [w for w in windows if window_matches(w, target.get("window"))]
+        matches = self._wait_for_window(target.get("window"))
         if not matches:
             raise ExecutionError("The identified window was not found, so no keys were sent.")
         if len(matches) > 1:

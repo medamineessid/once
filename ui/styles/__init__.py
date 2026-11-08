@@ -155,17 +155,17 @@ def _set_stylesheet(app):
 
 _STYLESHEET_TEMPLATE = Template("""
     QMainWindow {
-        background: #F3F3F3;
+        background: $BG_APP;
     }
     QWidget#sidePanel {
-        background: #FFFFFF;
-        border-right: 1px solid #E5E5E5;
+        background: $SURFACE;
+        border-right: 1px solid $BORDER;
     }
     QWidget#sidePanel:focus {
         border-right: 1px solid $ACCENT;
     }
     QWidget#mainPanel {
-        background: #F3F3F3;
+        background: $BG_APP;
     }
     QToolBar#sidebar {
         padding: 0px;
@@ -174,13 +174,13 @@ _STYLESHEET_TEMPLATE = Template("""
         font-size: 28px;
         font-weight: 700;
         color: #1D1D1D;
-        padding: 4px 0 12px 0;
+        padding: 16px 16px 12px 16px;
         font-family: $FONT_STACK;
     }
     QLabel#sidebarFooter {
         font-size: ${TYPE_FOOTER_PX}px;
         color: #9A9A9A;
-        padding: 12px 6px 4px 6px;
+        padding: 12px 16px 4px 16px;
         font-family: $FONT_STACK;
     }
     QToolButton#sidebarHomeButton,
@@ -203,7 +203,7 @@ _STYLESHEET_TEMPLATE = Template("""
     QToolButton#sidebarActivityButton:hover,
     QToolButton#sidebarSettingsButton:hover,
     QToolButton#sidebarCreateButton:hover {
-        background: #E1D8F7;
+        background: #F3F4F6;
         color: #1D1D1D;
     }
     QToolButton#sidebarHomeButton:focus,
@@ -278,9 +278,11 @@ _STYLESHEET_TEMPLATE = Template("""
     }
     QLabel#automationDetailsLabel {
         font-size: ${TYPE_CAPTION_PX}px;
-        color: ${TEXT_FAINT};
-        border-top: 1px solid ${BORDER};
-        padding-top: 8px;
+        color: ${TEXT_BODY};
+        background: ${SURFACE};
+        border: 1px solid ${BORDER};
+        border-radius: 10px;
+        padding: 12px 14px;
     }
     QLabel#authorizedLabel,
     QLabel#verifierIntroLabel {
@@ -452,7 +454,9 @@ _STYLESHEET_TEMPLATE = Template("""
     QListWidget#workflowList,
     QListWidget#activitiesList,
     QListWidget#recordingList,
-    QListWidget#stepsList {
+    QListWidget#stepsList,
+    QListWidget#editorStepsList,
+    QListWidget#approvalStepList {
         background: #FFFFFF;
         border: 1px solid #E5E5E5;
         border-radius: 8px;
@@ -465,7 +469,9 @@ _STYLESHEET_TEMPLATE = Template("""
     QListWidget#workflowList::item,
     QListWidget#activitiesList::item,
     QListWidget#recordingList::item,
-    QListWidget#stepsList::item {
+    QListWidget#stepsList::item,
+    QListWidget#editorStepsList::item,
+    QListWidget#approvalStepList::item {
         padding: 8px 10px;
         border-radius: 6px;
         margin: 2px 0;
@@ -473,14 +479,18 @@ _STYLESHEET_TEMPLATE = Template("""
     QListWidget#workflowList::item:selected,
     QListWidget#activitiesList::item:selected,
     QListWidget#recordingList::item:selected,
-    QListWidget#stepsList::item:selected {
+    QListWidget#stepsList::item:selected,
+    QListWidget#editorStepsList::item:selected,
+    QListWidget#approvalStepList::item:selected {
         background: #EEF2FF;
         color: #1D1D1D;
     }
     QListWidget#workflowList::item:hover,
     QListWidget#activitiesList::item:hover,
     QListWidget#recordingList::item:hover,
-    QListWidget#stepsList::item:hover {
+    QListWidget#stepsList::item:hover,
+    QListWidget#editorStepsList::item:hover,
+    QListWidget#approvalStepList::item:hover {
         background: #F9FAFB;
     }
 
@@ -677,6 +687,54 @@ _STYLESHEET_TEMPLATE = Template("""
     QLabel#panelErrorLabel {
         font-size: ${TYPE_CAPTION_PX}px;
         color: ${STATUS_ERROR};
+        font-family: $FONT_STACK;
+    }
+    QLabel#inspectorSummary {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${TEXT_BODY};
+        background: ${SURFACE_ALT};
+        border: 1px solid ${BORDER};
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-family: $FONT_STACK;
+    }
+    QLineEdit#inspectorField_name,
+    QLineEdit#inspectorField_message,
+    QLineEdit#inspectorField_target {
+        background: ${SURFACE};
+        color: ${TEXT_STRONG};
+        border: 1px solid ${BORDER_STRONG};
+        border-radius: 6px;
+        padding: 6px 8px;
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-family: $FONT_STACK;
+    }
+    QLineEdit#inspectorField_name:focus,
+    QLineEdit#inspectorField_message:focus,
+    QLineEdit#inspectorField_target:focus {
+        border-color: ${ACCENT};
+    }
+    QLabel#approvalPanelTitle {
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 700;
+        color: ${TEXT_STRONG};
+        font-family: $FONT_STACK;
+    }
+    QLabel#approvalPanelStepsHeading {
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-weight: 600;
+        color: ${TEXT_STRONG};
+        font-family: $FONT_STACK;
+    }
+    QLabel#approvalPanelBindingNote {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${TEXT_BODY};
+        font-family: $FONT_STACK;
+    }
+    QLabel#approvalRejectionLabel {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${STATUS_ERROR};
+        font-weight: 600;
         font-family: $FONT_STACK;
     }
 """)

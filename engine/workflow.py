@@ -82,6 +82,8 @@ class WorkflowStatus(StrEnum):
     CANCELLED = "CANCELLED"
     #: The run finished, nothing failed, and nothing was performed.
     OBSERVATION_ONLY = "OBSERVATION_ONLY"
+    #: At least one step was performed and at least one step was observation-only.
+    PARTIALLY_PERFORMED = "PARTIALLY_PERFORMED"
 
 
 @dataclass(frozen=True)
@@ -133,12 +135,15 @@ def _final_status(results: Sequence[StepResult], *, performed_any: bool) -> Work
     """Decide a finished run's status from its real results (see run-outcomes.md).
 
     Failures keep priority; otherwise a run that performed nothing is honest
-    about it instead of claiming success.
+    about it instead of claiming success, and a mixed run reports
+    PARTIALLY_PERFORMED.
     """
     if any(result.status is StepStatus.FAILED for result in results):
         return WorkflowStatus.FAILED
     if not performed_any:
         return WorkflowStatus.OBSERVATION_ONLY
+    if any(result.status is StepStatus.OBSERVED for result in results):
+        return WorkflowStatus.PARTIALLY_PERFORMED
     return WorkflowStatus.SUCCEEDED
 
 
@@ -356,16 +361,19 @@ def _load_target(step: WorkflowStep, target: str | None) -> dict:
 
 def _validate_element_identity(step: WorkflowStep, element: object) -> None:
     if not isinstance(element, dict) or not set(element).issubset(
-        {"automation_id", "control_type", "class_name"}
+        {"automation_id", "control_type", "class_name", "name"}
     ):
         raise WorkflowValidationError(f"Step {step.step_id} has unknown element target fields.")
     automation_id = element.get("automation_id")
     class_name = element.get("class_name")
-    for field in ("automation_id", "control_type", "class_name"):
+    name = element.get("name")
+    for field in ("automation_id", "control_type", "class_name", "name"):
         if field in element and not isinstance(element[field], str):
             raise WorkflowValidationError(f"Step {step.step_id} has an invalid element {field}.")
-    if not (isinstance(automation_id, str) and automation_id.strip()) and not (
-        isinstance(class_name, str) and class_name.strip()
+    if (
+        not (isinstance(automation_id, str) and automation_id.strip())
+        and not (isinstance(class_name, str) and class_name.strip())
+        and not (isinstance(name, str) and name.strip())
     ):
         raise WorkflowValidationError(
             f"Step {step.step_id} needs an element automation_id or class_name; "

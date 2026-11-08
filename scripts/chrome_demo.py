@@ -39,7 +39,7 @@ from engine.workflow import (
     WorkflowRunner,
     WorkflowStep,
 )
-from integrations.chrome_devtools import ChromeDevtoolsActions
+from integrations.chrome_devtools import ChromeApplicationRegistry, ChromeDevtoolsActions
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -113,6 +113,7 @@ def main() -> int:
 
     try:
         # 1. Launch an isolated Chrome through the approval gate.
+        chrome_exe = ChromeApplicationRegistry().resolve("chrome")
         launch = Workflow(
             "once-browser-launch",
             "Launch isolated Chrome",
@@ -122,7 +123,7 @@ def main() -> int:
                     "Launch",
                     StepKind.LAUNCH_BROWSER,
                     "An isolated Chrome instance is running for this workflow.",
-                    target=json.dumps({"application": "chrome"}),
+                    target=json.dumps({"executable": str(chrome_exe)}),
                 ),
             ),
         )

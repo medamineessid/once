@@ -15,7 +15,7 @@ check = subprocess.run(
 print("process 13980 alive?", "no" if "INFO:" in check.stdout else check.stdout.strip())
 
 sys.path.insert(0, r"C:\Users\DELL\once")
-from pywinauto import Desktop  # noqa: E402
+from pywinauto import Desktop
 
 windows = [w.element_info.process_id for w in Desktop(backend="uia").windows()]
 print("13980 windows remaining on desktop:", windows.count(13980))

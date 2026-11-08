@@ -62,7 +62,15 @@ def close_leftover_demo_windows(desktop) -> int:
 
 def main() -> int:
     print("== Once desktop automation: live Notepad demo ==")
-    actions = PywinautoDesktopActions()
+    from storage.app_registry import SqliteApplicationRegistry
+    from storage.database import connect
+
+    demo_dir = Path(tempfile.mkdtemp(prefix="once-notepad-demo-"))
+    registry = SqliteApplicationRegistry(connect(demo_dir / "approvals.db"))
+    notepad = Path("C:/Windows/System32/notepad.exe")
+    if notepad.is_file():
+        registry.approve(notepad, display_name="Notepad")
+    actions = PywinautoDesktopActions(approvals=registry)
     desktop = actions._default_desktop()
     leftovers = close_leftover_demo_windows(desktop)
     if leftovers:
@@ -70,13 +78,11 @@ def main() -> int:
         time.sleep(1.0)
 
     # 1. Fresh, disposable target file inside a temporary directory.
-    demo_dir = Path(tempfile.mkdtemp(prefix="once-notepad-demo-"))
     target_file = demo_dir / "once-demo-note.txt"
     target_file.write_text("", encoding="utf-8")
     print(f"target file (fresh): {target_file}")
 
     # 2. Launch step: approved workflow #1 (launch only).
-    notepad = Path("C:/Windows/System32/notepad.exe")
     if not notepad.is_file():
         print(f"DEMO STOPPED: {notepad} is missing; refusing to guess a launcher.")
         return 1

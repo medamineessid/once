@@ -194,6 +194,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
         self.setMinimumSize(960, 600)
+        self.resize(1280, 820)
         self._service = service or WorkflowService()
         self._recording_service = recording_service
         self._verifier_config = verifier_config
@@ -206,6 +207,7 @@ class MainWindow(QMainWindow):
         apply_theme(self)
         self.sidebar = Sidebar(self)
         self.status_footer = StatusFooter(self)
+        self.status_footer.setContentsMargins(SPACING_LG, 4, SPACING_LG, 4)
         self.workspace = QStackedWidget(self)
         self.home_page = HomePage(self)
         self.my_automations_page = MyAutomationsPage(self)
@@ -448,6 +450,22 @@ class MainWindow(QMainWindow):
         status = getattr(getattr(run, "status", None), "value", "UNKNOWN")
         if status == "SUCCEEDED":
             self.editor_page.show_run_message("success", EDITOR_RUN, EDITOR_RUN_SUCCEEDED)
+        elif status == "PARTIALLY_PERFORMED":
+            results = getattr(run, "results", ())
+            performed = sum(
+                1
+                for r in results
+                if getattr(getattr(r, "status", None), "value", "") in ("SUCCEEDED", "VERIFIED")
+            )
+            observed = sum(
+                1 for r in results if getattr(getattr(r, "status", None), "value", "") == "OBSERVED"
+            )
+            self.editor_page.show_run_message(
+                "warning",
+                EDITOR_RUN,
+                f"Partly performed: {performed} step(s) performed, "
+                f"{observed} step(s) observation only.",
+            )
         elif status == "OBSERVATION_ONLY":
             # The run completed but performed nothing, so it is not a failure.
             self.editor_page.show_run_message("warning", EDITOR_RUN, EDITOR_RUN_OBSERVED)

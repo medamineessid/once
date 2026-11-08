@@ -8,11 +8,22 @@ from pathlib import Path
 from typing import Protocol
 
 from engine.errors import AIProviderError, WorkflowValidationError
-from engine.workflow import StepKind, Workflow, WorkflowRunner, WorkflowStep
+from engine.workflow import (
+    ALLOWED_SHORTCUTS,
+    StepKind,
+    Workflow,
+    WorkflowRunner,
+    WorkflowStep,
+)
 from recorder.drafts import RawDraftAction
-from recorder.models import RecordedEventKind
+from recorder.models import RecordedEventKind, UIElementInfo
 
 from .models import AnalysisRequest, ProviderDraft, ProviderQuestion, ProviderResponse
+
+_CLICKABLE_CONTROLS = frozenset(
+    {"Button", "MenuItem", "CheckBox", "RadioButton", "ListItem", "TabItem", "Hyperlink"}
+)
+_TEXT_CONTROLS = frozenset({"Edit", "Document", "ComboBox"})
 
 MAX_INTERVIEW_TURNS = 5
 
@@ -64,6 +75,13 @@ def deterministic_demo_provider() -> FakeAnalysisProvider:
                             StepKind.REPORT,
                             "Review the recorded task before approval.",
                         ),
+                        WorkflowStep(
+                            "verify",
+                            "Verify recorded output",
+                            StepKind.VERIFY_PATH_EXISTS,
+                            "Confirm the recorded output exists.",
+                            "C:/work/recorded.txt",
+                        ),
                     ),
                 ),
             ),
@@ -109,9 +127,10 @@ def _recorded_executable(action: RawDraftAction) -> str | None:
     process name to an application it happens to know. Without a recorded path
     the observation is kept for review and no launch or close is proposed.
     """
-    recorded = getattr(action, "executable", None)
-    if isinstance(recorded, str) and recorded.strip():
-        return recorded.strip()
+    for attr in ("executable_path", "executable"):
+        recorded = getattr(action, attr, None)
+        if isinstance(recorded, str) and recorded.strip():
+            return recorded.strip()
     return None
 
 
@@ -120,7 +139,14 @@ def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> 
     step_id = f"observation-{action.sequence}"
     name = f"Observation {index}"
     executable = _recorded_executable(action)
-    if action.source_event is RecordedEventKind.WINDOW_OPEN and executable is not None:
+    if action.source_event is RecordedEventKind.WINDOW_OPEN:
+        if executable is None:
+            return WorkflowStep(
+                step_id,
+                name,
+                StepKind.REPORT,
+                f"{action.description} (executable path not recorded)",
+            )
         if executable not in launched:
             launched.add(executable)
             return WorkflowStep(
@@ -136,7 +162,14 @@ def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> 
             StepKind.REPORT,
             f"{action.description} The application is already part of this draft.",
         )
-    if action.source_event is RecordedEventKind.WINDOW_CLOSE and executable is not None:
+    if action.source_event is RecordedEventKind.WINDOW_CLOSE:
+        if executable is None:
+            return WorkflowStep(
+                step_id,
+                name,
+                StepKind.REPORT,
+                f"{action.description} (executable path not recorded)",
+            )
         if executable in launched:
             return WorkflowStep(
                 step_id,
@@ -154,4 +187,134 @@ def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> 
                 f"{Path(executable).stem}, so nothing is allowed to close it."
             ),
         )
+    if action.source_event is RecordedEventKind.MOUSE_CLICK:
+        click_step = _semantic_click_step(action, step_id, name)
+        if click_step is not None:
+            return click_step
+    if action.source_event is RecordedEventKind.TEXT_INPUT:
+        type_step = _semantic_type_step(action, step_id, name)
+        if type_step is not None:
+            return type_step
+    if action.source_event is RecordedEventKind.KEY_PRESS:
+        shortcut_step = _semantic_shortcut_step(action, step_id, name)
+        if shortcut_step is not None:
+            return shortcut_step
     return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
+
+
+def _element_target_dict(element: UIElementInfo) -> dict[str, str] | None:
+    """Build a validated UIA element selector dict from element identity fields."""
+    auto_id = (element.automation_id or "").strip()
+    cls_name = (element.class_name or "").strip()
+    elem_name = (element.name or "").strip()
+    if not auto_id and not cls_name and not elem_name:
+        return None
+    result: dict[str, str] = {}
+    if auto_id:
+        result["automation_id"] = auto_id
+    if element.control_type and element.control_type.strip():
+        result["control_type"] = element.control_type.strip()
+    if cls_name:
+        result["class_name"] = cls_name
+    if not auto_id and elem_name:
+        result["name"] = elem_name
+    return result
+
+
+def _semantic_click_step(
+    action: RawDraftAction, step_id: str, fallback_name: str
+) -> WorkflowStep | None:
+    """Convert a UIA-identified control click into CLICK_UI_ELEMENT."""
+    window_title = (getattr(action, "window_title", None) or "").strip()
+    element = getattr(action, "element", None)
+    if not window_title or not isinstance(element, UIElementInfo):
+        return None
+    if element.control_type not in _CLICKABLE_CONTROLS:
+        return None
+    elem_dict = _element_target_dict(element)
+    if elem_dict is None:
+        return None
+    if element.control_type in ("CheckBox", "RadioButton"):
+        interaction = "toggle"
+    elif element.control_type in ("ListItem", "TabItem"):
+        interaction = "select"
+    else:
+        interaction = "invoke"
+    label = (element.name or element.automation_id or element.class_name or "control").strip()
+    step_name = f"Click {label}"[:80] if label else fallback_name
+    target = json.dumps(
+        {
+            "window": {"title": window_title},
+            "element": elem_dict,
+            "interaction": interaction,
+        }
+    )
+    return WorkflowStep(
+        step_id,
+        step_name,
+        StepKind.CLICK_UI_ELEMENT,
+        f"Click {element.control_type} '{label}' in {window_title}."[:500],
+        target=target,
+    )
+
+
+def _semantic_type_step(
+    action: RawDraftAction, step_id: str, fallback_name: str
+) -> WorkflowStep | None:
+    """Convert non-password UIA text entry into TYPE_TEXT."""
+    window_title = (getattr(action, "window_title", None) or "").strip()
+    element = getattr(action, "element", None)
+    text = getattr(action, "text", None)
+    if (
+        not window_title
+        or not isinstance(element, UIElementInfo)
+        or element.is_password
+        or element.control_type not in _TEXT_CONTROLS
+        or not isinstance(text, str)
+        or not text
+    ):
+        return None
+    elem_dict = _element_target_dict(element)
+    if elem_dict is None:
+        return None
+    bounded_text = text[:500]
+    label = (element.name or element.automation_id or element.control_type or "field").strip()
+    step_name = f"Type in {label}"[:80] if label else fallback_name
+    target = json.dumps(
+        {
+            "window": {"title": window_title},
+            "element": elem_dict,
+            "text": bounded_text,
+        }
+    )
+    return WorkflowStep(
+        step_id,
+        step_name,
+        StepKind.TYPE_TEXT,
+        f"Enter text into '{label}' in {window_title}."[:500],
+        target=target,
+    )
+
+
+def _semantic_shortcut_step(
+    action: RawDraftAction, step_id: str, fallback_name: str
+) -> WorkflowStep | None:
+    """Convert an allowlisted shortcut in a known window into PRESS_SHORTCUT."""
+    window_title = (getattr(action, "window_title", None) or "").strip()
+    key = (getattr(action, "key", None) or "").strip().lower()
+    if not window_title or key not in ALLOWED_SHORTCUTS:
+        return None
+    step_name = f"Press {key.upper()}"[:80] if key else fallback_name
+    target = json.dumps(
+        {
+            "window": {"title": window_title},
+            "keys": key,
+        }
+    )
+    return WorkflowStep(
+        step_id,
+        step_name,
+        StepKind.PRESS_SHORTCUT,
+        f"Send shortcut {key} to {window_title}."[:500],
+        target=target,
+    )

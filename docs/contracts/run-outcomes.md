@@ -40,7 +40,8 @@ unchanged.
 
 | status | rule |
 |---|---|
-| `SUCCEEDED` | the run finished and **at least one non-`REPORT` step actually succeeded** (`SUCCEEDED` or `VERIFIED`) |
+| `SUCCEEDED` | the run finished, no step failed, at least one non-`REPORT` step actually succeeded (`SUCCEEDED` or `VERIFIED`), and zero steps were `OBSERVED` |
+| `PARTIALLY_PERFORMED` | **new.** The run finished, no step failed, at least one non-`REPORT` step actually succeeded (`SUCCEEDED` or `VERIFIED`), and at least one step ended `OBSERVED` |
 | `OBSERVATION_ONLY` | **new.** The run finished, no step failed, and no non-`REPORT` step performed or verified anything — every step was an observation (an all-`REPORT` workflow, or a workflow with no steps at all) |
 | `FAILED` | any step ended `FAILED` (or `INCONCLUSIVE`) |
 | `CANCELLED` | the run stopped because of cancellation |
@@ -51,20 +52,22 @@ Decision order at the end of a run:
 1. any `FAILED` result → `FAILED`;
 2. otherwise, if no non-`REPORT` step ended `SUCCEEDED`/`VERIFIED` →
    `OBSERVATION_ONLY`;
-3. otherwise → `SUCCEEDED`.
+3. otherwise, if any step ended `OBSERVED` → `PARTIALLY_PERFORMED`;
+4. otherwise → `SUCCEEDED`.
 
 A `REPORT` step with a postcondition still reports `OBSERVED`: the
 postcondition *verifies* the observation, it does not turn a report into
 an action. Such a run is `OBSERVATION_ONLY`.
 
 Failures keep priority over observations: a workflow that reports and
-then fails is `FAILED`, never `OBSERVATION_ONLY`.
+then fails is `FAILED`, never `OBSERVATION_ONLY` or `PARTIALLY_PERFORMED`.
 
 ## User-facing wording
 
 | run status | label | chip |
 |---|---|---|
 | `SUCCEEDED` | Succeeded | ok |
+| `PARTIALLY_PERFORMED` | Partly performed | warn |
 | `OBSERVATION_ONLY` | Observation only — nothing was performed | neutral |
 | `FAILED` | Failed | fail |
 | `CANCELLED` | Cancelled | neutral |

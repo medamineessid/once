@@ -14,11 +14,12 @@ from controller.approvals import (
     ApplicationApprovalStore,
     ApplicationIdentity,
     DatabaseApplicationApprovalStore,
+    executable_launch_paths,
     launch_identities_from_events,
 )
 from engine.acceptance import load_acceptance_cases
 from engine.agent_change import ApprovedChange, ChangeReview, approve_change
-from engine.desktop import DesktopApproval
+from engine.desktop import DESKTOP_EXECUTION_POLICY, DesktopApproval
 from engine.errors import AgentIntegrationError, WorkflowValidationError
 from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
 from engine.replay import (
@@ -136,7 +137,7 @@ class WorkflowService:
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
-        self._desktop_replay = ReplayExecutor(DESKTOP_INTERACTION_POLICY)
+        self._desktop_replay = ReplayExecutor(DESKTOP_EXECUTION_POLICY)
         if window_inspector is None:
             from integrations.windows_automation import PywinautoWindowInspector
 
@@ -152,7 +153,14 @@ class WorkflowService:
         if desktop_actions is None:
             from integrations.windows_desktop import PywinautoDesktopActions
 
-            self._desktop_actions: DesktopActions | None = PywinautoDesktopActions()
+            approvals_adapter = (
+                approval_store
+                if approval_store is not None and callable(getattr(approval_store, "find", None))
+                else None
+            )
+            self._desktop_actions: DesktopActions | None = PywinautoDesktopActions(
+                approvals=approvals_adapter
+            )
         else:
             self._desktop_actions = desktop_actions
         if browser_actions is None:
@@ -241,6 +249,23 @@ class WorkflowService:
             return True
         return self._approval_store.is_approved(identity)
 
+    def approve_workflow_applications(self, workflow: Workflow) -> None:
+        """Register explicit approval for existing executables in a workflow's launch steps."""
+        if self._approval_store is None:
+            return
+        from storage.app_registry import executable_sha256
+
+        for raw_path in executable_launch_paths(workflow):
+            exe = Path(raw_path)
+            if exe.is_file():
+                self.approve_application(
+                    ApplicationIdentity(
+                        name=exe.stem,
+                        executable_path=str(exe),
+                        executable_sha256=executable_sha256(exe),
+                    )
+                )
+
     @staticmethod
     def demo_workflow() -> Workflow:
         """Return a visible, deterministic workflow used by the first UI milestone."""
@@ -314,6 +339,7 @@ class WorkflowService:
                 "so there is nothing to save as a runnable automation. Record the task "
                 "again, or remove the observation-only steps."
             )
+        self.approve_workflow_applications(proposal.workflow)
         return self.save(proposal.workflow)
 
     def save_layout(
@@ -393,6 +419,7 @@ class WorkflowService:
                 "Only a workflow approved through the desktop approval gate can "
                 "run desktop actions."
             )
+        self.approve_workflow_applications(approval.workflow)
         try:
             run = self._desktop_replay.execute(
                 approval.workflow,
@@ -923,7 +950,7 @@ class WorkflowService:
             return None
         try:
             return load_workflow(candidate).name
-        except (WorkflowValidationError, OSError):
+        except WorkflowValidationError, OSError:
             return None
 
     def history(self) -> tuple[WorkflowRun, ...]:

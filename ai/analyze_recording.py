@@ -84,7 +84,15 @@ def analyze_recording(
         answer_text = _request_analysis(
             selected, _read_api_key(selected, credentials), request, poster
         )
-        return _provider_draft_from(answer_text, request.draft.recording_id)
+        draft = _provider_draft_from(answer_text, request.draft.recording_id)
+        local_draft = deterministic_recording_provider().analyze(request)
+        local_replayable = sum(
+            1 for s in local_draft.workflow.steps if s.kind is not StepKind.REPORT
+        )
+        cloud_replayable = sum(1 for s in draft.workflow.steps if s.kind is not StepKind.REPORT)
+        if local_replayable > cloud_replayable:
+            return local_draft
+        return draft
     except (
         AIProviderError,
         WorkflowValidationError,
@@ -265,10 +273,42 @@ def _normalize_workflow(recording_id: str, workflow_data: dict) -> dict:
     }
 
 
+def _action_metadata_tag(action: object) -> str:
+    parts: list[str] = []
+    exe = getattr(action, "executable_path", None)
+    if exe:
+        parts.append(f"executable={exe}")
+    win = getattr(action, "window_title", None)
+    if win:
+        parts.append(f"window={win}")
+    elem = getattr(action, "element", None)
+    if elem is not None:
+        elem_dict = {
+            k: v
+            for k, v in (
+                ("control_type", getattr(elem, "control_type", None)),
+                ("name", getattr(elem, "name", None)),
+                ("automation_id", getattr(elem, "automation_id", None)),
+                ("class_name", getattr(elem, "class_name", None)),
+            )
+            if v
+        }
+        if elem_dict:
+            parts.append(f"element={json.dumps(elem_dict, sort_keys=True)}")
+    key = getattr(action, "key", None)
+    if key:
+        parts.append(f"key={key}")
+    text = getattr(action, "text", None)
+    if text:
+        parts.append(f"text={json.dumps(text)}")
+    return f" [{' ; '.join(parts)}]" if parts else ""
+
+
 def _build_prompt(draft: RawDraft) -> str:
     """Event-first analysis brief over the redacted observation list only."""
     event_lines = [
         f"{action.sequence}. {action.source_event.value}: {action.description}"
+        + _action_metadata_tag(action)
         for action in list(draft.actions)[:MAX_PROMPT_ACTIONS]
     ]
     while len("\n".join(event_lines)) > MAX_PROMPT_CHARS and len(event_lines) > 1:
@@ -284,14 +324,25 @@ event list below; do not speculate about anything else on the screen.
 Method:
 1. Read the event list and form the overall intent in one sentence (the goal).
 2. Ground every step in the events; rewrite actions in past tense ("Opened",
-   "Closed"). Never invent applications, paths, or buttons that are not in the
-   events.
+   "Clicked", "Typed", "Pressed", "Closed"). Never invent applications, paths,
+   or buttons that are not in the events.
 3. Choose step kinds ONLY from this allowlist, with the exact target shapes:
-   - LAUNCH_APPLICATION: target JSON {{"application": "notepad" or "vscode"}}
-     - to launch only applications that a WINDOW_OPEN observation shows
-       (processes Code.exe->vscode, notepad.exe->notepad).
-   - CLOSE_APPLICATION: same target shape; only for an application that an
-     earlier step in this workflow launched.
+   - LAUNCH_APPLICATION: target JSON
+     {{"executable": "<exact executable path from WINDOW_OPEN event>"}}
+   - CLICK_UI_ELEMENT: target JSON
+     {{"window": {{"title": "<window title>"}},
+       "element": {{"class_name": "<class>", "control_type": "<type>", "name": "<name>"}},
+       "interaction": "invoke"}}
+     (use "toggle" when control_type is CheckBox, and include automation_id when
+      shown in [element=...]).
+   - TYPE_TEXT: target JSON
+     {{"window": {{"title": "<window title>"}},
+       "element": {{"class_name": "<class>", "control_type": "<type>"}},
+       "text": "<typed text>"}}
+   - PRESS_SHORTCUT: target JSON
+     {{"window": {{"title": "<window title>"}}, "keys": "<key name>"}}
+   - CLOSE_APPLICATION: target JSON {{"executable": "<exact executable path>"}};
+     only for an application that an earlier step in this workflow launched.
    - REPORT: plain observation or note; no target.
 4. Every step needs step_id, name, kind, message, target (message is a plain
    sentence). Keep the number of steps SMALL: launch once, not per window.
@@ -303,8 +354,9 @@ Say nothing outside the JSON. Answer with exactly one JSON object:
     "workflow_id": "<short-id>",
     "name": "<short title in Title Case>",
     "steps": [
-      {{"step_id": "s1", "name": "Open editor", "kind": "LAUNCH_APPLICATION",
-        "message": "Launch vscode.", "target": "{{\\"application\\": \\"vscode\\"}}"}}
+      {{"step_id": "s1", "name": "Open application", "kind": "LAUNCH_APPLICATION",
+        "message": "Launch application.",
+        "target": "{{\\"executable\\": \\"<exact executable path>\\"}}"}}
     ]
   }}
 }}

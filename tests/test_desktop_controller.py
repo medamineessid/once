@@ -84,7 +84,7 @@ def launch_workflow() -> Workflow:
         "Launch",
         StepKind.LAUNCH_BROWSER,
         "An isolated browser is running.",
-        target=json.dumps({"application": "chrome"}),
+        target=json.dumps({"executable": "C:/Program Files/Google/Chrome/Application/chrome.exe"}),
     )
     return Workflow("browser-launch", "Browser launch", (launch,))
 

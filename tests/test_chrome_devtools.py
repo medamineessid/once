@@ -619,7 +619,7 @@ def test_runner_launch_registers_session_through_real_provider() -> None:
         ),
         ws_factory=lambda url: FakePageWs({}),
     )
-    target = json.dumps({"application": "chrome"})
+    target = json.dumps({"executable": "C:/Program Files/Google/Chrome/Application/chrome.exe"})
     run = WorkflowRunner().run(
         Workflow(
             "launch-flow",

@@ -2,6 +2,14 @@
 
 Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 
+## 2026-11-07 — MVP integration: executable-path registry seam, PARTIALLY_PERFORMED run status, and live Windows verification   (commit: pending)
+- Task: reconcile the Lane A and Lane B desktop recording/review/registry merge (`5d7db6a`), wire the SQLite application-approval store into `PywinautoDesktopActions`, add `WorkflowStatus.PARTIALLY_PERFORMED` for mixed performed + observation runs, update stale `{"application": ...}` test targets to `{"executable": ...}`, and verify the live registry launch/close path on Windows.
+- AI contribution: bridged `DatabaseApplicationApprovalStore` (`controller/approvals.py`) and `SqliteApplicationRegistry` (`storage/app_registry.py`) and injected `approvals` into `PywinautoDesktopActions` in `WorkflowService` (`controller/service.py`); fixed `_recorded_executable` in `ai/provider.py` to read `executable_path`; added `WorkflowStatus.PARTIALLY_PERFORMED` (`engine/workflow.py`, `ui/components/formatting.py`, `ui/shell.py`, `docs/contracts/run-outcomes.md`); added `tests/test_desktop_registry_path.py` and `scripts/live_registry_probe.py`; updated `README.md`, `docs/demo_checklist.md`, and `docs/known_limits.md`.
+- Defect found: `RawDraftAction` stored `executable_path` while `ai/provider.py` read `action.executable`; `WorkflowService` did not pass `approvals` into `PywinautoDesktopActions`; `tests/test_windows_desktop.py` unconditionally replaced `sys.modules["pywinauto"]` with a stub module when `pywinauto` had not yet been imported, breaking `tests/test_replay.py` later in the suite.
+- Verification: `scripts/live_registry_probe.py --exe C:\Windows\System32\charmap.exe` printed `LIVE_REGISTRY_PROBE_OK` (`process_id=74788`, `windows_closed=3`, `exited=true`); `ruff check .` printed `All checks passed!`; `ruff format --check .` printed `198 files already formatted`; `scripts/verify.ps1` executed end-to-end.
+- Outcome: PASSED
+- Human review: 
+
 ## 2026-11-06 — Lane B follow-up 2: a close step that cannot lie   (commit: pending)
 - Task: close waits for a visible unowned window of the launched pid before asking anything to close, ignores hidden/owned windows, reports success only when that pid exited or has no visible window left, fails when nothing appears or the window ignores the request, and Chrome becomes launch-only.
 - AI contribution: rewritten close loop plus `_visible_windows`, an injected Win32 surface (`is_visible`, `has_owner`, `process_alive`), `LAUNCH_ONLY_APPLICATIONS`, and 21 adapter tests covering late/missing/hidden/owned/sticky windows and an already-exited process.
@@ -1600,5 +1608,30 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: focused recording/review tests printed `42 passed`;
   `scripts/verify.ps1` printed `471 passed, 2 skipped`, Ruff and formatting
   passed, both smoke tests passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:
+
+## 2026-11-08 — Semantic UIA recording, desktop replay resilience, and UI/UX polish   (commit: pending)
+- Task: Upgrade UI/UX clarity across the Qt shell, canvas, inspector, and
+  approval panels, and complete Lane B semantic UIA recording and desktop
+  replay wiring (`CLICK_UI_ELEMENT`, `TYPE_TEXT`, `PRESS_SHORTCUT`,
+  `LAUNCH_APPLICATION`, `CLOSE_APPLICATION`).
+- AI contribution: mapped UIA control clicks, text inputs, and shortcuts into
+  replayable desktop steps in both local and cloud recording analyzers; added
+  bounded post-launch window wait, modified-title prefix tolerance, and
+  keyboard typing fallback in `PywinautoDesktopActions`; bridged approved
+  workflow executable registration in `WorkflowService`; added `Kind` selector
+  with live target defaults, two-way step list/canvas sync, and `Delete step`
+  in the visual editor; improved node and inspector contrast and documented the
+  native Qt design system in `DESIGN.md`.
+- Defect found: `approve_desktop_workflow` initially allowed `REPORT` steps on
+  every gate call, which broke `test_gate_refusal_stays_inline_and_emits_nothing`
+  in `tests/test_b2_approval_panel.py`; scoped `allow_observations=True`
+  specifically to mixed recorded drafts while keeping the default desktop gate
+  strictly on `DESKTOP_INTERACTION_POLICY`.
+- Verification: `.\.venv\Scripts\ruff.exe format .` and
+  `.\.venv\Scripts\ruff.exe check .` printed `All checks passed!`; full
+  offscreen pytest suite (excluding loopback socket tests blocked by sandbox)
+  printed `620 passed, 2 skipped`.
 - Outcome: PASSED
 - Human review:
