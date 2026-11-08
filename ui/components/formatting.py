@@ -6,6 +6,7 @@ guesswork beyond an optional injected ``now`` so tests stay deterministic.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, datetime
 
 #: Human labels and chip kinds for workflow run statuses.
@@ -23,9 +24,26 @@ _STATUS_DISPLAY: dict[str, tuple[str, str]] = {
 }
 
 
-def status_display(raw: str) -> tuple[str, str]:
+def status_display(raw: str, results: Iterable[object] | None = None) -> tuple[str, str]:
     """Return ``(human label, chip kind)`` for a raw run status string."""
+    if raw == "PARTIALLY_PERFORMED" and results is not None:
+        items = tuple(results)
+        done = sum(
+            1
+            for r in items
+            if getattr(getattr(r, "status", None), "value", "") in ("SUCCEEDED", "VERIFIED")
+        )
+        observed = sum(
+            1 for r in items if getattr(getattr(r, "status", None), "value", "") == "OBSERVED"
+        )
+        return (f"Partly performed: {done} done, {observed} only observed", "warn")
     return _STATUS_DISPLAY.get(raw, (raw or "Unknown", "neutral"))
+
+
+def run_status_display(run: object) -> tuple[str, str]:
+    """Return ``(human label, chip kind)`` for a WorkflowRun object."""
+    status_value = getattr(getattr(run, "status", None), "value", "Unknown")
+    return status_display(status_value, getattr(run, "results", None))
 
 
 def human_timestamp(value: datetime | None, now: datetime | None = None) -> str:

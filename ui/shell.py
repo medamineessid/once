@@ -463,8 +463,7 @@ class MainWindow(QMainWindow):
             self.editor_page.show_run_message(
                 "warning",
                 EDITOR_RUN,
-                f"Partly performed: {performed} step(s) performed, "
-                f"{observed} step(s) observation only.",
+                f"Partly performed: {performed} done, {observed} only observed.",
             )
         elif status == "OBSERVATION_ONLY":
             # The run completed but performed nothing, so it is not a failure.

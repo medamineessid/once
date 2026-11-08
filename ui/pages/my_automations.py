@@ -380,7 +380,7 @@ class MyAutomationsPage(QWidget):
 
     def _on_run_finished(self, run: object) -> None:
         status_value = getattr(getattr(run, "status", None), "value", "Unknown")
-        label, _chip = status_display(status_value)
+        label, _chip = status_display(status_value, getattr(run, "results", None))
         self._details_label.setText(
             f"Run {label}: {len(run.results)} steps recorded."  # type: ignore[attr-defined]
         )
@@ -422,7 +422,7 @@ class MyAutomationsPage(QWidget):
             chip_kind = "neutral"
             if run is not None:
                 status_value = getattr(getattr(run, "status", None), "value", "Unknown")
-                status_text, chip_kind = status_display(status_value)
+                status_text, chip_kind = status_display(status_value, getattr(run, "results", None))
             row = AutomationRow(
                 saved_name or path.name,
                 status_text,

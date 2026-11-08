@@ -118,6 +118,10 @@ class HomePage(QWidget):
                 continue
             name = self._service.workflow_name(workflow_id) or workflow_id
             status_value = getattr(getattr(run, "status", None), "value", "Unknown")
+            results = getattr(run, "results", None)
+            if status_value == "PARTIALLY_PERFORMED" and results is not None:
+                label, _ = status_display(status_value, results)
+                status_value = label
             rows.append((name, status_value, human_timestamp(getattr(run, "finished_at", None))))
         return tuple(rows)
 

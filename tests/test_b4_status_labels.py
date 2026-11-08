@@ -106,3 +106,38 @@ def test_home_recent_activity_shows_the_observation_label(qtbot, tmp_path) -> No
 
     assert LABEL in texts
     assert "OBSERVATION_ONLY" not in texts
+
+
+def test_partially_performed_run_shows_done_and_observed_counts(qtbot, tmp_path) -> None:
+    target = tmp_path / "invoice.txt"
+    target.write_bytes(b"invoice")
+    mixed = Workflow(
+        workflow_id="mixed-outcome",
+        name="Mixed outcome",
+        steps=(
+            WorkflowStep("c1", "Check", StepKind.INSPECT_PATH, "Found", str(target)),
+            WorkflowStep("r1", "Note", StepKind.REPORT, "Observed only."),
+        ),
+    )
+    service = make_service(tmp_path)
+    run = service.run_workflow(mixed, allowed_root=tmp_path)
+    assert run.status is WorkflowStatus.PARTIALLY_PERFORMED
+    assert status_display(run.status.value, run.results) == (
+        "Partly performed: 1 done, 1 only observed",
+        "warn",
+    )
+
+    activity = ActivityPage()
+    qtbot.addWidget(activity)
+    activity.set_service(service)
+    item = activity._history_list.item(0)
+    row = activity._history_list.itemWidget(item)
+    row_texts = " | ".join(label.text() for label in row.findChildren(QLabel))
+    assert "Partly performed: 1 done, 1 only observed" in row_texts
+
+    home = HomePage()
+    qtbot.addWidget(home)
+    home.set_service(service)
+    home.refresh()
+    home_texts = " | ".join(label.text() for label in home._activity_rows[0].findChildren(QLabel))
+    assert "Partly performed: 1 done, 1 only observed" in home_texts

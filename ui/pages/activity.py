@@ -92,7 +92,7 @@ class ActivityPage(QWidget):
         if self._service is not None:
             name = self._service.workflow_name(workflow_id) or workflow_id
         status_value = getattr(getattr(run, "status", None), "value", "Unknown")
-        label, kind = status_display(status_value)
+        label, kind = status_display(status_value, getattr(run, "results", None))
         when = human_timestamp(getattr(run, "finished_at", None))
         return name, workflow_id, label, kind, when
 
@@ -106,7 +106,7 @@ class ActivityPage(QWidget):
         step_lines = "\n".join(
             f"{result.step_id} — {result.status.value} — {result.message}" for result in run.results
         )
-        label, _kind = status_display(getattr(run.status, "value", "Unknown"))
+        label, _kind = status_display(getattr(run.status, "value", "Unknown"), run.results)
         self._details_label.setText(
             f"{run.workflow_id} — {label} — {len(run.results)} steps"
             + (f"\n{step_lines}" if step_lines else "")
