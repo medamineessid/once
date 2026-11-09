@@ -272,3 +272,58 @@ def test_missing_key_with_default_credentials_source_falls_back(monkeypatch) -> 
         StepKind.LAUNCH_APPLICATION,
         StepKind.CLOSE_APPLICATION,
     ]
+
+
+def test_redundant_close_button_click_pruned_when_close_application_present() -> None:
+    answer = json.dumps(
+        {
+            "goal": "Launch and close tool",
+            "workflow": {
+                "workflow_id": "test-wf",
+                "name": "Test Tool",
+                "steps": [
+                    {
+                        "step_id": "s1",
+                        "name": "Launch",
+                        "kind": "LAUNCH_APPLICATION",
+                        "message": "Launch.",
+                        "target": json.dumps({"executable": r"C:\Windows\System32\notepad.exe"}),
+                    },
+                    {
+                        "step_id": "s2",
+                        "name": "Click close",
+                        "kind": "CLICK_UI_ELEMENT",
+                        "message": "Click close button.",
+                        "target": json.dumps(
+                            {
+                                "window": {"title": "Notepad"},
+                                "element": {
+                                    "automation_id": "Close",
+                                    "control_type": "Button",
+                                    "name": "Close",
+                                },
+                            }
+                        ),
+                    },
+                    {
+                        "step_id": "s3",
+                        "name": "Close",
+                        "kind": "CLOSE_APPLICATION",
+                        "message": "Close.",
+                        "target": json.dumps({"executable": r"C:\Windows\System32\notepad.exe"}),
+                    },
+                ],
+            },
+        }
+    )
+    calls: list = []
+    proposal = analyze_recording(
+        AnalysisRequest(observation_draft()),
+        provider="gemini",
+        credentials={"GEMINI_API_KEY": "fake-key"},
+        poster=recording_poster(gemini_api_envelope(answer), calls),
+    )
+    assert [step.kind for step in proposal.workflow.steps] == [
+        StepKind.LAUNCH_APPLICATION,
+        StepKind.CLOSE_APPLICATION,
+    ]

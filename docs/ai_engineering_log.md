@@ -1635,3 +1635,11 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   printed `620 passed, 2 skipped`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-09 — Resilient window title targeting and titlebar close de-duplication (commit: pending)
+- Task: Fix recording replay failures caused by dynamic window title variations (e.g. search queries or folder navigation) and redundant close-button clicks generated alongside `CLOSE_APPLICATION`.
+- AI contribution: updated `window_matches` in `integrations/uia_targeting.py` to extract the application/window suffix across standard Windows title separators (`-`, `:`, `—`, `|`) and normalize Unicode replacement characters and whitespace; mapped titlebar close clicks (`automation_id="Close"`) to report observations in `ai/provider.py` and pruned redundant close-button clicks in `ai/analyze_recording.py` when `CLOSE_APPLICATION` is present.
+- Defect found: when recording File Explorer, the window title during search was `"lane-a - Résultats de la recherche dans Accueil : Explorateur de fichiers"`, whereas upon replay File Explorer opened as `"Accueil - Explorateur de fichiers"`. The previous `window_matches` split strictly on `" - "`, leaving the colon-separated search prefix attached to the suffix, causing element resolution to fail and subsequent close steps to be skipped.
+- Verification: targeted desktop, provider, and analyzer tests passed (`47 passed`); full `scripts/verify.ps1` gate completed with `631 passed, 2 skipped in 141.86s`, Ruff check and format clean, both Qt smoke tests passed, append-only log guard passed, and `ALL CHECKS PASSED`.
+- Outcome: PASSED
+- Human review:

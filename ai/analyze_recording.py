@@ -236,24 +236,49 @@ def _parse_model_json(text: str) -> dict:
     return parsed
 
 
+def _is_redundant_close_click(kind: object, target: object) -> bool:
+    """True when a step redundantly clicks a window's titlebar close button."""
+    if kind != StepKind.CLICK_UI_ELEMENT.value or not isinstance(target, str):
+        return False
+    try:
+        data = json.loads(target)
+        element = data.get("element", {})
+        if isinstance(element, dict):
+            auto_id = (element.get("automation_id") or "").strip().lower()
+            name = (element.get("name") or "").strip().lower()
+            return auto_id == "close" or (
+                name in ("close", "fermer") and element.get("control_type") == "Button"
+            )
+    except Exception:
+        return False
+    return False
+
+
 def _normalize_workflow(recording_id: str, workflow_data: dict) -> dict:
     """Reshape the untrusted draft onto v3 with defaults; validator stays strict."""
     steps = workflow_data.get("steps")
     if not isinstance(steps, list):
         raise AIProviderError("The provider's workflow has no step list.")
+    has_close_app = any(
+        isinstance(s, dict) and s.get("kind") == StepKind.CLOSE_APPLICATION.value for s in steps
+    )
     normalized_steps: list[dict] = []
-    for index, raw in enumerate(steps, start=1):
+    for raw in steps:
         if not isinstance(raw, dict):
             raise AIProviderError("Every proposed step must be an object.")
         kind = raw.get("kind")
         target = raw.get("target")
+        target_str = target if isinstance(target, str) or target is None else None
+        if has_close_app and _is_redundant_close_click(kind, target_str):
+            continue
+        index = len(normalized_steps) + 1
         normalized_steps.append(
             {
                 "step_id": raw.get("step_id") or f"step-{index}",
                 "name": raw.get("name") or f"Step {index}",
                 "kind": kind,
                 "message": raw.get("message") or "",
-                "target": target if isinstance(target, str) or target is None else None,
+                "target": target_str,
                 "max_attempts": raw.get("max_attempts", 1),
                 "postcondition": None,
                 "timeout_seconds": raw.get("timeout_seconds", 10.0),
@@ -346,6 +371,8 @@ Method:
    - REPORT: plain observation or note; no target.
 4. Every step needs step_id, name, kind, message, target (message is a plain
    sentence). Keep the number of steps SMALL: launch once, not per window.
+   When closing an application, use CLOSE_APPLICATION instead of emitting an
+   extra CLICK_UI_ELEMENT for clicking the window's close button.
 
 Say nothing outside the JSON. Answer with exactly one JSON object:
 {{

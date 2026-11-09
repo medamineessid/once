@@ -188,6 +188,10 @@ def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> 
             ),
         )
     if action.source_event is RecordedEventKind.MOUSE_CLICK:
+        element = getattr(action, "element", None)
+        auto_id = getattr(element, "automation_id", None) or ""
+        if auto_id.strip() == "Close":
+            return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
         click_step = _semantic_click_step(action, step_id, name)
         if click_step is not None:
             return click_step

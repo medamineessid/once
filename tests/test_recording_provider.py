@@ -228,3 +228,48 @@ def test_semantic_click_type_and_shortcut_events_map_to_replayable_steps() -> No
         "keys": "enter",
         "window": {"title": "Example App"},
     }
+
+
+def test_titlebar_close_button_click_maps_to_report_step() -> None:
+    exe = r"C:\Program Files\Example\app.exe"
+    events = (
+        RecordedEvent(
+            1,
+            1_000,
+            RecordedEventKind.WINDOW_OPEN,
+            window_title="Example App",
+            process_name="app.exe",
+            executable_path=exe,
+        ),
+        RecordedEvent(
+            2,
+            2_000,
+            RecordedEventKind.MOUSE_CLICK,
+            x=500,
+            y=10,
+            window_title="Example App",
+            process_name="app.exe",
+            executable_path=exe,
+            element=UIElementInfo(
+                control_type="Button",
+                name="Close",
+                automation_id="Close",
+            ),
+        ),
+        RecordedEvent(
+            3,
+            3_000,
+            RecordedEventKind.WINDOW_CLOSE,
+            window_title="Example App",
+            process_name="app.exe",
+            executable_path=exe,
+        ),
+    )
+    draft = build_raw_draft(Recording("rec-close", 1_000, events))
+    proposal = deterministic_recording_provider().analyze(AnalysisRequest(draft))
+    kinds = [s.kind for s in proposal.workflow.steps]
+    assert kinds == [
+        StepKind.LAUNCH_APPLICATION,
+        StepKind.REPORT,
+        StepKind.CLOSE_APPLICATION,
+    ]

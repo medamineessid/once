@@ -7,7 +7,28 @@ targeting cannot behave differently depending on which integration is running.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from typing import Any
+
+
+def _normalize_title(title: str) -> str:
+    """Normalize Unicode characters, whitespace, and dirty prefixes from a title."""
+    normalized = unicodedata.normalize("NFKC", title).replace("\ufffd", "")
+    return normalized.lstrip("*• ").strip()
+
+
+def _trailing_title_segment(title: str) -> str:
+    """Extract the rightmost application or window role segment of a title.
+
+    Windows applications use different title separators depending on context:
+    - Standard document/app: 'Untitled - Notepad' -> 'Notepad'
+    - Multi-level / search: 'query - Search Results in Home : File Explorer' -> 'File Explorer'
+    - Em-dash or pipe: 'Document — App' or 'Page | Service'
+    """
+    clean = _normalize_title(title)
+    parts = [p.strip() for p in re.split(r"\s+[-:—|]\s+", clean) if p.strip()]
+    return parts[-1] if parts else clean
 
 
 def window_matches(wrapper: Any, target: object) -> bool:
@@ -21,14 +42,19 @@ def window_matches(wrapper: Any, target: object) -> bool:
         if not isinstance(actual, str) or not isinstance(expected, str):
             return False
         if actual != expected:
-            clean_expected = expected.lstrip("*• ")
-            clean_actual = actual.lstrip("*• ")
-            if clean_actual != clean_expected and not (
-                " - " in clean_expected
-                and " - " in clean_actual
-                and clean_actual.rsplit(" - ", 1)[-1] == clean_expected.rsplit(" - ", 1)[-1]
-            ):
-                return False
+            clean_expected = _normalize_title(expected)
+            clean_actual = _normalize_title(actual)
+            if clean_actual != clean_expected:
+                expected_suffix = _trailing_title_segment(clean_expected)
+                actual_suffix = _trailing_title_segment(clean_actual)
+                if not (
+                    expected_suffix
+                    and actual_suffix
+                    and len(expected_suffix) >= 2
+                    and len(actual_suffix) >= 2
+                    and expected_suffix.casefold() == actual_suffix.casefold()
+                ):
+                    return False
     for field, attribute in (
         ("process_id", "process_id"),
         ("class_name", "class_name"),

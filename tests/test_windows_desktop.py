@@ -726,3 +726,49 @@ def test_window_matches_tolerates_modified_title_prefix() -> None:
         json.dumps({"window": {"title": "Untitled - Notepad"}, "keys": "ctrl+s"})
     )
     assert result.status is StepStatus.SUCCEEDED
+
+
+def test_window_matches_matches_title_across_search_results_and_folder_variations() -> None:
+    # Simulates an application whose title includes search query context during recording
+    # but opens into a default view on replay (using ' - ' and ' : ' separators).
+    actual_window = FakeWindow(
+        FakeElementInfo(
+            name="Accueil - App",
+            class_name="Window",
+            control_type="Window",
+            process_id=101,
+        ),
+        [],
+    )
+    provider, _clock = provider_with([], windows=[actual_window])
+    result = provider.press_shortcut(
+        json.dumps(
+            {
+                "window": {"title": "search-query - Search results in Accueil : App"},
+                "keys": "ctrl+s",
+            }
+        )
+    )
+    assert result.status is StepStatus.SUCCEEDED
+
+
+def test_window_matches_normalizes_unicode_replacement_characters() -> None:
+    actual_window = FakeWindow(
+        FakeElementInfo(
+            name="Accueil - App",
+            class_name="Window",
+            control_type="Window",
+            process_id=102,
+        ),
+        [],
+    )
+    provider, _clock = provider_with([], windows=[actual_window])
+    result = provider.press_shortcut(
+        json.dumps(
+            {
+                "window": {"title": "R\ufffdsultats - Accueil : App"},
+                "keys": "ctrl+s",
+            }
+        )
+    )
+    assert result.status is StepStatus.SUCCEEDED
