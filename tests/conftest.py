@@ -106,3 +106,12 @@ def app_data_dir(tmp_path: Path) -> Path:
     directory = tmp_path / "appdata" / "Once"
     directory.mkdir(parents=True)
     return directory
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ambient_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure automated tests never call live AI services by leaking ambient API keys."""
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ONCE_GEMINI_API_KEY", raising=False)
+
