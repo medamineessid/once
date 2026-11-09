@@ -50,7 +50,7 @@ from ui.strings import (
 from ui.styles import SPACING_LG, SPACING_SM, SPACING_XL
 from ui.workers import WorkflowWorker, cancel_and_join
 
-_ROW_HEIGHT = 56
+_ROW_HEIGHT = 64
 
 
 def _saved_on_text(path: Path) -> str:
@@ -77,8 +77,8 @@ class AutomationRow(QWidget):
         super().__init__(parent)
         self.setObjectName("automationRow")
         row = QVBoxLayout(self)
-        row.setContentsMargins(6, 6, 6, 6)
-        row.setSpacing(2)
+        row.setContentsMargins(10, 8, 10, 8)
+        row.setSpacing(4)
         top = QHBoxLayout()
         top.setSpacing(SPACING_SM)
         self._name_label = QLabel(title, self)
@@ -90,7 +90,7 @@ class AutomationRow(QWidget):
         top.addWidget(self._name_label)
         top.addStretch(1)
         if chip is not None:
-            top.addWidget(chip)
+            top.addWidget(chip, alignment=Qt.AlignmentFlag.AlignVCenter)
         row.addLayout(top)
         caption_parts: list[str] = []
         if saved_on:

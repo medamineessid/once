@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -69,6 +69,7 @@ class Chip(QLabel):
         super().__init__(text, parent)
         self.setObjectName("chip")
         self.setProperty("chipKind", kind)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     @staticmethod
     def row(*chips: str, kind: str = "neutral", parent: QWidget | None = None) -> QWidget:

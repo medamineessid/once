@@ -86,6 +86,7 @@ class HomePage(QWidget):
 
         self._activity_panel = QWidget(self)
         self._activity_panel.setObjectName("activityPanel")
+        self._activity_panel.setMaximumWidth(744)
         self._activity_layout = QVBoxLayout(self._activity_panel)
         self._activity_layout.setContentsMargins(0, 0, 0, 0)
         self._activity_layout.setSpacing(SPACING_SM)
@@ -138,8 +139,9 @@ class HomePage(QWidget):
         for name, status_value, when in runs:
             label, _ = status_display(status_value)
             row = QWidget(self._activity_panel)
+            row.setStyleSheet("background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px;")
             row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setContentsMargins(14, 10, 14, 10)
             row_layout.setSpacing(SPACING_SM)
             title = QLabel(name, row)
             title.setObjectName("rowTitle")

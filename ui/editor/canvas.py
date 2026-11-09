@@ -153,6 +153,9 @@ class CanvasView(QGraphicsView):
         self._minimap.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._minimap.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._minimap.setFixedSize(160, 96)
+        self._minimap.setStyleSheet(
+            "background: rgba(246, 248, 250, 210); border: 1px solid #D1D5DB; border-radius: 6px;"
+        )
         self._minimap.show()
         self.node_moved.connect(self._node_moved)
 
@@ -251,6 +254,15 @@ class CanvasView(QGraphicsView):
             return
         self.fitInView(self.scene().sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
         self._zoom = self.transform().m11()
+        self._update_minimap()
+
+    def _update_minimap(self) -> None:
+        if not hasattr(self, "_minimap"):
+            return
+        rect = self.scene().sceneRect()
+        if rect.isEmpty():
+            return
+        self._minimap.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
 
     def _set_zoom(self, value: float) -> None:
         factor = value / self._zoom
@@ -287,6 +299,7 @@ class CanvasView(QGraphicsView):
     def resizeEvent(self, event: object) -> None:
         super().resizeEvent(event)
         self._minimap.move(self.viewport().width() - self._minimap.width() - 12, 12)
+        self._update_minimap()
 
     @override
     def wheelEvent(self, event: object) -> None:

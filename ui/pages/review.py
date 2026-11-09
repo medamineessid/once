@@ -65,6 +65,8 @@ class ReviewPage(QWidget):
         self._goal_label = QLabel("No proposal loaded.", self)
         self._goal_label.setObjectName("goalLabel")
         self._goal_label.setWordWrap(True)
+        self._goal_label.setMinimumWidth(640)
+        self._goal_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._goal_label, alignment=Qt.AlignHCenter)
         self._applications_container = QFrame(self)
         self._applications_container.setObjectName("approvalPanel")

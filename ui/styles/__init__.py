@@ -467,7 +467,12 @@ _STYLESHEET_TEMPLATE = Template("""
         min-height: 80px;
     }
     QListWidget#workflowList::item,
-    QListWidget#activitiesList::item,
+    QListWidget#activitiesList::item {
+        padding: 2px 4px;
+        border-radius: 6px;
+        margin: 2px 0;
+        color: transparent;
+    }
     QListWidget#recordingList::item,
     QListWidget#stepsList::item,
     QListWidget#editorStepsList::item,
@@ -477,7 +482,10 @@ _STYLESHEET_TEMPLATE = Template("""
         margin: 2px 0;
     }
     QListWidget#workflowList::item:selected,
-    QListWidget#activitiesList::item:selected,
+    QListWidget#activitiesList::item:selected {
+        background: #EEF2FF;
+        color: transparent;
+    }
     QListWidget#recordingList::item:selected,
     QListWidget#stepsList::item:selected,
     QListWidget#editorStepsList::item:selected,
@@ -486,7 +494,10 @@ _STYLESHEET_TEMPLATE = Template("""
         color: #1D1D1D;
     }
     QListWidget#workflowList::item:hover,
-    QListWidget#activitiesList::item:hover,
+    QListWidget#activitiesList::item:hover {
+        background: #F9FAFB;
+        color: transparent;
+    }
     QListWidget#recordingList::item:hover,
     QListWidget#stepsList::item:hover,
     QListWidget#editorStepsList::item:hover,
@@ -535,8 +546,9 @@ _STYLESHEET_TEMPLATE = Template("""
         font-size: ${TYPE_CAPTION_PX}px;
         color: ${TEXT_BODY};
         background: ${ACCENT_SOFT};
-        border-radius: 8px;
-        padding: 2px 8px;
+        border-radius: 6px;
+        padding: 3px 8px;
+        min-height: 18px;
         font-family: $FONT_STACK;
     }
     QLabel#chip[chipKind="ok"] {
