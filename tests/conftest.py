@@ -114,4 +114,3 @@ def _isolate_ambient_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ONCE_GEMINI_API_KEY", raising=False)
-
