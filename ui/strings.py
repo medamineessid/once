@@ -176,7 +176,8 @@ DESKTOP_APPROVAL_KIND_INTERACT_PAGE_ELEMENT = "Interact with a page element"
 DESKTOP_APPROVAL_KIND_FALLBACK = "Perform a desktop action"
 DESKTOP_APPROVAL_STEP_TEMPLATE = '{action} · step "{step_name}"'
 DESKTOP_APPROVAL_BINDING_NOTE = (
-    "Approval covers only the actions listed here, for exactly this run."
+    "Approval covers only the actions listed here, for exactly this run. "
+    "Press Ctrl+Alt+Q anytime while running to stop immediately."
 )
 DESKTOP_APPROVAL_REJECTED_TITLE = "This automation cannot be approved"
 DESKTOP_APPROVAL_APPROVE = "Approve for this run"

@@ -1643,3 +1643,11 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: targeted desktop, provider, and analyzer tests passed (`47 passed`); full `scripts/verify.ps1` gate completed with `631 passed, 2 skipped in 141.86s`, Ruff check and format clean, both Qt smoke tests passed, append-only log guard passed, and `ALL CHECKS PASSED`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-12 — Global replay kill switch, semantic input tracing, and UX safety hint (commit: pending)
+- Task: Complete controlled input replay safety (Roadmap Stage 10) by providing an out-of-band global hotkey kill switch, expanding clickable control types, and displaying the kill switch shortcut in the UI.
+- AI contribution: created HotkeyKillSwitch in integrations/kill_switch.py using Ctrl+Alt+Q (disjoint from allowlisted replay shortcuts); wired kill switch activation and status checking into WorkflowService.run_desktop_approved and run_replay; expanded _CLICKABLE_CONTROLS in ai/provider.py and _CLICKABLE_CONTROL_TYPES in integrations/windows_desktop.py to support TreeItem (with select interaction), SplitButton, and HeaderItem; added kill switch indicator note to ui/strings.py DESKTOP_APPROVAL_BINDING_NOTE.
+- Defect found: when testing WorkflowService cancel integration with run_replay, ReplayExecutor rejected plain REPORT steps under default replay policy; updated test to use allowlisted VERIFY_PATH_EXISTS steps.
+- Verification: targeted kill switch, controller service, and desktop provider tests passed (52 passed in 1.29s); full pytest suite passed (641 passed, 2 skipped); ruff check and ruff format passed.
+- Outcome: PASSED
+- Human review:

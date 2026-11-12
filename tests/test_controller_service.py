@@ -119,3 +119,41 @@ def test_save_approved_saves_replayable_workflow(tmp_path) -> None:
     path = service.save_approved(proposal)
     assert path.exists()
     assert service.list_saved() == (path,)
+
+
+def test_replay_halts_when_kill_switch_triggered(tmp_path) -> None:
+    from engine.workflow import WorkflowStatus
+
+    class StubKillSwitch:
+        def __init__(self) -> None:
+            self.started = False
+            self.stopped = False
+            self.triggered = False
+
+        def start(self) -> None:
+            self.started = True
+            # Simulate hotkey pressed as soon as run starts:
+            self.triggered = True
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    stub = StubKillSwitch()
+    service = _service_with_fakes(tmp_path)
+    service._kill_switch = stub
+    workflow = Workflow(
+        "replay-kill",
+        "Replay with kill switch",
+        (
+            WorkflowStep(
+                "s1", "Step 1", StepKind.VERIFY_PATH_EXISTS, "Path 1", str(tmp_path / "x1.txt")
+            ),
+            WorkflowStep(
+                "s2", "Step 2", StepKind.VERIFY_PATH_EXISTS, "Path 2", str(tmp_path / "x2.txt")
+            ),
+        ),
+    )
+    run = service.run_replay(workflow, allowed_root=None)
+    assert stub.started
+    assert stub.stopped
+    assert run.status is WorkflowStatus.CANCELLED

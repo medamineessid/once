@@ -273,3 +273,62 @@ def test_titlebar_close_button_click_maps_to_report_step() -> None:
         StepKind.REPORT,
         StepKind.CLOSE_APPLICATION,
     ]
+
+
+def test_treeitem_and_splitbutton_map_to_replayable_clicks() -> None:
+    exe = r"C:\Program Files\Example\app.exe"
+    events = (
+        RecordedEvent(
+            1,
+            1_000,
+            RecordedEventKind.WINDOW_OPEN,
+            window_title="Explorer",
+            process_name="app.exe",
+            executable_path=exe,
+        ),
+        RecordedEvent(
+            2,
+            2_000,
+            RecordedEventKind.MOUSE_CLICK,
+            x=100,
+            y=200,
+            window_title="Explorer",
+            process_name="app.exe",
+            executable_path=exe,
+            element=UIElementInfo(
+                control_type="TreeItem",
+                name="Documents",
+                automation_id="TreeItem_Docs",
+            ),
+        ),
+        RecordedEvent(
+            3,
+            3_000,
+            RecordedEventKind.MOUSE_CLICK,
+            x=150,
+            y=250,
+            window_title="Explorer",
+            process_name="app.exe",
+            executable_path=exe,
+            element=UIElementInfo(
+                control_type="SplitButton",
+                name="New",
+                automation_id="Split_New",
+            ),
+        ),
+    )
+    draft = build_raw_draft(Recording("rec-tree", 1_000, events))
+    proposal = deterministic_recording_provider().analyze(AnalysisRequest(draft))
+    kinds = [s.kind for s in proposal.workflow.steps]
+    assert kinds == [
+        StepKind.LAUNCH_APPLICATION,
+        StepKind.CLICK_UI_ELEMENT,
+        StepKind.CLICK_UI_ELEMENT,
+    ]
+    tree_target = json.loads(proposal.workflow.steps[1].target)
+    assert tree_target["interaction"] == "select"
+    assert tree_target["element"]["control_type"] == "TreeItem"
+
+    split_target = json.loads(proposal.workflow.steps[2].target)
+    assert split_target["interaction"] == "invoke"
+    assert split_target["element"]["control_type"] == "SplitButton"

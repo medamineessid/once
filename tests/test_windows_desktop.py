@@ -463,6 +463,43 @@ def test_click_toggle_supported_on_checkbox() -> None:
     assert checkbox.iface_toggle.toggled is True
 
 
+def test_click_select_supported_on_treeitem() -> None:
+    treeitem = FakeWrapper(
+        FakeElementInfo(control_type="TreeItem", automation_id="treeNode"),
+    )
+    provider, _clock = provider_with([treeitem])
+    result = provider.click_element(
+        json.dumps(
+            {
+                "window": WINDOW_IDENTITY,
+                "element": {"automation_id": "treeNode", "control_type": "TreeItem"},
+                "interaction": "select",
+            }
+        )
+    )
+    assert result.status is StepStatus.SUCCEEDED
+    assert treeitem.selected is True
+
+
+def test_click_invoke_supported_on_splitbutton() -> None:
+    split = FakeWrapper(
+        FakeElementInfo(control_type="SplitButton", automation_id="splitSave"),
+        has_invoke=True,
+    )
+    provider, _clock = provider_with([split])
+    result = provider.click_element(
+        json.dumps(
+            {
+                "window": WINDOW_IDENTITY,
+                "element": {"automation_id": "splitSave", "control_type": "SplitButton"},
+                "interaction": "invoke",
+            }
+        )
+    )
+    assert result.status is StepStatus.SUCCEEDED
+    assert split.iface_invoke.invoked is True
+
+
 def test_shortcut_is_delivered_to_the_identified_window_only() -> None:
     window = FakeWindow(FakeElementInfo(name=WINDOW_IDENTITY["title"], class_name="DemoEditor"), [])
     provider, _clock = provider_with([], windows=[window])

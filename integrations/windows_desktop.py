@@ -577,7 +577,18 @@ class PywinautoDesktopActions:
     # ---------------------------------------------------------------- click
 
     _CLICKABLE_CONTROL_TYPES = frozenset(
-        {"Button", "MenuItem", "CheckBox", "RadioButton", "ListItem", "TabItem", "Hyperlink"}
+        {
+            "Button",
+            "MenuItem",
+            "CheckBox",
+            "RadioButton",
+            "ListItem",
+            "TabItem",
+            "Hyperlink",
+            "TreeItem",
+            "SplitButton",
+            "HeaderItem",
+        }
     )
 
     def click_element(self, target_json: str) -> StepResult:

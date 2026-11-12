@@ -21,7 +21,18 @@ from recorder.models import RecordedEventKind, UIElementInfo
 from .models import AnalysisRequest, ProviderDraft, ProviderQuestion, ProviderResponse
 
 _CLICKABLE_CONTROLS = frozenset(
-    {"Button", "MenuItem", "CheckBox", "RadioButton", "ListItem", "TabItem", "Hyperlink"}
+    {
+        "Button",
+        "MenuItem",
+        "CheckBox",
+        "RadioButton",
+        "ListItem",
+        "TabItem",
+        "Hyperlink",
+        "TreeItem",
+        "SplitButton",
+        "HeaderItem",
+    }
 )
 _TEXT_CONTROLS = frozenset({"Edit", "Document", "ComboBox"})
 
@@ -240,7 +251,7 @@ def _semantic_click_step(
         return None
     if element.control_type in ("CheckBox", "RadioButton"):
         interaction = "toggle"
-    elif element.control_type in ("ListItem", "TabItem"):
+    elif element.control_type in ("ListItem", "TabItem", "TreeItem"):
         interaction = "select"
     else:
         interaction = "invoke"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import contextlib
 import sqlite3
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -134,10 +135,20 @@ class WorkflowService:
         browser_actions: BrowserActions | None = None,
         layout_connection: sqlite3.Connection | None = None,
         approval_store: ApplicationApprovalStore | None = None,
+        kill_switch: object | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
         self._desktop_replay = ReplayExecutor(DESKTOP_EXECUTION_POLICY)
+        if kill_switch is None:
+            try:
+                from integrations.kill_switch import HotkeyKillSwitch
+
+                self._kill_switch: object | None = HotkeyKillSwitch()
+            except Exception:
+                self._kill_switch = None
+        else:
+            self._kill_switch = kill_switch
         if window_inspector is None:
             from integrations.windows_automation import PywinautoWindowInspector
 
@@ -198,6 +209,11 @@ class WorkflowService:
     def allowed_root(self) -> Path | None:
         """The authorized folder, or None when the user has not chosen one."""
         return self._allowed_root
+
+    @property
+    def kill_switch(self) -> object | None:
+        """The run-scoped kill switch listener, if available."""
+        return self._kill_switch
 
     @property
     def layout_storage_configured(self) -> bool:
@@ -394,6 +410,24 @@ class WorkflowService:
         """Preview a desktop workflow under the desktop policy without running it."""
         return self._desktop_replay.preview(workflow)
 
+    def _start_kill_switch(self) -> object | None:
+        """Arm the global hotkey kill switch for one replay run."""
+        kill_switch = self._kill_switch
+        if kill_switch is not None and callable(getattr(kill_switch, "start", None)):
+            try:
+                kill_switch.start()
+                return kill_switch
+            except OSError, RuntimeError:
+                return None
+        return None
+
+    @staticmethod
+    def _stop_kill_switch(kill_switch: object | None) -> None:
+        """Disarm the global hotkey kill switch after a replay run."""
+        if kill_switch is not None and callable(getattr(kill_switch, "stop", None)):
+            with contextlib.suppress(OSError, RuntimeError):
+                kill_switch.stop()
+
     def run_desktop_approved(
         self,
         approval: object,
@@ -420,11 +454,19 @@ class WorkflowService:
                 "run desktop actions."
             )
         self.approve_workflow_applications(approval.workflow)
+        kill_switch = self._start_kill_switch()
+
+        def active_cancel() -> bool:
+            return bool(
+                (cancel_check is not None and cancel_check())
+                or (kill_switch is not None and getattr(kill_switch, "triggered", False))
+            )
+
         try:
             run = self._desktop_replay.execute(
                 approval.workflow,
                 allowed_root=allowed_root,
-                cancel_check=cancel_check,
+                cancel_check=active_cancel,
                 progress_callback=progress_callback,
                 window_inspector=self._window_inspector,
                 ui_element_inspector=self._ui_element_inspector,
@@ -432,6 +474,7 @@ class WorkflowService:
                 browser_actions=self._browser_actions,
             )
         finally:
+            self._stop_kill_switch(kill_switch)
             if not keep_browsers_after_run:
                 self.close_browser_sessions()
         if self._history is not None:
@@ -448,14 +491,25 @@ class WorkflowService:
         ui_element_inspector: UIElementInspector | None = None,
     ) -> WorkflowRun:
         """Execute and persist only actions allowed by the replay policy."""
-        run = self._replay.execute(
-            workflow,
-            allowed_root=allowed_root,
-            cancel_check=cancel_check,
-            progress_callback=progress_callback,
-            window_inspector=window_inspector or self._window_inspector,
-            ui_element_inspector=ui_element_inspector or self._ui_element_inspector,
-        )
+        kill_switch = self._start_kill_switch()
+
+        def active_cancel() -> bool:
+            return bool(
+                (cancel_check is not None and cancel_check())
+                or (kill_switch is not None and getattr(kill_switch, "triggered", False))
+            )
+
+        try:
+            run = self._replay.execute(
+                workflow,
+                allowed_root=allowed_root,
+                cancel_check=active_cancel,
+                progress_callback=progress_callback,
+                window_inspector=window_inspector or self._window_inspector,
+                ui_element_inspector=ui_element_inspector or self._ui_element_inspector,
+            )
+        finally:
+            self._stop_kill_switch(kill_switch)
         if self._history is not None:
             self._history.record(run)
         return run
