@@ -31,8 +31,31 @@ def _trailing_title_segment(title: str) -> str:
     return parts[-1] if parts else clean
 
 
-def window_matches(wrapper: Any, target: object) -> bool:
-    """True when a top-level wrapper satisfies every requested window field."""
+def titles_share_application_suffix(actual: str, expected: str) -> bool:
+    """True when two titles end in the same application segment.
+
+    This is deliberately weak evidence ('Doc1 - Word' and 'Doc2 - Word' agree),
+    so callers may only use it together with a stronger identity such as a
+    process this run launched; it is never sufficient on its own.
+    """
+    expected_suffix = _trailing_title_segment(expected)
+    actual_suffix = _trailing_title_segment(actual)
+    return (
+        len(expected_suffix) >= 2
+        and len(actual_suffix) >= 2
+        and expected_suffix.casefold() == actual_suffix.casefold()
+    )
+
+
+def window_matches(wrapper: Any, target: object, *, relaxed_title: bool = False) -> bool:
+    """True when a top-level wrapper satisfies every requested window field.
+
+    By default the title must be equal after Unicode normalisation and removal
+    of an unsaved-changes marker ('*Untitled - Notepad' equals
+    'Untitled - Notepad'). With ``relaxed_title`` only the trailing application
+    segment must agree; the caller is responsible for restricting candidates to
+    processes it launched, because a relaxed title alone is ambiguous.
+    """
     if not isinstance(target, dict):
         return False
     info = wrapper.element_info
@@ -44,17 +67,10 @@ def window_matches(wrapper: Any, target: object) -> bool:
         if actual != expected:
             clean_expected = _normalize_title(expected)
             clean_actual = _normalize_title(actual)
-            if clean_actual != clean_expected:
-                expected_suffix = _trailing_title_segment(clean_expected)
-                actual_suffix = _trailing_title_segment(clean_actual)
-                if not (
-                    expected_suffix
-                    and actual_suffix
-                    and len(expected_suffix) >= 2
-                    and len(actual_suffix) >= 2
-                    and expected_suffix.casefold() == actual_suffix.casefold()
-                ):
-                    return False
+            if clean_actual != clean_expected and not (
+                relaxed_title and titles_share_application_suffix(clean_actual, clean_expected)
+            ):
+                return False
     for field, attribute in (
         ("process_id", "process_id"),
         ("class_name", "class_name"),

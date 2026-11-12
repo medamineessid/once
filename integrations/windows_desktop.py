@@ -116,6 +116,26 @@ def _default_process_alive(pid: int) -> bool:
         kernel32.CloseHandle(handle)
 
 
+def _default_process_image(pid: int) -> str | None:
+    """Full image path of a process, or None when it cannot be read."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return None
+    try:
+        size = ctypes.c_ulong(1024)
+        buffer = ctypes.create_unicode_buffer(size.value)
+        if not kernel32.QueryFullProcessImageNameW(handle, 0, buffer, ctypes.byref(size)):
+            return None
+        return buffer.value or None
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def _load_parsed(target_json: str, what: str) -> dict:
     try:
         parsed = json.loads(target_json)
@@ -140,6 +160,7 @@ class PywinautoDesktopActions:
         is_visible: Callable[[Any], bool] | None = None,
         has_owner: Callable[[Any], bool] | None = None,
         process_alive: Callable[[int], bool] | None = None,
+        process_image: Callable[[int], str | None] | None = None,
     ) -> None:
         self._desktop_factory = desktop_factory or self._default_desktop
         #: Approved applications, injected by the caller (storage-backed).
@@ -151,6 +172,7 @@ class PywinautoDesktopActions:
         self._is_visible = is_visible or _default_is_visible
         self._has_owner = has_owner or _default_has_owner
         self._process_alive = process_alive or _default_process_alive
+        self._process_image = process_image or _default_process_image
         #: executable path -> (pid, close_supported) of exactly what this run launched.
         self._launched: dict[str, tuple[int, bool]] = {}
 
@@ -468,14 +490,38 @@ class PywinautoDesktopActions:
     # ------------------------------------------------- shared element lookup
 
     def _wait_for_window(self, window_identity: object, timeout_seconds: float = 5.0) -> list[Any]:
-        """Poll briefly for the target window so post-launch steps do not race."""
+        """Poll briefly for the target window so post-launch steps do not race.
+
+        An exact (normalised) title match always wins. Only when none exists may
+        a relaxed, application-suffix title match be used, and then only for
+        windows whose process image is an executable launched by this run, so
+        a fresh 'Home - App' window can stand in for a recorded
+        'search - Results : App' window without ever touching an unrelated one.
+        """
         deadline = self._clock() + timeout_seconds
         while True:
             windows = self._desktop_factory().windows()
             matches = [w for w in windows if window_matches(w, window_identity)]
+            if not matches and self._launched:
+                matches = [
+                    w
+                    for w in windows
+                    if window_matches(w, window_identity, relaxed_title=True)
+                    and self._owned_by_launched_executable(w)
+                ]
             if matches or self._clock() >= deadline:
                 return matches
             self._sleep(self._poll_interval)
+
+    def _owned_by_launched_executable(self, wrapper: Any) -> bool:
+        """True when the window's process runs an executable this run launched."""
+        pid = getattr(wrapper.element_info, "process_id", None)
+        if not isinstance(pid, int) or pid <= 0:
+            return False
+        if any(pid == launched_pid for launched_pid, _close in self._launched.values()):
+            return True
+        image = self._process_image(pid)
+        return bool(image) and _executable_key(Path(image)) in self._launched
 
     def _resolve_element(self, target_json: str, what: str) -> Any:
         """Return the unique element wrapper or raise a structured failure."""

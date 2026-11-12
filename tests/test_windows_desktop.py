@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from engine.errors import ExecutionError
 from engine.workflow import ApprovedApplication, StepStatus
 from integrations.windows_desktop import PywinautoDesktopActions
 
@@ -728,47 +729,63 @@ def test_window_matches_tolerates_modified_title_prefix() -> None:
     assert result.status is StepStatus.SUCCEEDED
 
 
-def test_window_matches_matches_title_across_search_results_and_folder_variations() -> None:
-    # Simulates an application whose title includes search query context during recording
-    # but opens into a default view on replay (using ' - ' and ' : ' separators).
-    actual_window = FakeWindow(
-        FakeElementInfo(
-            name="Accueil - App",
-            class_name="Window",
-            control_type="Window",
-            process_id=101,
-        ),
+def _launched_provider(windows):
+    """Provider that has launched sys.executable as pid 4242 in this run."""
+    provider, _clock = provider_with([], windows=windows)
+    launch = provider.launch_application(json.dumps({"executable": sys.executable}))
+    assert launch.status is StepStatus.SUCCEEDED
+    return provider
+
+
+def _window(name: str, pid: int) -> FakeWindow:
+    return FakeWindow(
+        FakeElementInfo(name=name, class_name="Window", control_type="Window", process_id=pid),
         [],
     )
-    provider, _clock = provider_with([], windows=[actual_window])
+
+
+RECORDED_SEARCH_TITLE = {"title": "query - Search results in Home : App"}
+
+
+def test_relaxed_title_matches_a_window_of_the_process_this_run_launched() -> None:
+    provider = _launched_provider([_window("Home - App", 4242)])
     result = provider.press_shortcut(
-        json.dumps(
-            {
-                "window": {"title": "search-query - Search results in Accueil : App"},
-                "keys": "ctrl+s",
-            }
-        )
+        json.dumps({"window": RECORDED_SEARCH_TITLE, "keys": "ctrl+s"})
     )
     assert result.status is StepStatus.SUCCEEDED
 
 
-def test_window_matches_normalizes_unicode_replacement_characters() -> None:
-    actual_window = FakeWindow(
-        FakeElementInfo(
-            name="Accueil - App",
-            class_name="Window",
-            control_type="Window",
-            process_id=102,
-        ),
-        [],
-    )
-    provider, _clock = provider_with([], windows=[actual_window])
+def test_relaxed_title_matches_a_handed_off_window_of_the_launched_executable() -> None:
+    provider = _launched_provider([_window("Home - App", 777)])
+    provider._process_image = lambda pid: sys.executable if pid == 777 else None
     result = provider.press_shortcut(
-        json.dumps(
-            {
-                "window": {"title": "R\ufffdsultats - Accueil : App"},
-                "keys": "ctrl+s",
-            }
-        )
+        json.dumps({"window": RECORDED_SEARCH_TITLE, "keys": "ctrl+s"})
+    )
+    assert result.status is StepStatus.SUCCEEDED
+
+
+def test_O2_relaxed_title_never_targets_a_window_this_run_did_not_launch() -> None:
+    provider = _launched_provider([_window("Home - App", 555)])
+    provider._process_image = lambda pid: r"C:\Other\unrelated.exe"
+    with pytest.raises(ExecutionError, match="not found"):
+        provider.press_shortcut(json.dumps({"window": RECORDED_SEARCH_TITLE, "keys": "ctrl+s"}))
+
+
+def test_O2_relaxed_title_is_never_used_without_a_launch_in_this_run() -> None:
+    provider, _clock = provider_with([], windows=[_window("Doc2 - Word", 99)])
+    with pytest.raises(ExecutionError, match="not found"):
+        provider.press_shortcut(json.dumps({"window": {"title": "Doc1 - Word"}, "keys": "ctrl+s"}))
+
+
+def test_O2_relaxed_title_with_two_launched_windows_is_ambiguous() -> None:
+    provider = _launched_provider([_window("A - App", 4242), _window("B - App", 4242)])
+    with pytest.raises(ExecutionError, match="ambiguous"):
+        provider.press_shortcut(json.dumps({"window": RECORDED_SEARCH_TITLE, "keys": "ctrl+s"}))
+
+
+def test_exact_title_normalises_unicode_replacement_characters() -> None:
+    provider, _clock = provider_with([], windows=[_window("Rsultats - App", 99)])
+    result = provider.press_shortcut(
+        json.dumps({"window": {"title": "R\ufffdsultats - App"}, "keys": "ctrl+s"})
     )
     assert result.status is StepStatus.SUCCEEDED

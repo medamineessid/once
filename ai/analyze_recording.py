@@ -236,22 +236,28 @@ def _parse_model_json(text: str) -> dict:
     return parsed
 
 
+#: UI Automation id Windows assigns to the standard caption-bar close button.
+CAPTION_CLOSE_AUTOMATION_ID = "Close"
+
+
 def _is_redundant_close_click(kind: object, target: object) -> bool:
-    """True when a step redundantly clicks a window's titlebar close button."""
+    """True when a step clicks a window's standard caption-bar close button.
+
+    Identified by the system automation id only, never by a localised label.
+    A target that is not valid JSON is left in place for the strict validator
+    to reject visibly.
+    """
     if kind != StepKind.CLICK_UI_ELEMENT.value or not isinstance(target, str):
         return False
     try:
         data = json.loads(target)
-        element = data.get("element", {})
-        if isinstance(element, dict):
-            auto_id = (element.get("automation_id") or "").strip().lower()
-            name = (element.get("name") or "").strip().lower()
-            return auto_id == "close" or (
-                name in ("close", "fermer") and element.get("control_type") == "Button"
-            )
-    except Exception:
+    except json.JSONDecodeError:
         return False
-    return False
+    element = data.get("element") if isinstance(data, dict) else None
+    if not isinstance(element, dict):
+        return False
+    auto_id = element.get("automation_id")
+    return isinstance(auto_id, str) and auto_id.strip() == CAPTION_CLOSE_AUTOMATION_ID
 
 
 def _normalize_workflow(recording_id: str, workflow_data: dict) -> dict:
