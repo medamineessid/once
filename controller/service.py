@@ -145,7 +145,7 @@ class WorkflowService:
                 from integrations.kill_switch import HotkeyKillSwitch
 
                 self._kill_switch: object | None = HotkeyKillSwitch()
-            except Exception:
+            except ImportError, OSError, RuntimeError:
                 self._kill_switch = None
         else:
             self._kill_switch = kill_switch

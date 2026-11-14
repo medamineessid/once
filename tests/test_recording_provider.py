@@ -332,3 +332,39 @@ def test_treeitem_and_splitbutton_map_to_replayable_clicks() -> None:
     split_target = json.loads(proposal.workflow.steps[2].target)
     assert split_target["interaction"] == "invoke"
     assert split_target["element"]["control_type"] == "SplitButton"
+
+
+def test_real_recording_filters_os_shell_and_produces_clean_steps() -> None:
+    """Replaying draft generation on recording-1794212626041060300.json must
+    filter out OS shell processes and title-change flapping, leaving only the
+    4 real user steps: launch Terminal, click Start, open Settings, close Settings."""
+    from pathlib import Path
+
+    from recorder.storage import RecordingStore
+
+    fixture_dir = Path(__file__).parent / "fixtures"
+    recording = RecordingStore(fixture_dir).load("recording-1794212626041060300")
+    draft = build_raw_draft(recording)
+    proposal = deterministic_recording_provider().analyze(AnalysisRequest(draft))
+
+    actionable = [s for s in proposal.workflow.steps if s.kind is not StepKind.REPORT]
+    assert [(s.kind, s.name) for s in actionable] == [
+        (StepKind.LAUNCH_APPLICATION, "Observation 1"),
+        (StepKind.CLICK_UI_ELEMENT, "Click Démarrer"),
+        (StepKind.CLICK_UI_ELEMENT, "Click Paramètres"),
+        (StepKind.CLICK_UI_ELEMENT, "Close Paramètres"),
+    ]
+    assert json.loads(actionable[0].target)["executable"].endswith("WindowsTerminal.exe")
+    # Ensure no OS shell processes were launched or closed:
+    for step in proposal.workflow.steps:
+        if step.kind in (StepKind.LAUNCH_APPLICATION, StepKind.CLOSE_APPLICATION):
+            exe_name = Path(json.loads(step.target)["executable"]).name.lower()
+            assert exe_name not in {
+                "startmenuexperiencehost.exe",
+                "applicationframehost.exe",
+                "systemsettings.exe",
+                "explorer.exe",
+            }
+    # Ensure WindowsTerminal was NOT emitted as CLOSE_APPLICATION (only renamed):
+    close_steps = [s for s in proposal.workflow.steps if s.kind is StepKind.CLOSE_APPLICATION]
+    assert close_steps == []

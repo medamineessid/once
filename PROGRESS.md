@@ -1,0 +1,15 @@
+# Autonomous Execution Progress & Decisions
+
+## Plan Progress
+- [x] **1. Housekeeping**: Replaced bare `except Exception:` in `WorkflowService.__init__` (`controller/service.py`) with `except (ImportError, OSError, RuntimeError):`. Tested `HotkeyKillSwitch` (`Ctrl+Alt+Q`); `SetWindowsHookEx(WH_KEYBOARD_LL)` installs a valid hook handle, though synthetic keystrokes from a headless subshell cannot trigger the low-level hook without an interactive foreground desktop window / physical keyboard input.
+- [x] **2. Recorder fix**: Updated `WindowEventMonitor` (`integrations/recorder.py`) and `_win32_windows()` to include `hwnd` and track windows by stable `(process_name, hwnd)` identity. Added `WINDOW_TITLE_CHANGED` in `recorder/models.py` and `recorder/drafts.py`. Added regression test using `tests/fixtures/recording-1794212626041060300.json`.
+- [x] **3. Draft generator fix**: Filtered OS shell processes (`StartMenuExperienceHost.exe`, `ApplicationFrameHost.exe`, `ShellExperienceHost.exe`, `SearchHost.exe`, `TextInputHost.exe`, `SystemSettings.exe`, `explorer.exe`) in `ai/provider.py`. Added `_is_flapping_or_title_change` so title-change closes do not emit `CLOSE_APPLICATION`. Allowed titlebar Close clicks on non-launched (e.g. UWP/Start-launched) windows to emit `CLICK_UI_ELEMENT` ("Close <window>"). Added regression test on `recording-1794212626041060300.json`.
+- [x] **4. Click fallback**: Added defined fallback order in `PywinautoDesktopActions.click_element` (`integrations/windows_desktop.py`): UIA `Invoke` pattern first, then re-verify window/element presence & bounds and click element bounding box center via injectable `mouse_click` (`pywinauto.mouse.click`). Added unit tests in `tests/test_windows_desktop.py`.
+- [ ] **5. Prove it on real desktop**: Record/run Notepad task on real desktop.
+- [ ] **6. Phase 2 UX fixes**: Home, Automation details, sidebar highlight bug, Activity details, English-only consistency, focus states and contrast (one commit per item).
+- [ ] **7. Phase 3 anti-slop**: Design tokens, scales, remove filler copy and dead code.
+
+## Decisions
+1. **Kill switch testing in headless shell**: Since `run_command` executes in a background shell without physical keyboard input and Windows `WH_KEYBOARD_LL` ignores synthetic input when no interactive console/foreground window is attached, we verified hook installation (`SystemHook` handle non-zero) and unit-tested trigger semantics via `FakeListener`, documenting the physical-input limitation.
+2. **OS shell process list**: Filtered `startmenuexperiencehost.exe`, `applicationframehost.exe`, `shellexperiencehost.exe`, `searchhost.exe`, `textinputhost.exe`, `systemsettings.exe`, and `explorer.exe` from `LAUNCH_APPLICATION` / `CLOSE_APPLICATION` lifecycle steps because they are Windows shell/UWP container hosts, not standalone user-launched applications.
+3. **Titlebar Close button handling**: Kept `Close` button clicks on `launched` apps as `REPORT` (preserving `test_titlebar_close_button_click_maps_to_report_step`), while allowing `Close` button clicks on interactively opened windows (like UWP Settings) to emit `CLICK_UI_ELEMENT` ("Close Paramètres").

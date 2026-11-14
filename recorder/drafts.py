@@ -81,4 +81,8 @@ def _describe(event: RecordedEvent) -> str:
         title = event.window_title or "untitled window"
         who = event.process_name or "an application"
         return f"The {who} window closed: {title}."
+    if event.kind is RecordedEventKind.WINDOW_TITLE_CHANGED:
+        title = event.window_title or "untitled window"
+        who = event.process_name or "an application"
+        return f"The {who} window title changed to: {title}."
     return f"Window focus observed: {event.window_title or 'unknown window'}."

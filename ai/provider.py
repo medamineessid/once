@@ -36,6 +36,18 @@ _CLICKABLE_CONTROLS = frozenset(
 )
 _TEXT_CONTROLS = frozenset({"Edit", "Document", "ComboBox"})
 
+OS_SHELL_PROCESSES = frozenset(
+    {
+        "startmenuexperiencehost.exe",
+        "applicationframehost.exe",
+        "shellexperiencehost.exe",
+        "searchhost.exe",
+        "textinputhost.exe",
+        "systemsettings.exe",
+        "explorer.exe",
+    }
+)
+
 MAX_INTERVIEW_TURNS = 5
 
 
@@ -107,8 +119,9 @@ def deterministic_recording_provider() -> AnalysisProvider:
         def analyze(self, request: AnalysisRequest) -> ProviderDraft:
             steps: list[WorkflowStep] = []
             launched: set[str] = set()
-            for index, action in enumerate(request.draft.actions, start=1):
-                steps.append(_step_for_action(action, index, launched))
+            actions = request.draft.actions
+            for index, action in enumerate(actions, start=1):
+                steps.append(_step_for_action(action, index, launched, actions))
             workflow = Workflow(
                 workflow_id=f"recording-{request.draft.recording_id}",
                 name="Recorded task draft",
@@ -131,6 +144,45 @@ def deterministic_recording_provider() -> AnalysisProvider:
     return RecordingProvider()
 
 
+def _is_flapping_or_title_change(
+    action: RawDraftAction,
+    actions: Sequence[RawDraftAction],
+    index: int,
+) -> bool:
+    """True if this WINDOW_CLOSE was caused by title changes or flapping rather than real close."""
+    exec_path = _recorded_executable(action)
+    if not exec_path:
+        return False
+    target_name = Path(exec_path).name.lower()
+
+    # 1. If the app is opened again later in the recording, earlier closes were not genuine closes
+    for other in actions[index:]:
+        other_exec = _recorded_executable(other)
+        if (
+            other_exec
+            and Path(other_exec).name.lower() == target_name
+            and other.source_event is RecordedEventKind.WINDOW_OPEN
+        ):
+            return True
+
+    # 2. If close is paired with an open of the same executable (title transition):
+    start = max(0, index - 3)
+    end = min(len(actions), index + 2)
+    for i, other in enumerate(actions[start:end], start=start):
+        if i == index - 1:
+            continue
+        other_exec = _recorded_executable(other)
+        if (
+            other_exec
+            and Path(other_exec).name.lower() == target_name
+            and other.source_event is RecordedEventKind.WINDOW_OPEN
+            and other.window_title != action.window_title
+        ):
+            return True
+
+    return False
+
+
 def _recorded_executable(action: RawDraftAction) -> str | None:
     """The executable path the recording captured for this action, if it has one.
 
@@ -145,11 +197,17 @@ def _recorded_executable(action: RawDraftAction) -> str | None:
     return None
 
 
-def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> WorkflowStep:
+def _step_for_action(
+    action: RawDraftAction,
+    index: int,
+    launched: set[str],
+    all_actions: Sequence[RawDraftAction] = (),
+) -> WorkflowStep:
     """Turn one observation into a validated engine step deterministically."""
     step_id = f"observation-{action.sequence}"
     name = f"Observation {index}"
     executable = _recorded_executable(action)
+    exe_name = Path(executable).name.lower() if executable else ""
     if action.source_event is RecordedEventKind.WINDOW_OPEN:
         if executable is None:
             return WorkflowStep(
@@ -157,6 +215,13 @@ def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> 
                 name,
                 StepKind.REPORT,
                 f"{action.description} (executable path not recorded)",
+            )
+        if exe_name in OS_SHELL_PROCESSES:
+            return WorkflowStep(
+                step_id,
+                name,
+                StepKind.REPORT,
+                f"{action.description} (OS shell process ignored for application lifecycle)",
             )
         if executable not in launched:
             launched.add(executable)
@@ -181,6 +246,20 @@ def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> 
                 StepKind.REPORT,
                 f"{action.description} (executable path not recorded)",
             )
+        if exe_name in OS_SHELL_PROCESSES:
+            return WorkflowStep(
+                step_id,
+                name,
+                StepKind.REPORT,
+                f"{action.description} (OS shell process ignored for application lifecycle)",
+            )
+        if _is_flapping_or_title_change(action, all_actions, index):
+            return WorkflowStep(
+                step_id,
+                name,
+                StepKind.REPORT,
+                f"{action.description} (Window title change observation; not an application close)",
+            )
         if executable in launched:
             return WorkflowStep(
                 step_id,
@@ -198,10 +277,12 @@ def _step_for_action(action: RawDraftAction, index: int, launched: set[str]) -> 
                 f"{Path(executable).stem}, so nothing is allowed to close it."
             ),
         )
+    if action.source_event is RecordedEventKind.WINDOW_TITLE_CHANGED:
+        return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
     if action.source_event is RecordedEventKind.MOUSE_CLICK:
         element = getattr(action, "element", None)
         auto_id = getattr(element, "automation_id", None) or ""
-        if auto_id.strip() == "Close":
+        if auto_id.strip() == "Close" and executable in launched:
             return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
         click_step = _semantic_click_step(action, step_id, name)
         if click_step is not None:
@@ -255,8 +336,13 @@ def _semantic_click_step(
         interaction = "select"
     else:
         interaction = "invoke"
+    auto_id = (element.automation_id or "").strip()
     label = (element.name or element.automation_id or element.class_name or "control").strip()
-    step_name = f"Click {label}"[:80] if label else fallback_name
+    close_keywords = ("close", "fermer", "fermer paramètres", "fermer la fenêtre")
+    if auto_id == "Close" or label.lower() in close_keywords:
+        step_name = f"Close {window_title}"
+    else:
+        step_name = f"Click {label}"[:80] if label else fallback_name
     target = json.dumps(
         {
             "window": {"title": window_title},

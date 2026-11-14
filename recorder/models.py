@@ -15,6 +15,7 @@ class RecordedEventKind(StrEnum):
     WINDOW_FOCUS = "WINDOW_FOCUS"
     WINDOW_OPEN = "WINDOW_OPEN"
     WINDOW_CLOSE = "WINDOW_CLOSE"
+    WINDOW_TITLE_CHANGED = "WINDOW_TITLE_CHANGED"
 
 
 @dataclass(frozen=True)

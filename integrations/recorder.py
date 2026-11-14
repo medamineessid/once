@@ -8,7 +8,7 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from recorder.models import RecordedEvent, RecordedEventKind, UIElementInfo
 
@@ -443,8 +443,19 @@ class WindowEventMonitor:
         self._seen_executables = seen_executables if seen_executables is not None else set()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        self._known: set[tuple[str, str]] = set()
+        self._known: dict[tuple[Any, ...], tuple[Any, ...]] = {}
         self._counter = 0
+
+    @staticmethod
+    def _window_key(window: tuple[Any, ...]) -> tuple[Any, ...]:
+        """Compute stable identity: (process_name, hwnd) if hwnd is present, else fallback."""
+        if len(window) >= 4 and isinstance(window[3], int):
+            return (window[0], window[3])
+        if len(window) == 3 and isinstance(window[2], int):
+            return (window[0], window[2])
+        if len(window) >= 3 and isinstance(window[2], str):
+            return (window[0], window[1], window[2])
+        return (window[0], window[1])
 
     def start(self) -> None:
         """Take the baseline snapshot, then start the bounded polling thread."""
@@ -452,7 +463,7 @@ class WindowEventMonitor:
             raise RuntimeError("The window monitor is already active.")
         self._stop.clear()
         self._counter = 0
-        self._known = set(self._safe_current())
+        self._known = {self._window_key(w): w for w in self._safe_current()}
         self._thread = threading.Thread(target=self._loop, daemon=True, name="once-window-monitor")
         self._thread.start()
 
@@ -464,15 +475,15 @@ class WindowEventMonitor:
             thread.join(timeout=5)
         self._thread = None
 
-    def current(self) -> tuple[tuple[str, str], ...]:
+    def current(self) -> tuple[tuple[Any, ...], ...]:
         """Return the last silent-baseline window set for tests and diagnostics."""
-        return tuple(sorted(self._known))
+        return tuple(sorted(self._known.values(), key=lambda w: (str(w[0]), str(w[1]))))
 
     def _local_sequence(self) -> int:
         self._counter += 1
         return self._counter
 
-    def _safe_current(self) -> tuple[tuple[str, str], ...]:
+    def _safe_current(self) -> tuple[tuple[Any, ...], ...]:
         try:
             windows = self._window_lister()
         except OSError:
@@ -481,17 +492,24 @@ class WindowEventMonitor:
 
     def _loop(self) -> None:
         while not self._stop.is_set():
-            current = set(self._safe_current())
-            for window in sorted(current - self._known):
-                self._emit(RecordedEventKind.WINDOW_OPEN, window)
-            for window in sorted(self._known - current):
-                self._emit(RecordedEventKind.WINDOW_CLOSE, window)
-            self._known = current
+            current_windows = self._safe_current()
+            current_by_id = {self._window_key(w): w for w in current_windows}
+            for key in sorted(current_by_id.keys() - self._known.keys(), key=lambda k: str(k)):
+                self._emit(RecordedEventKind.WINDOW_OPEN, current_by_id[key])
+            for key in sorted(self._known.keys() - current_by_id.keys(), key=lambda k: str(k)):
+                self._emit(RecordedEventKind.WINDOW_CLOSE, self._known[key])
+            for key in sorted(current_by_id.keys() & self._known.keys(), key=lambda k: str(k)):
+                old_window = self._known[key]
+                new_window = current_by_id[key]
+                if old_window[1] != new_window[1]:
+                    self._emit(RecordedEventKind.WINDOW_TITLE_CHANGED, new_window)
+            self._known = current_by_id
             self._sleep(self._interval)
 
-    def _emit(self, kind: RecordedEventKind, window: tuple[str, str, ...]) -> None:
-        process_name, title, *identity = window
-        executable_path = identity[0] if identity else None
+    def _emit(self, kind: RecordedEventKind, window: tuple[Any, ...]) -> None:
+        process_name = window[0]
+        title = window[1]
+        executable_path = window[2] if len(window) > 2 and isinstance(window[2], str) else None
         executable_sha256: str | None = None
         executable_signer: str | None = None
         if executable_path:
@@ -533,15 +551,15 @@ def _file_sha256(path: str) -> str | None:
 _UNKNOWN_SHA256 = "0" * 64
 
 
-def _win32_windows() -> tuple[tuple[str, str, str], ...]:
-    """Enumerate visible top-level windows as (process name, title, exe path)."""
+def _win32_windows() -> tuple[tuple[str, str, str, int], ...]:
+    """Enumerate visible top-level windows as (process name, title, exe path, hwnd)."""
     if os.name != "nt":
         raise OSError("Window capture is available only on Windows.")
     import ctypes
 
     user32 = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
-    results: list[tuple[str, str, str]] = []
+    results: list[tuple[str, str, str, int]] = []
     enum_process = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
 
     def on_window(hwnd: int, _lparam: object) -> bool:
@@ -554,7 +572,7 @@ def _win32_windows() -> tuple[tuple[str, str, str], ...]:
                 user32.GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
                 image_path = _win32_process_image_path(kernel32, process_id.value)
                 if image_path:
-                    results.append((Path(image_path).name, buffer.value, image_path))
+                    results.append((Path(image_path).name, buffer.value, image_path, hwnd))
         return True
 
     user32.EnumWindows(enum_process(on_window), 0)

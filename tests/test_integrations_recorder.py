@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from integrations.recorder import PynputRecorder, WindowEventMonitor
@@ -250,3 +252,94 @@ def test_window_monitor_emits_open_and_close_with_executable_path(tmp_path) -> N
     assert collector.events[0].executable_path == str(exe_file)
     assert collector.events[0].executable_sha256 is not None
     assert len(collector.events[0].executable_sha256) == 64
+
+
+def test_window_monitor_tracks_hwnd_and_title_change_produces_no_close_open_flapping(
+    tmp_path: Path,
+) -> None:
+    """Regression test using recording-1794212626041060300.json:
+
+    When Windows Terminal changes title ('Windows PowerShell' -> '626346453/70264'
+    -> 'Windows PowerShell'), tracking by HWND identity emits WINDOW_TITLE_CHANGED,
+    never spurious WINDOW_CLOSE + WINDOW_OPEN pairs.
+    """
+    import json
+
+    recording_path = Path(__file__).parent / "fixtures" / "recording-1794212626041060300.json"
+    data = json.loads(recording_path.read_text(encoding="utf-8"))
+
+    # Extract the distinct terminal titles from the real recording
+    terminal_events = [e for e in data["events"] if e.get("process_name") == "WindowsTerminal.exe"]
+    titles = [e["window_title"] for e in terminal_events]
+    assert "626346453/70264" in titles
+    assert "Windows PowerShell" in titles
+
+    collector = EventCollector()
+    wt_exe = "C:\\Program Files\\WindowsApps\\wt\\WindowsTerminal.exe"
+    hwnd_wt = 0x1234
+    hwnd_settings = 0x5678
+    settings_exe = "C:\\Windows\\System32\\ApplicationFrameHost.exe"
+
+    # Sequence of states where the same HWND undergoes title renames:
+    snapshots_sequence: list[tuple[tuple[str, str, str, int], ...]] = [
+        # Baseline: Terminal already open
+        (("WindowsTerminal.exe", "Windows PowerShell", wt_exe, hwnd_wt),),
+        # Step 1: Terminal title changes to transient PID title
+        (("WindowsTerminal.exe", "626346453/70264", wt_exe, hwnd_wt),),
+        # Step 2: Terminal title changes back
+        (("WindowsTerminal.exe", "Windows PowerShell", wt_exe, hwnd_wt),),
+        # Step 3: Settings window opens
+        (
+            ("WindowsTerminal.exe", "Windows PowerShell", wt_exe, hwnd_wt),
+            ("ApplicationFrameHost.exe", "Paramètres", settings_exe, hwnd_settings),
+        ),
+        # Step 4: Settings window changes title internally on same HWND
+        (
+            ("WindowsTerminal.exe", "Windows PowerShell", wt_exe, hwnd_wt),
+            ("ApplicationFrameHost.exe", "Paramètres - Système", settings_exe, hwnd_settings),
+        ),
+    ]
+
+    current_idx = 0
+
+    def next_snapshot() -> tuple[tuple[str, str, str, int], ...]:
+        nonlocal current_idx
+        idx = min(current_idx, len(snapshots_sequence) - 1)
+        current_idx += 1
+        return snapshots_sequence[idx]
+
+    monitor = WindowEventMonitor(
+        collector,
+        window_lister=next_snapshot,
+        interval_seconds=0.0,
+        sleep=lambda _s: None,
+    )
+    monitor.start()
+    for _ in range(500):
+        if len(collector.events) >= 3:
+            break
+        import time
+
+        time.sleep(0.002)
+    monitor.stop()
+
+    # Verify: NO close events occurred for the terminal or settings renames
+    terminal_closes = [
+        e
+        for e in collector.events
+        if e.kind is RecordedEventKind.WINDOW_CLOSE and e.process_name == "WindowsTerminal.exe"
+    ]
+    terminal_opens = [
+        e
+        for e in collector.events
+        if e.kind is RecordedEventKind.WINDOW_OPEN and e.process_name == "WindowsTerminal.exe"
+    ]
+    title_changes = [
+        e for e in collector.events if e.kind is RecordedEventKind.WINDOW_TITLE_CHANGED
+    ]
+
+    assert terminal_closes == []
+    assert terminal_opens == []
+    assert len(title_changes) >= 2
+    assert title_changes[0].window_title == "626346453/70264"
+    assert title_changes[1].window_title == "Windows PowerShell"

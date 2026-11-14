@@ -79,6 +79,14 @@ class FakeElementInfo:
         self.is_password = is_password
 
 
+class FakeRect:
+    def __init__(self, left: int, top: int, right: int, bottom: int) -> None:
+        self.left = left
+        self.top = top
+        self.right = right
+        self.bottom = bottom
+
+
 class FakeWrapper:
     def __init__(
         self,
@@ -88,14 +96,19 @@ class FakeWrapper:
         value: str | None = "before",
         has_invoke=True,
         has_toggle=False,
+        rect: FakeRect | None = None,
     ) -> None:
         self.element_info = info
         self._enabled = enabled
         self.iface_value = FakePointers(value) if (value is not None) else None
         self.iface_invoke = FakePointers() if has_invoke else None
         self.iface_toggle = FakePointers() if has_toggle else None
+        self._rect = rect or FakeRect(10, 20, 110, 60)
         self.focused_keys: list[str] = []
         self.selected = False
+
+    def rectangle(self) -> FakeRect:
+        return self._rect
 
     def is_enabled(self) -> bool:
         return self._enabled
@@ -197,7 +210,7 @@ class FakeApprovals:
         )
 
 
-def provider_with(children, *, windows=None, sleep=None, clock=None):
+def provider_with(children, *, windows=None, sleep=None, clock=None, mouse_click=None):
     """Build a provider bound to one fake desktop with fixed time."""
     if windows is None:
         windows = [
@@ -222,6 +235,7 @@ def provider_with(children, *, windows=None, sleep=None, clock=None):
         popen=lambda argv: FakeProcess(),
         sleep=sleep,
         clock=clock,
+        mouse_click=mouse_click,
     )
     return provider, clock
 
@@ -498,6 +512,51 @@ def test_click_invoke_supported_on_splitbutton() -> None:
     )
     assert result.status is StepStatus.SUCCEEDED
     assert split.iface_invoke.invoked is True
+
+
+def test_click_falls_back_to_center_coordinates_when_invoke_pattern_unsupported() -> None:
+    button = FakeWrapper(
+        FakeElementInfo(control_type="Button", automation_id="StartButton"),
+        has_invoke=False,
+        rect=FakeRect(100, 200, 140, 240),
+    )
+    clicks: list[tuple[int, int]] = []
+    provider, _clock = provider_with([button], mouse_click=lambda x, y: clicks.append((x, y)))
+    result = provider.click_element(
+        json.dumps(
+            {
+                "window": WINDOW_IDENTITY,
+                "element": {"automation_id": "StartButton", "control_type": "Button"},
+                "interaction": "invoke",
+            }
+        )
+    )
+    assert result.status is StepStatus.SUCCEEDED
+    assert clicks == [(120, 220)]
+    assert "click_method=coordinate_fallback" in result.evidence
+    assert "coords=120,220" in result.evidence
+
+
+def test_click_fallback_refuses_zero_size_rectangle() -> None:
+    button = FakeWrapper(
+        FakeElementInfo(control_type="Button", automation_id="StartButton"),
+        has_invoke=False,
+        rect=FakeRect(100, 200, 100, 200),
+    )
+    clicks: list[tuple[int, int]] = []
+    provider, _clock = provider_with([button], mouse_click=lambda x, y: clicks.append((x, y)))
+    result = provider.click_element(
+        json.dumps(
+            {
+                "window": WINDOW_IDENTITY,
+                "element": {"automation_id": "StartButton", "control_type": "Button"},
+                "interaction": "invoke",
+            }
+        )
+    )
+    assert result.status is StepStatus.FAILED
+    assert "zero or negative size" in result.message
+    assert clicks == []
 
 
 def test_shortcut_is_delivered_to_the_identified_window_only() -> None:

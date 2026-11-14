@@ -161,6 +161,7 @@ class PywinautoDesktopActions:
         has_owner: Callable[[Any], bool] | None = None,
         process_alive: Callable[[int], bool] | None = None,
         process_image: Callable[[int], str | None] | None = None,
+        mouse_click: Callable[[int, int], None] | None = None,
     ) -> None:
         self._desktop_factory = desktop_factory or self._default_desktop
         #: Approved applications, injected by the caller (storage-backed).
@@ -173,6 +174,7 @@ class PywinautoDesktopActions:
         self._has_owner = has_owner or _default_has_owner
         self._process_alive = process_alive or _default_process_alive
         self._process_image = process_image or _default_process_image
+        self._mouse_click = mouse_click or self._default_mouse_click
         #: executable path -> (pid, close_supported) of exactly what this run launched.
         self._launched: dict[str, tuple[int, bool]] = {}
 
@@ -183,6 +185,12 @@ class PywinautoDesktopActions:
         from pywinauto import Desktop
 
         return Desktop(backend="uia")
+
+    @staticmethod
+    def _default_mouse_click(x: int, y: int) -> None:
+        from pywinauto import mouse
+
+        mouse.click(coords=(x, y))
 
     @staticmethod
     def _default_popen(argv: list[str]) -> subprocess.Popen:
@@ -600,7 +608,12 @@ class PywinautoDesktopActions:
         self._guard_clickable(element, interaction, element_type)
         try:
             if interaction == "invoke":
-                self._pattern(element, "invoke").Invoke()
+                try:
+                    self._pattern(element, "invoke").Invoke()
+                except ExecutionError:
+                    return self._click_element_center_fallback(
+                        target_json, element_type, interaction
+                    )
             elif interaction == "toggle":
                 self._pattern(element, "toggle").Toggle()
             else:
@@ -619,6 +632,59 @@ class PywinautoDesktopActions:
             evidence=(
                 f"interaction={interaction}",
                 f"control_type={element_type}",
+                "click_method=pattern",
+                "target_verified=true",
+            ),
+        )
+
+    def _click_element_center_fallback(
+        self, target_json: str, element_type: Any, interaction: str
+    ) -> StepResult:
+        """Fallback for clickable controls without InvokePattern (e.g. StartButton):
+        re-verify window and element presence, then click the center of its bounding box."""
+        element = self._resolve_element(target_json, "click")
+        try:
+            rect = element.rectangle()
+            width = rect.right - rect.left
+            height = rect.bottom - rect.top
+        except (AttributeError, OSError, RuntimeError, ValueError) as error:
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=f"Fallback click refused: could not read element bounds ({error}).",
+                evidence=(f"interaction={interaction}", "click_method=coordinate_fallback"),
+            )
+        if width <= 0 or height <= 0:
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message="Fallback click refused: the element has zero or negative size.",
+                evidence=(f"interaction={interaction}", "click_method=coordinate_fallback"),
+            )
+        cx = (rect.left + rect.right) // 2
+        cy = (rect.top + rect.bottom) // 2
+        try:
+            self._mouse_click(cx, cy)
+        except (AttributeError, OSError, RuntimeError, ValueError) as error:
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=f"Fallback mouse click failed at ({cx}, {cy}): {error}",
+                evidence=(
+                    f"interaction={interaction}",
+                    "click_method=coordinate_fallback",
+                    f"coords={cx},{cy}",
+                ),
+            )
+        return StepResult(
+            step_id="",
+            status=StepStatus.SUCCEEDED,
+            message=f"Clicked the element center at ({cx}, {cy}) via coordinate fallback.",
+            evidence=(
+                f"interaction={interaction}",
+                f"control_type={element_type}",
+                "click_method=coordinate_fallback",
+                f"coords={cx},{cy}",
                 "target_verified=true",
             ),
         )
