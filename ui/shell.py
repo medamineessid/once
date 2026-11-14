@@ -264,6 +264,7 @@ class MainWindow(QMainWindow):
         self._install_page_shortcuts()
         self.home_page.manual_requested.connect(self._show_editor)
         self.home_page.record_requested.connect(self._show_recording)
+        self.home_page.view_run_requested.connect(self._show_run_details)
         self.my_automations_page.created_automation.connect(self._show_create_automation)
         self.my_automations_page.opened_workflow.connect(self._open_workflow)
         self.create_automation_page.task_entered.connect(self._handle_task_entered)
@@ -311,6 +312,10 @@ class MainWindow(QMainWindow):
     def _show_page_activity(self) -> None:
         self._show_page(ShellPages.ACTIVITY)
         self.activity_page.refresh()
+
+    def _show_run_details(self, run_id: str) -> None:
+        self._show_page(ShellPages.ACTIVITY)
+        self.activity_page.select_run(run_id)
 
     def _show_page_settings(self) -> None:
         self._show_page(ShellPages.SETTINGS)

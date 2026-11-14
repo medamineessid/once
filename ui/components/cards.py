@@ -32,7 +32,7 @@ class Card(QFrame):
         super().__init__(parent)
         self.setObjectName("cardTile")
         self.setMinimumWidth(260)
-        self.setMaximumWidth(360)
+        self.setMaximumWidth(480)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(10)

@@ -137,6 +137,14 @@ class ActivityPage(QWidget):
             self._history_list.setItemWidget(item, row)
         self._details_label.setText(ACTIVITY_DETAILS_EMPTY)
 
+    def select_run(self, run_id: str) -> None:
+        """Select a run by run_id after refreshing."""
+        self._refresh()
+        for index, run in enumerate(self._runs):
+            if getattr(run, "run_id", None) == run_id:
+                self._history_list.setCurrentRow(index)
+                return
+
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service
         self._refresh()

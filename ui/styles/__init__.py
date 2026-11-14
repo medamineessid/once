@@ -680,6 +680,31 @@ _STYLESHEET_TEMPLATE = Template("""
     QWidget#runRow {
         background: transparent;
     }
+    QFrame#homeRunRow {
+        background: ${SURFACE};
+        border: 1px solid ${BORDER};
+        border-radius: 8px;
+    }
+    QLabel#rowErrorReason {
+        font-size: ${TYPE_CAPTION_PX}px;
+        color: ${STATUS_ERROR};
+        font-family: $FONT_STACK;
+    }
+    QPushButton#linkActionButton {
+        background: transparent;
+        border: none;
+        color: ${ACCENT_TEXT};
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-weight: 600;
+        padding: 2px 4px;
+        font-family: $FONT_STACK;
+    }
+    QPushButton#linkActionButton:hover {
+        text-decoration: underline;
+    }
+    QPushButton#linkActionButton:focus {
+        outline: 2px solid ${ACCENT};
+    }
     QLabel#rowTitle {
         font-size: ${TYPE_BODY_PX}px;
         font-weight: 500;

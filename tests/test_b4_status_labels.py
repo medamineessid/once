@@ -123,7 +123,7 @@ def test_partially_performed_run_shows_done_and_observed_counts(qtbot, tmp_path)
     run = service.run_workflow(mixed, allowed_root=tmp_path)
     assert run.status is WorkflowStatus.PARTIALLY_PERFORMED
     assert status_display(run.status.value, run.results) == (
-        "Partly performed: 1 done, 1 only observed",
+        "1 of 2 steps ran",
         "warn",
     )
 
@@ -133,11 +133,43 @@ def test_partially_performed_run_shows_done_and_observed_counts(qtbot, tmp_path)
     item = activity._history_list.item(0)
     row = activity._history_list.itemWidget(item)
     row_texts = " | ".join(label.text() for label in row.findChildren(QLabel))
-    assert "Partly performed: 1 done, 1 only observed" in row_texts
+    assert "1 of 2 steps ran" in row_texts
 
     home = HomePage()
     qtbot.addWidget(home)
     home.set_service(service)
     home.refresh()
     home_texts = " | ".join(label.text() for label in home._activity_rows[0].findChildren(QLabel))
-    assert "Partly performed: 1 done, 1 only observed" in home_texts
+    assert "1 of 2 steps ran" in home_texts
+
+
+def test_home_failed_run_shows_reason_and_view_details(qtbot, tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QPushButton
+
+    failing = Workflow(
+        workflow_id="fail-test",
+        name="Failing workflow",
+        steps=(WorkflowStep("f1", "Fail", StepKind.FAIL, "Element missing in window"),),
+    )
+    service = WorkflowService(
+        history=ExecutionHistory(connect(tmp_path / "history.db")),
+        workflow_directory=tmp_path / "workflows",
+    )
+    service.save(failing)
+    run = service.run_workflow(failing, allowed_root=tmp_path)
+
+    home = HomePage()
+    qtbot.addWidget(home)
+    home.set_service(service)
+    home.refresh()
+    row = home._activity_rows[0]
+    row_texts = " | ".join(label.text() for label in row.findChildren(QLabel))
+    assert "Failing workflow" in row_texts
+    assert "Failed" in row_texts
+    assert "Element missing in window" in row_texts
+    buttons = row.findChildren(QPushButton)
+    assert any(b.text() == "View details" for b in buttons)
+    emitted: list[str] = []
+    home.view_run_requested.connect(emitted.append)
+    next(b for b in buttons if b.text() == "View details").click()
+    assert emitted == [run.run_id]

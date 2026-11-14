@@ -33,11 +33,32 @@ def status_display(raw: str, results: Iterable[object] | None = None) -> tuple[s
             for r in items
             if getattr(getattr(r, "status", None), "value", "") in ("SUCCEEDED", "VERIFIED")
         )
-        observed = sum(
-            1 for r in items if getattr(getattr(r, "status", None), "value", "") == "OBSERVED"
-        )
-        return (f"Partly performed: {done} done, {observed} only observed", "warn")
+        return (f"{done} of {len(items)} steps ran", "warn")
     return _STATUS_DISPLAY.get(raw, (raw or "Unknown", "neutral"))
+
+
+def failure_reason(results: Iterable[object] | None) -> str:
+    """Return a concise single-line failure reason from the first failed step."""
+    if results is None:
+        return ""
+    for item in results:
+        status_val = getattr(getattr(item, "status", None), "value", "")
+        if status_val == "FAILED":
+            msg = " ".join(str(getattr(item, "message", "") or "").split())
+            if msg:
+                return msg if len(msg) <= 120 else msg[:117] + "..."
+    return ""
+
+
+def friendly_run_name(service: object | None, workflow_id: str) -> str:
+    """Return a human-readable automation name for a run, never a raw ID if avoidable."""
+    if service is not None:
+        saved_name = getattr(service, "workflow_name", lambda _wid: None)(workflow_id)
+        if isinstance(saved_name, str) and saved_name.strip():
+            return saved_name.strip()
+    if workflow_id.startswith("recording-"):
+        return "Recorded automation"
+    return workflow_id
 
 
 def run_status_display(run: object) -> tuple[str, str]:
