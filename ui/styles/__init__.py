@@ -775,6 +775,12 @@ _STYLESHEET_TEMPLATE = Template("""
     QLineEdit#inspectorField_target:focus {
         border-color: ${ACCENT};
     }
+    QPushButton#primaryActionButton:focus,
+    QPushButton#secondaryActionButton:focus,
+    QListWidget:focus {
+        outline: 2px solid ${ACCENT};
+        outline-offset: 2px;
+    }
     QLabel#approvalPanelTitle {
         font-size: ${TYPE_BODY_PX}px;
         font-weight: 700;

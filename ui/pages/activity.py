@@ -17,7 +17,13 @@ from PySide6.QtWidgets import (
 
 from controller.service import WorkflowService
 from ui.components.cards import Chip
-from ui.components.formatting import human_timestamp, status_display
+from ui.components.formatting import (
+    clean_step_message,
+    friendly_run_name,
+    friendly_step_status,
+    human_timestamp,
+    status_display,
+)
 from ui.components.pageheader import PageHeader
 from ui.strings import ACTIVITY_DETAILS_EMPTY, ACTIVITY_SUBTITLE, ACTIVITY_TITLE
 from ui.styles import SPACING_LG, SPACING_SM, SPACING_XL
@@ -88,9 +94,7 @@ class ActivityPage(QWidget):
     def _row_facts(self, run: object) -> tuple[str, str, str, str, str]:
         """(name-or-id, id, status label, chip kind, when text) for one run."""
         workflow_id = getattr(run, "workflow_id", "?")
-        name = workflow_id
-        if self._service is not None:
-            name = self._service.workflow_name(workflow_id) or workflow_id
+        name = friendly_run_name(self._service, workflow_id)
         status_value = getattr(getattr(run, "status", None), "value", "Unknown")
         label, kind = status_display(status_value, getattr(run, "results", None))
         when = human_timestamp(getattr(run, "finished_at", None))
@@ -103,12 +107,17 @@ class ActivityPage(QWidget):
             self._details_label.setText(ACTIVITY_DETAILS_EMPTY)
             return
         run = self._runs[row]
+        name = friendly_run_name(self._service, getattr(run, "workflow_id", ""))
         step_lines = "\n".join(
-            f"{result.step_id} — {result.status.value} — {result.message}" for result in run.results
+            f"Step {idx}: {friendly_step_status(getattr(result.status, 'value', ''))} — "
+            f"{clean_step_message(result.message)}"
+            for idx, result in enumerate(run.results, start=1)
         )
         label, _kind = status_display(getattr(run.status, "value", "Unknown"), run.results)
+        count = len(run.results)
+        step_word = "step" if count == 1 else "steps"
         self._details_label.setText(
-            f"{run.workflow_id} — {label} — {len(run.results)} steps"
+            f"{name} — {label} ({count} {step_word})"
             + (f"\n{step_lines}" if step_lines else "")
         )
 
@@ -128,7 +137,7 @@ class ActivityPage(QWidget):
             item = QListWidgetItem(summary)
             item.setForeground(QColor(0, 0, 0, 0))
             item.setData(Qt.UserRole, workflow_id)
-            item.setToolTip(f"{workflow_id} — {label} — {when}")
+            item.setToolTip(summary)
             row = RunRow(name, label, kind, when, parent=self._history_list)
             hint = row.sizeHint()
             hint.setHeight(64)

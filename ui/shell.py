@@ -167,9 +167,19 @@ class Sidebar(QToolBar):
 
     def set_checked(self, page: ShellPages) -> None:
         self._home_button.setChecked(page == ShellPages.HOME)
-        self._automations_button.setChecked(page == ShellPages.MY_AUTOMATIONS)
+        self._automations_button.setChecked(
+            page in (ShellPages.MY_AUTOMATIONS, ShellPages.REVIEW, ShellPages.EDITOR)
+        )
         self._activity_button.setChecked(page == ShellPages.ACTIVITY)
         self._settings_button.setChecked(page == ShellPages.SETTINGS)
+        for btn in (
+            self._home_button,
+            self._automations_button,
+            self._activity_button,
+            self._settings_button,
+        ):
+            if btn.hasFocus() and not btn.isChecked():
+                btn.clearFocus()
 
     def is_on(self, page: ShellPages) -> bool:
         return (

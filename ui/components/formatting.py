@@ -90,6 +90,23 @@ _DEBUG_SUFFIXES = (
 )
 
 
+_STEP_STATUS_LABELS: dict[str, str] = {
+    "SUCCEEDED": "Done",
+    "VERIFIED": "Verified",
+    "FAILED": "Failed",
+    "SKIPPED": "Skipped",
+    "CANCELLED": "Cancelled",
+    "OBSERVED": "Note only",
+    "RUNNING": "Running",
+    "PENDING": "Pending",
+}
+
+
+def friendly_step_status(raw: str) -> str:
+    """Return a plain-English label for an internal StepStatus value."""
+    return _STEP_STATUS_LABELS.get(raw, raw.replace("_", " ").capitalize())
+
+
 def friendly_action_label(kind_value: str) -> str:
     """Map an internal StepKind string to a plain-English action label."""
     return _ACTION_LABELS.get(kind_value, kind_value.replace("_", " ").capitalize())
