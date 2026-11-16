@@ -169,8 +169,7 @@ class ActivityPage(QWidget):
         count = len(run.results)
         step_word = "step" if count == 1 else "steps"
         self._details_label.setText(
-            f"{name} — {label} ({count} {step_word})"
-            + (f"\n{step_lines}" if step_lines else "")
+            f"{name} — {label} ({count} {step_word})" + (f"\n{step_lines}" if step_lines else "")
         )
         self._details_label.adjustSize()
         self._details_container.updateGeometry()
@@ -186,8 +185,7 @@ class ActivityPage(QWidget):
         self._details_container.setVisible(has_runs)
         self._empty_state.setVisible(not has_runs)
         running = any(
-            getattr(getattr(run, "status", None), "value", "") == "RUNNING"
-            for run in self._runs
+            getattr(getattr(run, "status", None), "value", "") == "RUNNING" for run in self._runs
         )
         self._clear_all_button.setEnabled(has_runs and not running)
 

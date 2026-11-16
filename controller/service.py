@@ -21,7 +21,7 @@ from controller.approvals import (
 from engine.acceptance import load_acceptance_cases
 from engine.agent_change import ApprovedChange, ChangeReview, approve_change
 from engine.desktop import DESKTOP_EXECUTION_POLICY, DesktopApproval
-from engine.errors import AgentIntegrationError, WorkflowValidationError
+from engine.errors import AgentIntegrationError, StorageError, WorkflowValidationError
 from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
 from engine.replay import (
     DESKTOP_INTERACTION_POLICY,
@@ -44,6 +44,7 @@ from engine.workflow import (
     Workflow,
     WorkflowRun,
     WorkflowRunner,
+    WorkflowStatus,
     WorkflowStep,
 )
 from integrations.coding_agent import GitRepository, WorktreeCheckout, run_agent_for_proposal
@@ -55,7 +56,7 @@ from storage.history import (
     ProposalVerificationRecord,
     WorktreeRecord,
 )
-from storage.layouts import LayoutLoadResult, load_layout, save_layout
+from storage.layouts import LayoutLoadResult, delete_layout, load_layout, save_layout
 from storage.workflows import load_workflow, save_workflow
 
 
@@ -1012,6 +1013,75 @@ class WorkflowService:
         if self._history is None:
             return ()
         return tuple(record.run for record in self._history.list_runs())
+
+    def delete_run(self, run_id: str) -> None:
+        """Delete one finished run and its step results from local history."""
+        if self._history is None:
+            raise StorageError("Run history is not available in this copy of Once.")
+        run = next((item for item in self.history() if item.run_id == run_id), None)
+        if run is None:
+            raise StorageError("That run is no longer in your history.")
+        if run.status is WorkflowStatus.RUNNING:
+            raise StorageError(
+                "That run is still in progress. Wait for it to finish, then delete it."
+            )
+        try:
+            removed = self._history.delete_run(run_id)
+        except sqlite3.Error as error:
+            raise StorageError("Could not delete that run from your history.") from error
+        if not removed:
+            raise StorageError("That run is no longer in your history.")
+
+    def clear_runs(self) -> int:
+        """Delete every finished run; refuse while any run is in progress."""
+        if self._history is None:
+            raise StorageError("Run history is not available in this copy of Once.")
+        if any(run.status is WorkflowStatus.RUNNING for run in self.history()):
+            raise StorageError(
+                "A run is still in progress. Wait for it to finish, then clear the history."
+            )
+        try:
+            return self._history.clear_runs()
+        except sqlite3.Error as error:
+            raise StorageError("Could not clear your run history.") from error
+
+    def delete_automation(self, workflow_id: str, *, delete_runs: bool = True) -> None:
+        """Delete one saved automation and, when asked, all of its runs.
+
+        Only files inside the configured Once workflow folder are removed; a
+        name that resolves anywhere else is refused. Editor layout metadata is
+        removed with the automation because it belongs to the same definition.
+        """
+        if self._workflow_directory is None:
+            raise StorageError("Saved automations are not available in this copy of Once.")
+        if workflow_id in {"", ".", ".."} or Path(workflow_id).name != workflow_id:
+            raise StorageError("That automation name is not valid.")
+        directory = self._workflow_directory.resolve()
+        candidate = (self._workflow_directory / f"{workflow_id}.json").resolve()
+        if not candidate.is_relative_to(directory):
+            raise StorageError("That automation is not stored in the Once data folder.")
+        if not candidate.is_file():
+            raise StorageError("That automation is no longer saved.")
+        if delete_runs and any(
+            run.workflow_id == workflow_id and run.status is WorkflowStatus.RUNNING
+            for run in self.history()
+        ):
+            raise StorageError(
+                "This automation is still running. Wait for it to finish, then delete it."
+            )
+        try:
+            candidate.unlink()
+        except OSError as error:
+            raise StorageError("Could not delete this saved automation.") from error
+        try:
+            if delete_runs and self._history is not None:
+                self._history.delete_runs_for_workflow(workflow_id)
+            if self._layout_connection is not None:
+                delete_layout(self._layout_connection, workflow_id)
+        except sqlite3.Error as error:
+            raise StorageError(
+                "The automation file was deleted, but its Once history could not be updated."
+            ) from error
 
     def close(self) -> None:
         """Release controller-owned persistence resources."""

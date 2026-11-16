@@ -19,16 +19,21 @@ from PySide6.QtWidgets import (
 )
 
 from controller.service import WorkflowService
-from engine.errors import WorkflowValidationError
+from engine.errors import OnceError, WorkflowValidationError
 from engine.workflow import Workflow
 from ui.components.approval_panel import DesktopApprovalPanel
 from ui.components.banner import Banner
 from ui.components.cards import Chip
 from ui.components.confirm import InlineConfirm
+from ui.components.delete_confirm import DeleteConfirmDialog, automation_delete_message
 from ui.components.formatting import human_timestamp, status_display
 from ui.components.pageheader import PageHeader
 from ui.strings import (
+    DELETE_ACTION,
     MY_BANNER_ERROR_TITLE,
+    MY_DELETE_ERROR_TITLE,
+    MY_DELETE_HINT_BODY,
+    MY_DELETE_HINT_TITLE,
     MY_DETAILS_EMPTY,
     MY_EMPTY,
     MY_LAST_RUN_PREFIX,
@@ -169,9 +174,14 @@ class MyAutomationsPage(QWidget):
         )
         self._run_button.setMinimumHeight(38)
         self._run_button.confirmed.connect(self._on_run_confirmed)
+        self._delete_button = QPushButton(DELETE_ACTION, self)
+        self._delete_button.setObjectName("secondaryActionButton")
+        self._delete_button.setMinimumHeight(38)
+        self._delete_button.clicked.connect(self._delete_selected)
         actions_row.addWidget(self._open_button)
         actions_row.addWidget(self._preview_button)
         actions_row.addWidget(self._run_button)
+        actions_row.addWidget(self._delete_button)
         actions_container = QFrame(self)
         actions_container.setObjectName("actionsContainer")
         actions_container_layout = QVBoxLayout(actions_container)
@@ -209,6 +219,7 @@ class MyAutomationsPage(QWidget):
     def _set_running(self, running: bool) -> None:
         self._open_button.setEnabled(not running)
         self._preview_button.setEnabled(not running)
+        self._delete_button.setEnabled(not running)
         self._run_button.set_running(running, MY_RUN_RUNNING)
 
     def _thread_finished(self) -> None:
@@ -283,6 +294,38 @@ class MyAutomationsPage(QWidget):
             lines.append("Status: this replay contains unsupported actions and cannot be executed.")
         self._details_label.setText("\n".join(lines))
         self.preview_requested.emit()
+
+    def _delete_selected(self) -> None:
+        """Delete the selected automation, naming its runs in the dialog."""
+        item = self._workflow_list.currentItem()
+        if item is None or self._service is None:
+            self._banner.show_message("info", MY_DELETE_HINT_TITLE, MY_DELETE_HINT_BODY)
+            return
+        row_path = item.data(Qt.UserRole)
+        if row_path is None:
+            return
+        saved_path = Path(row_path)
+        workflow_id = saved_path.stem
+        name = self._service.workflow_name(workflow_id) or saved_path.name
+        run_count = sum(
+            1 for run in self._service.history() if getattr(run, "workflow_id", None) == workflow_id
+        )
+        choice = DeleteConfirmDialog(
+            automation_delete_message(name, run_count),
+            runs_count=run_count,
+            parent=self,
+        ).ask()
+        if not choice.confirmed:
+            return
+        try:
+            self._service.delete_automation(workflow_id, delete_runs=choice.delete_runs)
+        except OnceError as error:
+            self._details_label.setText(f"Error: {error}")
+            self._banner.show_message("error", MY_DELETE_ERROR_TITLE, str(error))
+            return
+        self._approval_panel.reset()
+        self._pending_approval_path = None
+        self._refresh()
 
     # ----------------------------------------------------------- run (mutating)
 

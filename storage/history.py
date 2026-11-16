@@ -107,6 +107,41 @@ class ExecutionHistory:
         except sqlite3.IntegrityError:
             raise
 
+    def delete_run(self, run_id: str) -> bool:
+        """Delete one run and its step results; True when a run was removed."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM workflow_step_results WHERE run_id = ?", (run_id,)
+            )
+            cursor = self._connection.execute(
+                "DELETE FROM workflow_runs WHERE run_id = ?", (run_id,)
+            )
+        return cursor.rowcount > 0
+
+    def clear_runs(self) -> int:
+        """Delete every run and its step results; return the number removed."""
+        with self._lock, self._connection:
+            self._connection.execute("DELETE FROM workflow_step_results")
+            cursor = self._connection.execute("DELETE FROM workflow_runs")
+        return cursor.rowcount
+
+    def delete_runs_for_workflow(self, workflow_id: str) -> int:
+        """Delete every run of one automation; return the number removed."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                DELETE FROM workflow_step_results
+                WHERE run_id IN (
+                    SELECT run_id FROM workflow_runs WHERE workflow_id = ?
+                )
+                """,
+                (workflow_id,),
+            )
+            cursor = self._connection.execute(
+                "DELETE FROM workflow_runs WHERE workflow_id = ?", (workflow_id,)
+            )
+        return cursor.rowcount
+
     def record_verification(self, bundle: EvidenceBundle) -> None:
         """Atomically insert one verification run and its case results."""
         with self._lock, self._connection:

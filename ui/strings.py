@@ -68,11 +68,17 @@ MY_UNREADABLE_BODY = (
     "Some files in this folder could not be read as automations. "
     "They are listed by file name and cannot be opened."
 )
+MY_DELETE_HINT_TITLE = "Pick an automation first"
+MY_DELETE_HINT_BODY = "Select an automation in the list, then press Delete."
+MY_DELETE_ERROR_TITLE = "Automation not deleted"
 
 # --- Activity ----------------------------------------------------------------
 ACTIVITY_TITLE = "Activity"
 ACTIVITY_SUBTITLE = "A readable history of the runs you started."
 ACTIVITY_EMPTY_LIST = "No runs yet — try the demonstration from Home."
+ACTIVITY_EMPTY_HEADING = "No runs yet"
+ACTIVITY_EMPTY_BODY = "Runs you start will appear here."
+ACTIVITY_CLEAR_ALL = "Clear all runs"
 ACTIVITY_DETAILS_EMPTY = "Select a run to see details."
 
 # --- Settings ---------------------------------------------------------------
@@ -157,6 +163,12 @@ REVIEW_PREVIEW_PROBLEM_TITLE = "This proposal cannot be reviewed yet"
 REVIEW_SAVE_ERROR_TITLE = "Approval did not finish"
 REVIEW_APPROVED_TITLE = "Proposal approved"
 REVIEW_APPROVED_BODY = "Saved as {name}. Run it from My automations."
+REVIEW_DELETE_ERROR_TITLE = "Automation not deleted"
+
+# --- Destructive actions ----------------------------------------------------
+DELETE_ACTION = "Delete"
+DELETE_CANCEL = "Cancel"
+DELETE_CONFIRM_TITLE = "Confirm delete"
 
 DESKTOP_APPROVAL_TITLE = "Permission needed to act on the desktop"
 DESKTOP_APPROVAL_LEAD = (

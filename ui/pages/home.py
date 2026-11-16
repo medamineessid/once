@@ -13,7 +13,9 @@ from PySide6.QtWidgets import (
 )
 
 from controller.service import WorkflowService
+from engine.errors import OnceError
 from ui.components.cards import Card, Chip, EmptyState
+from ui.components.delete_confirm import DeleteConfirmDialog, run_delete_message
 from ui.components.formatting import (
     failure_reason,
     friendly_run_name,
@@ -22,6 +24,7 @@ from ui.components.formatting import (
 )
 from ui.components.pageheader import PageHeader
 from ui.strings import (
+    DELETE_ACTION,
     HOME_CARD_CREATE_ACTION,
     HOME_CARD_CREATE_BODY,
     HOME_CARD_CREATE_TITLE,
@@ -117,6 +120,12 @@ class HomePage(QWidget):
         self._loading_label.setVisible(False)
         self._activity_layout.addWidget(self._loading_label)
 
+        self._notice_label = QLabel("", self._activity_panel)
+        self._notice_label.setObjectName("rowErrorReason")
+        self._notice_label.setWordWrap(True)
+        self._notice_label.setVisible(False)
+        self._activity_layout.addWidget(self._notice_label)
+
         self._activity_empty = EmptyState(
             "No runs yet",
             HOME_RECENT_EMPTY,
@@ -141,11 +150,11 @@ class HomePage(QWidget):
 
     def _recent_rows(
         self,
-    ) -> tuple[tuple[str, str, str, str, str, str], ...]:
-        """Return (run_id, name, status label, chip kind, when, failure_reason) tuples."""
+    ) -> tuple[tuple[str, str, str, str, str, str, bool], ...]:
+        """Return (run_id, name, label, chip kind, when, reason, running) tuples."""
         if self._service is None:
             return ()
-        rows: list[tuple[str, str, str, str, str, str]] = []
+        rows: list[tuple[str, str, str, str, str, str, bool]] = []
         for run in self._service.history()[:_RECENT_RUN_COUNT]:
             workflow_id = getattr(run, "workflow_id", "?")
             if workflow_id == "demo-local-workflow":
@@ -157,7 +166,7 @@ class HomePage(QWidget):
             label, chip_kind = status_display(status_value, results)
             when = human_timestamp(getattr(run, "finished_at", None))
             reason = failure_reason(results) if status_value == "FAILED" else ""
-            rows.append((run_id, name, label, chip_kind, when, reason))
+            rows.append((run_id, name, label, chip_kind, when, reason, status_value == "RUNNING"))
         return tuple(rows)
 
     def _refresh_activity(self) -> None:
@@ -165,6 +174,7 @@ class HomePage(QWidget):
             stale.setParent(None)
             stale.deleteLater()
         self._activity_rows.clear()
+        self._notice_label.setVisible(False)
 
         if self._loading:
             self._loading_label.setVisible(True)
@@ -178,7 +188,7 @@ class HomePage(QWidget):
             return
         self._activity_empty.setVisible(False)
 
-        for run_id, name, label, chip_kind, when, reason in runs:
+        for run_id, name, label, chip_kind, when, reason, running in runs:
             row = QFrame(self._activity_panel)
             row.setObjectName("homeRunRow")
             row_layout = QVBoxLayout(row)
@@ -198,11 +208,19 @@ class HomePage(QWidget):
             chip = Chip(label, kind=chip_kind, parent=row)
             when_label = QLabel(when, row)
             when_label.setObjectName("rowCaption")
+            delete_btn = QPushButton(DELETE_ACTION, row)
+            delete_btn.setObjectName("deleteRunButton")
+            delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            delete_btn.setEnabled(not running)
+            delete_btn.clicked.connect(
+                lambda _=False, rid=run_id, run_name=name: self._delete_run(rid, run_name)
+            )
             top.addWidget(title)
             top.addStretch(1)
             top.addWidget(chip)
             if when:
                 top.addWidget(when_label)
+            top.addWidget(delete_btn)
             row_layout.addLayout(top)
 
             if reason:
@@ -227,4 +245,19 @@ class HomePage(QWidget):
 
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service
+        self._refresh_activity()
+
+    def _delete_run(self, run_id: str, name: str) -> None:
+        """Delete one finished run after an explicitly confirmed dialog."""
+        if self._service is None:
+            return
+        choice = DeleteConfirmDialog(run_delete_message(name), parent=self).ask()
+        if not choice.confirmed:
+            return
+        try:
+            self._service.delete_run(run_id)
+        except OnceError as error:
+            self._notice_label.setText(str(error))
+            self._notice_label.setVisible(True)
+            return
         self._refresh_activity()

@@ -23,17 +23,20 @@ from ai.approval import approve_proposal, preview_proposal
 from ai.models import ProviderDraft
 from controller.approvals import ApplicationIdentity
 from controller.service import WorkflowService, classify_workflow_steps
-from engine.errors import WorkflowValidationError
+from engine.errors import OnceError, WorkflowValidationError
 from engine.workflow import Workflow
 from ui.components.banner import SEVERITY_ERROR, SEVERITY_INFO, SEVERITY_SUCCESS, Banner
 from ui.components.cards import Chip
+from ui.components.delete_confirm import DeleteConfirmDialog, automation_delete_message
 from ui.components.formatting import friendly_step_display
 from ui.components.icons import draw_automations_glyph, icon_pixmap
 from ui.editor.canvas import CanvasView
 from ui.strings import (
+    DELETE_ACTION,
     REVIEW_APPROVE,
     REVIEW_APPROVED_BODY,
     REVIEW_APPROVED_TITLE,
+    REVIEW_DELETE_ERROR_TITLE,
     REVIEW_EDIT,
     REVIEW_PREVIEW_PROBLEM_TITLE,
     REVIEW_SAVE_ERROR_TITLE,
@@ -50,6 +53,7 @@ class ReviewPage(QWidget):
     cancelled = Signal()
     edit_requested = Signal(object)
     run_requested = Signal(object)
+    automation_deleted = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -146,6 +150,12 @@ class ReviewPage(QWidget):
         self._run_button.clicked.connect(self._run_saved_workflow)
         self._run_button.hide()
 
+        self._delete_button = QPushButton(DELETE_ACTION, content)
+        self._delete_button.setObjectName("secondaryActionButton")
+        self._delete_button.setMinimumHeight(38)
+        self._delete_button.clicked.connect(self._delete_saved_workflow)
+        self._delete_button.hide()
+
         self._edit_button = QPushButton(REVIEW_EDIT, content)
         self._edit_button.setObjectName("primaryActionButton")
         self._edit_button.setMinimumHeight(38)
@@ -161,6 +171,7 @@ class ReviewPage(QWidget):
         self._approve_button.hide()
 
         buttons_row.addWidget(self._cancel_button)
+        buttons_row.addWidget(self._delete_button)
         buttons_row.addStretch(1)
         buttons_row.addWidget(self._run_button)
         buttons_row.addWidget(self._edit_button)
@@ -324,6 +335,31 @@ class ReviewPage(QWidget):
         if self._saved_workflow is not None:
             self.run_requested.emit(self._saved_workflow)
 
+    def _delete_saved_workflow(self) -> None:
+        """Delete this saved automation, naming its runs in the dialog."""
+        if self._service is None or self._saved_workflow is None:
+            return
+        workflow = self._saved_workflow
+        run_count = sum(
+            1
+            for run in self._service.history()
+            if getattr(run, "workflow_id", None) == workflow.workflow_id
+        )
+        choice = DeleteConfirmDialog(
+            automation_delete_message(workflow.name, run_count),
+            runs_count=run_count,
+            parent=self,
+        ).ask()
+        if not choice.confirmed:
+            return
+        try:
+            self._service.delete_automation(workflow.workflow_id, delete_runs=choice.delete_runs)
+        except OnceError as error:
+            self._banner.show_message(SEVERITY_ERROR, REVIEW_DELETE_ERROR_TITLE, str(error))
+            return
+        self.show_workflow(None)
+        self.automation_deleted.emit()
+
     def _approve(self) -> None:
         if self._service is None or self._proposal is None:
             return
@@ -361,6 +397,7 @@ class ReviewPage(QWidget):
         self._title_label.setText(REVIEW_TITLE_SAVED)
         self._edit_button.setVisible(workflow is not None)
         self._run_button.setVisible(workflow is not None)
+        self._delete_button.setVisible(workflow is not None)
         self._approve_button.hide()
         self._goal_label.setText(workflow.name if workflow else "No automation loaded.")
         self._steps_list.clear()
@@ -379,6 +416,7 @@ class ReviewPage(QWidget):
         self._pending_identities = ()
         self._edit_button.hide()
         self._run_button.hide()
+        self._delete_button.hide()
         self._title_label.setText(REVIEW_TITLE_DRAFT)
         self._canvas.set_workflow(None)
         self._banner.clear()

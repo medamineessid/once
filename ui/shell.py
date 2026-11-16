@@ -289,6 +289,7 @@ class MainWindow(QMainWindow):
         self.review_page.approved.connect(self._open_approved_draft)
         self.review_page.edit_requested.connect(self._open_review_workflow_editor)
         self.review_page.run_requested.connect(self._run_from_editor)
+        self.review_page.automation_deleted.connect(self._on_automation_deleted)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 
@@ -501,6 +502,13 @@ class MainWindow(QMainWindow):
         workflow = self._service.load(path)
         self.workspace.setCurrentWidget(self.review_page)
         self.review_page.show_workflow(workflow)
+
+    def _on_automation_deleted(self) -> None:
+        """Return to the refreshed list after an automation was deleted."""
+        self.review_page.show_workflow(None)
+        self.my_automations_page.refresh()
+        self.home_page.refresh()
+        self._show_page_automations()
 
     def _handle_task_entered(self, text: str) -> None:
         """Acknowledge a described task on the create page, non-modally.

@@ -77,6 +77,12 @@ def save_layout(
         )
 
 
+def delete_layout(connection: sqlite3.Connection, workflow_id: str) -> None:
+    """Remove editor metadata for one workflow; a missing row is a no-op."""
+    with connection:
+        connection.execute("DELETE FROM workflow_layouts WHERE workflow_id = ?", (workflow_id,))
+
+
 def load_layout(connection: sqlite3.Connection, workflow_id: str) -> LayoutLoadResult:
     """Load one layout, falling back visibly when its JSON is corrupt."""
     row = connection.execute(
