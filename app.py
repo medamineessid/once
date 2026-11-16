@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 from controller.recording import RecordingService
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig, load_verifier_config
+from engine.errors import StorageError
 from ui.main_window import MainWindow
 from ui.shell import MainWindow as ShellMainWindow
 
@@ -127,6 +128,9 @@ def main(argv: list[str] | None = None) -> int:
             f"Once could not create its data folder at {app_data_dir}. "
             f"Reason: {error}. Choose a writable location and start Once again.",
         )
+        return 1
+    except StorageError as error:
+        QMessageBox.critical(None, "Once cannot start", str(error))
         return 1
     except sqlite3.DatabaseError as error:
         # The history database exists but cannot be opened (corrupt or written

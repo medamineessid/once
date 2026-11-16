@@ -1,16 +1,19 @@
-"""SQLite connection and schema management for Once history."""
+"""SQLite connection, ordered migrations, and backup before schema changes."""
 
 from __future__ import annotations
 
+import shutil
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 
+from engine.errors import StorageError
 
-def connect(path: Path) -> sqlite3.Connection:
-    """Open a local SQLite database and create the current schema."""
-    connection = sqlite3.connect(path, check_same_thread=False)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
+Migration = Callable[[sqlite3.Connection], None]
+
+
+def _migration_1(connection: sqlite3.Connection) -> None:
+    """Create the schema used by the first persistent history database."""
     connection.executescript(
         """
         CREATE TABLE IF NOT EXISTS workflow_runs (
@@ -29,16 +32,13 @@ def connect(path: Path) -> sqlite3.Connection:
             evidence TEXT NOT NULL DEFAULT '[]',
             PRIMARY KEY (run_id, position)
         );
-        """
-    )
-    connection.executescript(
-        """
         CREATE TABLE IF NOT EXISTS acceptance_runs (
             run_id TEXT PRIMARY KEY,
             started_at TEXT NOT NULL,
             finished_at TEXT NOT NULL,
             passed INTEGER NOT NULL,
-            redaction_applied INTEGER NOT NULL
+            redaction_applied INTEGER NOT NULL,
+            cancelled INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS acceptance_case_results (
             run_id TEXT NOT NULL REFERENCES acceptance_runs(run_id),
@@ -52,10 +52,6 @@ def connect(path: Path) -> sqlite3.Connection:
             fields TEXT NOT NULL DEFAULT '[]',
             PRIMARY KEY (run_id, position)
         );
-        """
-    )
-    connection.executescript(
-        """
         CREATE TABLE IF NOT EXISTS agent_proposals (
             proposal_id TEXT PRIMARY KEY,
             created_at TEXT NOT NULL,
@@ -75,10 +71,6 @@ def connect(path: Path) -> sqlite3.Connection:
             decided_at TEXT NOT NULL,
             PRIMARY KEY (proposal_id, decision)
         );
-        """
-    )
-    connection.executescript(
-        """
         CREATE TABLE IF NOT EXISTS loop_runs (
             loop_id TEXT PRIMARY KEY,
             status TEXT NOT NULL,
@@ -113,19 +105,11 @@ def connect(path: Path) -> sqlite3.Connection:
             closed_at TEXT,
             PRIMARY KEY (path, created_at)
         );
-        """
-    )
-    connection.execute(
-        """
         CREATE TABLE IF NOT EXISTS workflow_layouts (
             workflow_id TEXT PRIMARY KEY,
             layout TEXT NOT NULL,
             updated_at TEXT NOT NULL
-        )
-        """
-    )
-    connection.execute(
-        """
+        );
         CREATE TABLE IF NOT EXISTS approved_applications (
             application_key TEXT PRIMARY KEY,
             executable TEXT NOT NULL,
@@ -135,12 +119,17 @@ def connect(path: Path) -> sqlite3.Connection:
             close_supported INTEGER NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
             approved_at TEXT
-        )
+        );
         """
     )
-    columns = {
+    # Older databases created before additive columns existed.
+    step_columns = {
         row["name"] for row in connection.execute("PRAGMA table_info(workflow_step_results)")
     }
+    if "evidence" not in step_columns:
+        connection.execute(
+            "ALTER TABLE workflow_step_results ADD COLUMN evidence TEXT NOT NULL DEFAULT '[]'"
+        )
     acceptance_columns = {
         row["name"] for row in connection.execute("PRAGMA table_info(acceptance_runs)")
     }
@@ -148,9 +137,71 @@ def connect(path: Path) -> sqlite3.Connection:
         connection.execute(
             "ALTER TABLE acceptance_runs ADD COLUMN cancelled INTEGER NOT NULL DEFAULT 0"
         )
-    if "evidence" not in columns:
-        connection.execute(
-            "ALTER TABLE workflow_step_results ADD COLUMN evidence TEXT NOT NULL DEFAULT '[]'"
+
+
+#: Ordered schema migrations. Append new migrations; never edit an old one.
+MIGRATIONS: tuple[tuple[int, Migration], ...] = ((1, _migration_1),)
+SCHEMA_VERSION = MIGRATIONS[-1][0]
+
+
+def backup_path(database_path: Path, version: int) -> Path:
+    """The deterministic pre-migration backup beside the database."""
+    return database_path.with_name(f"{database_path.name}.v{version}.bak")
+
+
+def _backup_database(path: Path, version: int, connection: sqlite3.Connection) -> Path:
+    destination = backup_path(path, version)
+    try:
+        connection.commit()
+        shutil.copy2(path, destination)
+    except OSError as error:
+        raise StorageError(
+            f"Once could not back up its history database before upgrading it. "
+            f"Nothing was changed. Reason: {error}"
+        ) from error
+    return destination
+
+
+def _upgrade(connection: sqlite3.Connection, path: Path, current: int) -> None:
+    if current > SCHEMA_VERSION:
+        raise StorageError(
+            f"The Once history database was created by a newer version "
+            f"(database {current}, this app {SCHEMA_VERSION}). It was left unchanged. "
+            "Update Once, or move the database aside before using this older version."
         )
-    connection.commit()
+    pending = [(version, migrate) for version, migrate in MIGRATIONS if version > current]
+    if not pending:
+        return
+    if path.exists() and path.stat().st_size > 0:
+        _backup_database(path, current, connection)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        for version, migrate in pending:
+            migrate(connection)
+            connection.execute(f"PRAGMA user_version = {int(version)}")
+        connection.commit()
+    except (sqlite3.Error, OSError) as error:
+        connection.rollback()
+        raise StorageError(
+            f"Once could not upgrade its history database. The original data was "
+            f"left unchanged. Reason: {error}"
+        ) from error
+
+
+def connect(path: Path) -> sqlite3.Connection:
+    """Open a local SQLite database, upgrading it through ordered migrations.
+
+    An automatic copy is written beside the database before any migration, and
+    a database from a newer app version is refused without modification.
+    """
+    path = Path(path)
+    connection = sqlite3.connect(path, check_same_thread=False)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    current = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    try:
+        _upgrade(connection, path, current)
+    except Exception:
+        connection.close()
+        raise
     return connection
