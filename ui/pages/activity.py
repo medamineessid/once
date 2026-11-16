@@ -43,7 +43,7 @@ from ui.strings import (
     ACTIVITY_TITLE,
     DELETE_ACTION,
 )
-from ui.styles import SPACING_LG, SPACING_SM, SPACING_XL
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL, SPACING_XS, SPACING_XXL
 
 
 class RunRow(QWidget):
@@ -63,8 +63,8 @@ class RunRow(QWidget):
         super().__init__(parent)
         self.setObjectName("runRow")
         row = QVBoxLayout(self)
-        row.setContentsMargins(10, 8, 10, 8)
-        row.setSpacing(4)
+        row.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
+        row.setSpacing(SPACING_XS)
         top = QHBoxLayout()
         top.setSpacing(SPACING_SM)
         self._name_label = QLabel(title, self)
@@ -127,7 +127,7 @@ class ActivityPage(QWidget):
         self._details_container = QFrame(self)
         self._details_container.setObjectName("detailsContainer")
         details_layout = QVBoxLayout(self._details_container)
-        details_layout.setContentsMargins(0, 0, 0, 0)
+        details_layout.setContentsMargins(SPACING_LG, SPACING_LG, SPACING_LG, SPACING_LG)
         details_layout.setSpacing(SPACING_SM)
         self._details_label = QLabel(ACTIVITY_DETAILS_EMPTY, self._details_container)
         self._details_label.setObjectName("activityDetailsLabel")
@@ -200,7 +200,8 @@ class ActivityPage(QWidget):
             name, workflow_id, label, kind, when, status_value = self._row_facts(run)
             run_id = getattr(run, "run_id", "")
             summary = f"{name} — {label}" + (f" — {when}" if when else "")
-            item = QListWidgetItem(summary)
+            name = friendly_run_name(self._service, workflow_id)
+            item = QListWidgetItem(name)
             item.setForeground(QColor(0, 0, 0, 0))
             item.setData(Qt.UserRole, workflow_id)
             item.setToolTip(summary)
@@ -214,7 +215,7 @@ class ActivityPage(QWidget):
                 parent=self._history_list,
             )
             hint = row.sizeHint()
-            hint.setHeight(64)
+            hint.setHeight(SPACING_XXL * 2 + SPACING_MD)
             item.setSizeHint(hint)
             self._history_list.addItem(item)
             self._history_list.setItemWidget(item, row)
