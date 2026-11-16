@@ -54,7 +54,7 @@ def test_create_rename_save_lists_opens_runs_and_activity_shows_name(qtbot, tmp_
     window.my_automations_page._workflow_list.setCurrentRow(0)
     qtbot.mouseClick(window.my_automations_page._open_button, Qt.MouseButton.LeftButton)
     assert window.workspace.currentWidget() is window.review_page
-    assert window.review_page._goal_label.text() == "Goal: My test automation"
+    assert window.review_page._goal_label.text() == "My test automation"
 
     window._show_page_automations()
     window.my_automations_page._workflow_list.setCurrentRow(0)
