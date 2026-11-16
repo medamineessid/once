@@ -125,7 +125,6 @@ class Sidebar(QToolBar):
         self.setIconSize(QSize(20, 20))
         self.setMovable(False)
         self.setFloatable(False)
-        self.setStyleSheet("QToolBar { background: transparent; }")
         logo = QLabel("Once")
         logo.setObjectName("onceLogo")
         self.addWidget(logo)

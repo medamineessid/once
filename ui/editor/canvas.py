@@ -33,7 +33,18 @@ from ui.editor.layout import (
     NodeSlot,
     auto_layout,
 )
-from ui.styles import ACCENT, ACCENT_TEXT, BORDER, BORDER_STRONG, SURFACE, TEXT_STRONG
+from ui.styles import (
+    ACCENT,
+    ACCENT_TEXT,
+    BORDER,
+    BORDER_STRONG,
+    STATUS_ERROR,
+    STATUS_OK,
+    STATUS_WARNING,
+    SURFACE,
+    TEXT_STRONG,
+    TINT_FINISH,
+)
 
 MARGIN = 40.0
 _ARROW_LEN = 9.0
@@ -68,7 +79,7 @@ class NodeCard(QGraphicsPathItem):
         path.addRoundedRect(QRectF(0.0, 0.0, slot.w, slot.h), 10.0, 10.0)
         self.setPos(slot.x, slot.y)
         self.setPen(QPen(QColor(BORDER_STRONG if terminal else BORDER), _NORMAL_PEN_WIDTH))
-        self.setBrush(QBrush(QColor("#F2F4F7" if terminal else SURFACE)))
+        self.setBrush(QBrush(QColor(TINT_FINISH if terminal else SURFACE)))
         self.setPath(path)
         self.status = "PENDING" if not terminal else ""
 
@@ -97,12 +108,12 @@ class NodeCard(QGraphicsPathItem):
         self.status = status
         colors = {
             "RUNNING": ACCENT,
-            "SUCCEEDED": "#15803D",
-            "VERIFIED": "#15803D",
-            "OBSERVED": "#92400E",
-            "FAILED": "#B91C1C",
-            "SKIPPED": "#92400E",
-            "CANCELLED": "#92400E",
+            "SUCCEEDED": STATUS_OK,
+            "VERIFIED": STATUS_OK,
+            "OBSERVED": STATUS_WARNING,
+            "FAILED": STATUS_ERROR,
+            "SKIPPED": STATUS_WARNING,
+            "CANCELLED": STATUS_WARNING,
             "PENDING": BORDER,
         }
         color = colors.get(status, BORDER)
