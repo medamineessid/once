@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from .acceptance import AcceptanceCase, ComparisonMode
 from .errors import ExecutionError
+from .fs import atomic_write_text
 
 MAX_OUTPUT_TAIL = 2_000
 MAX_TIMEOUT_SECONDS = 300.0
@@ -173,8 +174,8 @@ class EvidenceBundle:
         directory.mkdir(parents=True, exist_ok=True)
         json_path = directory / f"{self.run_id}.json"
         markdown_path = directory / f"{self.run_id}.md"
-        json_path.write_text(self.to_json(), encoding="utf-8")
-        markdown_path.write_text(self.to_markdown(), encoding="utf-8")
+        atomic_write_text(json_path, self.to_json())
+        atomic_write_text(markdown_path, self.to_markdown())
         return json_path, markdown_path
 
 

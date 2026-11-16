@@ -71,6 +71,26 @@ def test_verifier_passes_exact_tolerance_and_case_insensitive_fields(tmp_path) -
     assert markdown_path.exists()
 
 
+def test_interrupted_evidence_write_keeps_the_previous_files(tmp_path, monkeypatch) -> None:
+    bundle = AcceptanceVerifier(command(tmp_path)).verify((case(tmp_path),))
+    json_path, markdown_path = bundle.write(tmp_path / "evidence")
+    previous_json = json_path.read_text(encoding="utf-8")
+    previous_markdown = markdown_path.read_text(encoding="utf-8")
+    original_write = Path.write_text
+
+    def partial_write(self: Path, data: str, *args, **kwargs) -> int:
+        original_write(self, data[:10], *args, **kwargs)
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "write_text", partial_write)
+    with pytest.raises(OSError, match="disk full"):
+        bundle.write(tmp_path / "evidence")
+
+    assert json_path.read_text(encoding="utf-8") == previous_json
+    assert markdown_path.read_text(encoding="utf-8") == previous_markdown
+    assert list((tmp_path / "evidence").glob(".*.tmp")) == []
+
+
 def test_verifier_reports_mismatch_and_missing_required_field(tmp_path) -> None:
     current = case(tmp_path)
     mismatch = AcceptanceCase(
