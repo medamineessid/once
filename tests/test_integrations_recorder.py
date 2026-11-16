@@ -208,8 +208,9 @@ def test_win32_window_list_requires_windows() -> None:
         isinstance(process_name, str)
         and isinstance(title, str)
         and isinstance(image_path, str)
+        and isinstance(hwnd, int)
         and title
-        for process_name, title, image_path in windows
+        for process_name, title, image_path, hwnd in windows
     )
 
 
