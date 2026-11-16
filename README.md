@@ -69,7 +69,7 @@ py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe app.py --shell
 ```
 
-*(Need the legacy diagnostic window? Run `.\.venv\Scripts\python.exe app.py --legacy`.)*
+*(Need the legacy diagnostic window? Run `.\.venv\Scripts\python.exe app.py --classic`.)*
 
 ---
 
