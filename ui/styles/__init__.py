@@ -269,7 +269,7 @@ _STYLESHEET_TEMPLATE = Template("""
     }
     QLabel#activityDetailsLabel {
         font-size: ${TYPE_CAPTION_PX}px;
-        color: #6B6B6B;
+        color: ${TEXT_BODY};
     }
     QLabel#goalLabel {
         font-size: ${TYPE_SUBTITLE_PX}px;
