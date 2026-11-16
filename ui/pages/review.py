@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -21,6 +26,9 @@ from controller.service import WorkflowService, classify_workflow_steps
 from engine.errors import WorkflowValidationError
 from engine.workflow import Workflow
 from ui.components.banner import SEVERITY_ERROR, SEVERITY_INFO, SEVERITY_SUCCESS, Banner
+from ui.components.cards import Chip
+from ui.components.formatting import friendly_step_display
+from ui.components.icons import draw_automations_glyph, icon_pixmap
 from ui.editor.canvas import CanvasView
 from ui.strings import (
     REVIEW_APPROVE,
@@ -32,15 +40,16 @@ from ui.strings import (
     REVIEW_TITLE_DRAFT,
     REVIEW_TITLE_SAVED,
 )
-from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL, SPACING_XS
 
 
 class ReviewPage(QWidget):
-    """Clean review of a proposed workflow before approval."""
+    """Clean review of a proposed workflow or details of a saved automation."""
 
     approved = Signal(object)
     cancelled = Signal()
     edit_requested = Signal(object)
+    run_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -52,25 +61,35 @@ class ReviewPage(QWidget):
         self._init_ui()
 
     def _init_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
+        outer.setSpacing(0)
+
+        scroll = QScrollArea(self)
+        scroll.setObjectName("detailsScrollArea")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        content = QWidget(scroll)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, SPACING_SM, 0)
         layout.setSpacing(SPACING_LG)
-        layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
-        self._title_label = QLabel(REVIEW_TITLE_DRAFT, self)
+        layout.setAlignment(Qt.AlignTop)
+
+        self._title_label = QLabel(REVIEW_TITLE_DRAFT, content)
         self._title_label.setObjectName("pageTitle")
-        layout.addWidget(self._title_label, alignment=Qt.AlignHCenter)
-        self._banner = Banner(self)
-        self._banner.setMinimumWidth(640)
-        layout.addWidget(self._banner, alignment=Qt.AlignHCenter)
-        self._goal_label = QLabel("No proposal loaded.", self)
+        layout.addWidget(self._title_label)
+
+        self._banner = Banner(content)
+        layout.addWidget(self._banner)
+
+        self._goal_label = QLabel("No proposal loaded.", content)
         self._goal_label.setObjectName("goalLabel")
         self._goal_label.setWordWrap(True)
-        self._goal_label.setMinimumWidth(640)
-        self._goal_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._goal_label, alignment=Qt.AlignHCenter)
-        self._applications_container = QFrame(self)
+        layout.addWidget(self._goal_label)
+
+        self._applications_container = QFrame(content)
         self._applications_container.setObjectName("approvalPanel")
-        self._applications_container.setMinimumWidth(640)
         applications_layout = QVBoxLayout(self._applications_container)
         applications_layout.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
         applications_layout.setSpacing(SPACING_SM)
@@ -90,52 +109,163 @@ class ReviewPage(QWidget):
         applications_layout.addWidget(self._applications_label)
         applications_layout.addLayout(actions_row)
         self._applications_container.hide()
-        layout.addWidget(self._applications_container, alignment=Qt.AlignHCenter)
-        self._steps_list = QListWidget(self)
+        layout.addWidget(self._applications_container)
+
+        self._steps_list = QListWidget(content)
         self._steps_list.setObjectName("stepsList")
-        self._steps_list.setMinimumWidth(640)
         self._steps_list.setWordWrap(True)
-        self._steps_list.setAlternatingRowColors(True)
+        self._steps_list.setAlternatingRowColors(False)
         self._steps_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._steps_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._steps_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._steps_list.addItems(self._empty_steps())
-        layout.addWidget(self._steps_list, alignment=Qt.AlignHCenter)
-        self._canvas = CanvasView(self)
-        self._canvas.setMinimumSize(640, 220)
+        self._resize_steps_list()
+        layout.addWidget(self._steps_list)
+
+        self._canvas = CanvasView(content)
+        self._canvas.set_minimap_visible(False)
+        self._canvas.setMinimumHeight(260)
         layout.addWidget(self._canvas)
+
         layout.addSpacing(SPACING_MD)
-        self._actions_container = QFrame(self)
+        self._actions_container = QFrame(content)
         actions_layout = QVBoxLayout(self._actions_container)
         actions_layout.setContentsMargins(0, 0, 0, 0)
         actions_layout.setSpacing(SPACING_SM)
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(SPACING_SM)
-        self._edit_button = QPushButton(REVIEW_EDIT, self)
-        self._edit_button.setObjectName("secondaryActionButton")
+
+        self._cancel_button = QPushButton("Back", content)
+        self._cancel_button.setObjectName("secondaryActionButton")
+        self._cancel_button.setMinimumHeight(38)
+        self._cancel_button.clicked.connect(self._cancel_review)
+
+        self._run_button = QPushButton("Run", content)
+        self._run_button.setObjectName("secondaryActionButton")
+        self._run_button.setMinimumHeight(38)
+        self._run_button.clicked.connect(self._run_saved_workflow)
+        self._run_button.hide()
+
+        self._edit_button = QPushButton(REVIEW_EDIT, content)
+        self._edit_button.setObjectName("primaryActionButton")
         self._edit_button.setMinimumHeight(38)
         self._edit_button.clicked.connect(self._edit_saved_workflow)
         # An unhandled editor hand-off (lane B task B7) keeps the control
         # invisible per the honest-controls rule.
         self._edit_button.hide()
-        self._cancel_button = QPushButton("Cancel", self)
-        self._cancel_button.setObjectName("secondaryActionButton")
-        self._cancel_button.setMinimumHeight(38)
-        self._cancel_button.clicked.connect(self._cancel_review)
-        self._approve_button = QPushButton(REVIEW_APPROVE, self)
+
+        self._approve_button = QPushButton(REVIEW_APPROVE, content)
         self._approve_button.setObjectName("primaryActionButton")
         self._approve_button.setMinimumHeight(38)
         self._approve_button.clicked.connect(self._approve)
-        # Approve is visible only when the page can actually review and save
-        # something: a service is injected and a proposal passed the preview
-        # step of the existing approval path (ai.approval.preview_proposal).
         self._approve_button.hide()
-        buttons_row.addWidget(self._edit_button)
+
         buttons_row.addWidget(self._cancel_button)
+        buttons_row.addStretch(1)
+        buttons_row.addWidget(self._run_button)
+        buttons_row.addWidget(self._edit_button)
         buttons_row.addWidget(self._approve_button)
         actions_layout.addLayout(buttons_row)
-        layout.addWidget(self._actions_container, alignment=Qt.AlignHCenter)
+        layout.addWidget(self._actions_container)
+
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
 
     def _empty_steps(self) -> list[str]:
         return ["No step details to review."]
+
+    def _resize_steps_list(self) -> None:
+        """Size _steps_list to show all rows without an inner vertical scrollbar."""
+        total = 16
+        for i in range(self._steps_list.count()):
+            hint = self._steps_list.sizeHintForRow(i)
+            total += max(hint, 40) + 4
+        self._steps_list.setMinimumHeight(total)
+        self._steps_list.setMaximumHeight(total)
+
+    def _add_step_row(
+        self,
+        index: int,
+        step: object,
+        *,
+        tag: str | None = None,
+    ) -> None:
+        title, action_label, clean_desc = friendly_step_display(step)
+        summary = f"{index}. {action_label}: {title}"
+        if clean_desc and clean_desc != title:
+            summary += f" — {clean_desc}"
+        item = QListWidgetItem(summary)
+        self._steps_list.addItem(item)
+
+        row = QFrame(self._steps_list)
+        row.setObjectName("reviewStepRow")
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
+        row_layout.setSpacing(SPACING_SM)
+
+        num_label = QLabel(f"{index}.", row)
+        num_label.setObjectName("rowCaption")
+        num_label.setFixedWidth(24)
+
+        icon_label = QLabel(row)
+        icon_label.setPixmap(icon_pixmap(draw_automations_glyph, 16))
+        icon_label.setFixedSize(20, 20)
+
+        kind_chip = Chip(action_label, kind="neutral", parent=row)
+
+        text_col = QVBoxLayout()
+        text_col.setContentsMargins(0, 0, 0, 0)
+        text_col.setSpacing(SPACING_XS)
+
+        name_edit = QLineEdit(title, row)
+        name_edit.setObjectName("inlineStepEdit")
+        name_edit.setPlaceholderText("Step description")
+        name_edit.editingFinished.connect(
+            lambda idx=index - 1, ed=name_edit: self._on_step_title_edited(idx, ed.text())
+        )
+        text_col.addWidget(name_edit)
+
+        if clean_desc and clean_desc != title:
+            desc_label = QLabel(clean_desc, row)
+            desc_label.setObjectName("rowCaption")
+            desc_label.setWordWrap(True)
+            text_col.addWidget(desc_label)
+
+        row_layout.addWidget(num_label, alignment=Qt.AlignmentFlag.AlignTop)
+        row_layout.addWidget(icon_label, alignment=Qt.AlignmentFlag.AlignTop)
+        row_layout.addWidget(kind_chip, alignment=Qt.AlignmentFlag.AlignTop)
+        row_layout.addLayout(text_col, stretch=1)
+        if tag:
+            tag_kind = "ok" if tag == "Replayable" else "neutral"
+            row_layout.addWidget(
+                Chip(tag, kind=tag_kind, parent=row),
+                alignment=Qt.AlignmentFlag.AlignTop,
+            )
+
+        item.setSizeHint(row.sizeHint())
+        self._steps_list.setItemWidget(item, row)
+
+    def _on_step_title_edited(self, step_index: int, new_title: str) -> None:
+        cleaned = new_title.strip()
+        if not cleaned:
+            return
+        if self._saved_workflow is not None and 0 <= step_index < len(self._saved_workflow.steps):
+            steps = list(self._saved_workflow.steps)
+            steps[step_index] = replace(steps[step_index], name=cleaned[:80])
+            updated = replace(self._saved_workflow, steps=tuple(steps))
+            self._saved_workflow = updated
+            self._canvas.set_workflow(updated)
+            if self._service is not None:
+                try:
+                    self._service.save(updated)
+                except WorkflowValidationError as error:
+                    self._banner.show_message(SEVERITY_ERROR, REVIEW_SAVE_ERROR_TITLE, str(error))
+        elif self._proposal is not None and 0 <= step_index < len(self._proposal.workflow.steps):
+            steps = list(self._proposal.workflow.steps)
+            steps[step_index] = replace(steps[step_index], name=cleaned[:80])
+            updated_wf = replace(self._proposal.workflow, steps=tuple(steps))
+            self._proposal = replace(self._proposal, workflow=updated_wf)
+            self._canvas.set_workflow(updated_wf)
 
     def _update_action_visibility(self) -> None:
         ready = self._service is not None and self._proposal is not None
@@ -190,6 +320,10 @@ class ReviewPage(QWidget):
         if self._saved_workflow is not None:
             self.edit_requested.emit(self._saved_workflow)
 
+    def _run_saved_workflow(self) -> None:
+        if self._saved_workflow is not None:
+            self.run_requested.emit(self._saved_workflow)
+
     def _approve(self) -> None:
         if self._service is None or self._proposal is None:
             return
@@ -220,34 +354,31 @@ class ReviewPage(QWidget):
         self.approved.emit(approved.workflow)
 
     def show_workflow(self, workflow: Workflow | None) -> None:
-        """Show an opened saved workflow for read-only review, like the old window."""
+        """Show an opened saved workflow for review and quick editing/running."""
         self._proposal = None
         self._saved_workflow = workflow
         self._pending_identities = ()
-        # The opened-workflow mode is "Automation details", not a review: the
-        # user is looking at a saved automation (UX audit D14).
         self._title_label.setText(REVIEW_TITLE_SAVED)
         self._edit_button.setVisible(workflow is not None)
+        self._run_button.setVisible(workflow is not None)
         self._approve_button.hide()
-        self._goal_label.setText(f"Goal: {workflow.name}" if workflow else "No workflow loaded.")
+        self._goal_label.setText(workflow.name if workflow else "No automation loaded.")
         self._steps_list.clear()
         self._banner.clear()
-        # The canvas is read-only for now (P3): the chain renders from the pure
-        # auto-layout plan; editing arrives with the editor page.
         self._canvas.set_workflow(workflow)
         if workflow:
             for index, step in enumerate(workflow.steps, start=1):
-                self._steps_list.addItem(
-                    f"{index}. {step.kind.value} - {step.name}: {step.message}"
-                )
+                self._add_step_row(index, step)
         else:
             self._steps_list.addItems(self._empty_steps())
+        self._resize_steps_list()
         self._update_action_visibility()
 
     def load_proposal(self, proposal: ProviderDraft | None) -> None:
         self._saved_workflow = None
         self._pending_identities = ()
         self._edit_button.hide()
+        self._run_button.hide()
         self._title_label.setText(REVIEW_TITLE_DRAFT)
         self._canvas.set_workflow(None)
         self._banner.clear()
@@ -256,16 +387,16 @@ class ReviewPage(QWidget):
             self._proposal = None
             self._goal_label.setText("No proposal loaded.")
             self._steps_list.addItems(self._empty_steps())
+            self._resize_steps_list()
             self._update_action_visibility()
             return
         self._goal_label.setText(f"Goal: {proposal.goal}")
         try:
-            preview = preview_proposal(proposal)
+            preview_proposal(proposal)
         except WorkflowValidationError as error:
-            # An unusable draft is untrusted data: explain it in plain
-            # language, keep the steps empty, and never offer approval.
             self._proposal = None
             self._steps_list.addItems(self._empty_steps())
+            self._resize_steps_list()
             self._banner.show_message(
                 SEVERITY_ERROR,
                 REVIEW_PREVIEW_PROBLEM_TITLE,
@@ -278,17 +409,16 @@ class ReviewPage(QWidget):
         replayability = classify_workflow_steps(proposal.workflow)
         labels = {item.step_id: item for item in replayability}
         observation_only = [item for item in replayability if not item.replayable]
-        for index, step_text in enumerate(preview.steps, start=1):
-            step = proposal.workflow.steps[index - 1]
+        for index, step in enumerate(proposal.workflow.steps, start=1):
             info = labels.get(step.step_id)
-            tag = "Replayable" if (info is not None and info.replayable) else "Observation only"
-            reason = info.reason if info else ""
-            self._steps_list.addItem(f"{index}. {step_text}  [{tag}: {reason}]")
+            tag = "Replayable" if (info is not None and info.replayable) else "Note only"
+            self._add_step_row(index, step, tag=tag)
+        self._resize_steps_list()
         if observation_only:
             self._banner.show_message(
                 SEVERITY_INFO,
-                "Some steps are observation only",
-                "Steps marked Observation only will be shown but not performed when the task runs.",
+                "Some steps are notes only",
+                "Steps marked Note only are kept for context and do not run actions.",
             )
         self._update_action_visibility()
 

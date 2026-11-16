@@ -279,6 +279,7 @@ class MainWindow(QMainWindow):
         self.review_page.cancelled.connect(self._on_review_cancelled)
         self.review_page.approved.connect(self._open_approved_draft)
         self.review_page.edit_requested.connect(self._open_review_workflow_editor)
+        self.review_page.run_requested.connect(self._run_from_editor)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 

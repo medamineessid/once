@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from engine.workflow import Workflow
+from ui.components.formatting import friendly_step_display
 from ui.editor.layout import (
     FINISH_ID,
     START_ID,
@@ -146,6 +147,7 @@ class CanvasView(QGraphicsView):
         self._selected_id: str | None = None
         self._step_statuses: dict[str, str] = {}
         self._zoom = 1.0
+        self._minimap_enabled = True
         self._minimap = QGraphicsView(self)
         self._minimap.setObjectName("canvasMinimap")
         self._minimap.setScene(self._scene)
@@ -153,11 +155,13 @@ class CanvasView(QGraphicsView):
         self._minimap.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._minimap.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._minimap.setFixedSize(160, 96)
-        self._minimap.setStyleSheet(
-            "background: rgba(246, 248, 250, 210); border: 1px solid #D1D5DB; border-radius: 6px;"
-        )
         self._minimap.show()
         self.node_moved.connect(self._node_moved)
+
+    def set_minimap_visible(self, visible: bool) -> None:
+        """Show or hide the corner minimap overlay."""
+        self._minimap_enabled = visible
+        self._minimap.setVisible(visible)
 
     @property
     def selected_id(self) -> str | None:
@@ -298,8 +302,13 @@ class CanvasView(QGraphicsView):
     @override
     def resizeEvent(self, event: object) -> None:
         super().resizeEvent(event)
-        self._minimap.move(self.viewport().width() - self._minimap.width() - 12, 12)
-        self._update_minimap()
+        show_mini = self._minimap_enabled and self.viewport().height() >= 340
+        self._minimap.setVisible(show_mini)
+        if show_mini:
+            self._minimap.move(self.viewport().width() - self._minimap.width() - 12, 12)
+            self._update_minimap()
+        if not self._scene.sceneRect().isEmpty():
+            self.fit_to_screen()
 
     @override
     def wheelEvent(self, event: object) -> None:
@@ -316,7 +325,8 @@ class CanvasView(QGraphicsView):
             FINISH_ID: ("Finish", ""),
         }
         for step in workflow.steps:
-            titles[step.step_id] = (step.name, step.kind.value)
+            title, action_label, _desc = friendly_step_display(step)
+            titles[step.step_id] = (title, action_label)
         return titles
 
     # --------------------------------------------------------------- selection

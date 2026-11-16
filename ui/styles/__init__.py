@@ -680,10 +680,34 @@ _STYLESHEET_TEMPLATE = Template("""
     QWidget#runRow {
         background: transparent;
     }
-    QFrame#homeRunRow {
+    QFrame#homeRunRow,
+    QFrame#reviewStepRow {
         background: ${SURFACE};
         border: 1px solid ${BORDER};
         border-radius: 8px;
+    }
+    QLineEdit#inlineStepEdit {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        padding: 4px 6px;
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 500;
+        color: ${TEXT_STRONG};
+        font-family: $FONT_STACK;
+    }
+    QLineEdit#inlineStepEdit:hover {
+        border-color: ${BORDER};
+        background: ${SURFACE_ALT};
+    }
+    QLineEdit#inlineStepEdit:focus {
+        border-color: ${ACCENT};
+        background: ${SURFACE};
+    }
+    QGraphicsView#canvasMinimap {
+        background: ${SURFACE_ALT};
+        border: 1px solid ${BORDER_STRONG};
+        border-radius: 6px;
     }
     QLabel#rowErrorReason {
         font-size: ${TYPE_CAPTION_PX}px;

@@ -58,8 +58,9 @@ def test_load_proposal_lists_preview_steps_and_goal(qtbot, tmp_path) -> None:
     assert goal_text == "Goal: Run a small demo"
     steps = [page._steps_list.item(index).text() for index in range(page._steps_list.count())]
     assert len(steps) == 2
-    assert all("source=AI inference" in line for line in steps)
-    assert any("expected=Hello." in line for line in steps)
+    assert all("source=AI inference" not in line for line in steps)
+    assert "Say hello" in steps[0] and "Hello." in steps[0]
+    assert "Check notes" in steps[1] and "Done." in steps[1]
 
 
 def test_approve_visible_only_with_service_and_previewed_proposal(qtbot, tmp_path) -> None:
