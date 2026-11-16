@@ -14,6 +14,7 @@
 - [x] **11. Silent blocker-check failure**: The coding-agent review panel now narrows broad catches to `OnceError`, `OSError`, and `sqlite3.Error`, includes the real failure in the visible message, and logs it before showing it. Regression test: `tests/test_review_ui.py::test_blocker_check_failure_is_shown_and_logged`.
 - [x] **12. Legacy recording delete confirmation**: The legacy window now asks "Delete recording '…'? This cannot be undone." with Cancel as the default before deleting a saved recording. Test: `tests/test_legacy_delete.py`.
 - [x] **13. README flag drift**: README now names `--classic` (the flag `app.py` implements) instead of the nonexistent `--legacy`. Test: `tests/test_docs_truth.py`.
+- [x] **14. Silent recorder UI Automation failures**: UIA point/focus/window inspection now catches only expected import, attribute, OS, runtime, value, type, and loaded-COM errors, logs a warning with the real reason, and keeps recording without metadata instead of failing silently. Regression test: `tests/test_recorder_logging.py` (verified failing before the fix and passing after).
 
 ## Decisions
 1. **Kill switch testing in headless shell**: Since `run_command` executes in a background shell without physical keyboard input and Windows `WH_KEYBOARD_LL` ignores synthetic input when no interactive console/foreground window is attached, we verified hook installation (`SystemHook` handle non-zero) and unit-tested trigger semantics via `FakeListener`, documenting the physical-input limitation.

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -11,6 +13,26 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from recorder.models import RecordedEvent, RecordedEventKind, UIElementInfo
+
+logger = logging.getLogger(__name__)
+
+
+def _inspection_errors() -> tuple[type[BaseException], ...]:
+    """Expected UI Automation failures, including COM errors once comtypes is loaded."""
+    errors: list[type[BaseException]] = [
+        ImportError,
+        AttributeError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+    ]
+    comtypes = sys.modules.get("comtypes")
+    com_error = getattr(comtypes, "COMError", None) if comtypes is not None else None
+    if isinstance(com_error, type) and issubclass(com_error, BaseException):
+        errors.append(com_error)
+    return tuple(errors)
+
 
 WindowLister = Callable[[], tuple[tuple[str, str, ...], ...]]
 
@@ -87,7 +109,12 @@ class UIAElementProvider:
                     proc_name = Path(raw_exe).name
             element = _to_element_info(info)
             return element, window_title, proc_name, exe_path, False
-        except Exception:
+        except _inspection_errors() as error:
+            logger.warning(
+                "UI Automation point inspection failed (%s); recording without element metadata",
+                error,
+                exc_info=True,
+            )
             return None, None, None, None, False
 
     def inspect_focused(
@@ -123,10 +150,20 @@ class UIAElementProvider:
                 focused_info = UIAElementInfo()
                 if getattr(focused_info, "process_id", None) == pid:
                     element = _to_element_info(focused_info)
-            except Exception:
+            except _inspection_errors() as error:
+                logger.warning(
+                    "Focused UI element inspection failed (%s); recording without element metadata",
+                    error,
+                    exc_info=True,
+                )
                 element = None
             return element, window_title, proc_name, exe_path, False
-        except Exception:
+        except _inspection_errors() as error:
+            logger.warning(
+                "Foreground window inspection failed (%s); recording without window metadata",
+                error,
+                exc_info=True,
+            )
             return None, None, None, None, False
 
 
