@@ -36,6 +36,43 @@ def test_recorder_omits_key_events_in_password_fields() -> None:
     assert collector.events == []
 
 
+def test_typed_text_is_flushed_after_idle_without_stopping() -> None:
+    """Text typed just before closing must be emitted before the close event."""
+    import time
+    from types import SimpleNamespace
+
+    collector = EventCollector()
+
+    class FocusedEdit:
+        def inspect_focused(self):
+            return (
+                UIElementInfo(control_type="Edit", class_name="Edit"),
+                "demo window",
+                "demo.exe",
+                r"C:\Demo\demo.exe",
+                False,
+            )
+
+    recorder = PynputRecorder(
+        collector,
+        element_provider=FocusedEdit(),
+        keyboard_enabled=True,
+        text_flush_seconds=0.02,
+    )
+
+    recorder._on_press(SimpleNamespace(char="o"))
+    for _ in range(50):
+        if collector.events:
+            break
+        time.sleep(0.01)
+
+    assert [event.kind for event in collector.events] == [
+        RecordedEventKind.WINDOW_OPEN,
+        RecordedEventKind.TEXT_INPUT,
+    ]
+    assert collector.events[-1].text == "o"
+
+
 def test_recorder_records_mouse_press_only() -> None:
     collector = EventCollector()
     recorder = PynputRecorder(collector)

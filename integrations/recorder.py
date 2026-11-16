@@ -145,9 +145,12 @@ class UIAElementProvider:
             proc_name = Path(raw_exe).name if raw_exe else None
             element: UIElementInfo | None = None
             try:
+                from pywinauto.uia_defines import IUIA
                 from pywinauto.uia_element_info import UIAElementInfo
 
-                focused_info = UIAElementInfo()
+                # UIAElementInfo() without an element describes the desktop root,
+                # not the focused control. Ask UI Automation for the real one.
+                focused_info = UIAElementInfo(IUIA().iuia.GetFocusedElement())
                 if getattr(focused_info, "process_id", None) == pid:
                     element = _to_element_info(focused_info)
             except _inspection_errors() as error:
@@ -194,6 +197,7 @@ class PynputRecorder:
         element_provider: ElementProvider | None = None,
         keyboard_enabled: bool = False,
         window_monitor: WindowEventMonitor | _DefaultMonitor | None = _OWN_MONITOR,
+        text_flush_seconds: float = 0.7,
     ) -> None:
         self._sink = sink
         self._element_provider = element_provider
@@ -203,6 +207,9 @@ class PynputRecorder:
         self._seen_executables: set[str] = set()
         self._ctrl_down = False
         self._text_buffer: list[str] = []
+        self._text_lock = threading.Lock()
+        self._text_flush_seconds = max(0.01, text_flush_seconds)
+        self._text_flush_timer: threading.Timer | None = None
         self._text_context: (
             tuple[UIElementInfo | None, str | None, str | None, str | None] | None
         ) = None
@@ -229,8 +236,10 @@ class PynputRecorder:
         from pynput import keyboard, mouse
 
         self._seen_executables.clear()
-        self._text_buffer.clear()
-        self._text_context = None
+        self._cancel_text_flush()
+        with self._text_lock:
+            self._text_buffer.clear()
+            self._text_context = None
         self._ctrl_down = False
         if self._window_monitor is not None:
             self._window_monitor.start()
@@ -245,6 +254,7 @@ class PynputRecorder:
 
     def stop(self) -> None:
         """Stop listeners and wait for their callback threads."""
+        self._cancel_text_flush()
         self._flush_text_buffer()
         if self._window_monitor is not None:
             self._window_monitor.stop()
@@ -325,9 +335,11 @@ class PynputRecorder:
             return
         char = self._extract_printable_char(key, key_str)
         if char is not None:
-            if not self._text_buffer:
-                self._text_context = (element, win_title, proc_name, exe_path)
-            self._text_buffer.append(char)
+            with self._text_lock:
+                if not self._text_buffer:
+                    self._text_context = (element, win_title, proc_name, exe_path)
+                self._text_buffer.append(char)
+            self._schedule_text_flush()
 
     def _extract_shortcut(self, key: object, key_str: str) -> str | None:
         if key_str in _SPECIAL_SHORTCUTS:
@@ -355,13 +367,33 @@ class PynputRecorder:
             return char
         return None
 
+    def _schedule_text_flush(self) -> None:
+        """Flush typed text after a short idle period, not only at stop.
+
+        Users routinely type and then close the window. Waiting until stop()
+        made the text event arrive after the close event, so the draft could no
+        longer turn it into a typed step in the right place.
+        """
+        self._cancel_text_flush()
+        timer = threading.Timer(self._text_flush_seconds, self._flush_text_buffer)
+        timer.daemon = True
+        self._text_flush_timer = timer
+        timer.start()
+
+    def _cancel_text_flush(self) -> None:
+        timer, self._text_flush_timer = self._text_flush_timer, None
+        if timer is not None:
+            timer.cancel()
+
     def _flush_text_buffer(self) -> None:
-        if not self._text_buffer:
-            return
-        text = "".join(self._text_buffer)
-        context = self._text_context
-        self._text_buffer.clear()
-        self._text_context = None
+        self._cancel_text_flush()
+        with self._text_lock:
+            if not self._text_buffer:
+                return
+            text = "".join(self._text_buffer)
+            context = self._text_context
+            self._text_buffer.clear()
+            self._text_context = None
         if not text:
             return
         element, win_title, proc_name, exe_path = context or (None, None, None, None)
