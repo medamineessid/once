@@ -872,17 +872,22 @@ class WorkflowRunner:
             if result.status in PERFORMED_STEP_STATUSES and step.kind is not StepKind.REPORT:
                 performed_any = True
             if result.status not in CONTINUING_STEP_STATUSES:
+                cancelled = is_cancelled()
                 results.extend(
                     StepResult(
                         step_id=remaining.step_id,
                         status=StepStatus.SKIPPED,
-                        message="Skipped because an earlier step failed.",
+                        message=(
+                            "Skipped because the workflow was cancelled."
+                            if cancelled
+                            else "Skipped because an earlier step failed."
+                        ),
                     )
                     for remaining in workflow.steps[index + 1 :]
                 )
                 return completed(
                     WorkflowStatus.CANCELLED
-                    if result.status is StepStatus.SKIPPED
+                    if cancelled or result.status is StepStatus.SKIPPED
                     else WorkflowStatus.FAILED
                 )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import atexit
 import contextlib
+import logging
 import sqlite3
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -58,6 +59,8 @@ from storage.history import (
 )
 from storage.layouts import LayoutLoadResult, delete_layout, load_layout, save_layout
 from storage.workflows import load_workflow, save_workflow
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -463,6 +466,7 @@ class WorkflowService:
                 or (kill_switch is not None and getattr(kill_switch, "triggered", False))
             )
 
+        run = None
         try:
             run = self._desktop_replay.execute(
                 approval.workflow,
@@ -476,11 +480,29 @@ class WorkflowService:
             )
         finally:
             self._stop_kill_switch(kill_switch)
+            if run is None or run.status in (
+                WorkflowStatus.FAILED,
+                WorkflowStatus.CANCELLED,
+            ):
+                self._cleanup_launched_applications()
             if not keep_browsers_after_run:
                 self.close_browser_sessions()
         if self._history is not None:
             self._history.record(run)
         return run
+
+    def _cleanup_launched_applications(self) -> None:
+        """Close only applications launched by a failed or cancelled run."""
+        cleanup = getattr(self._desktop_actions, "close_launched_applications", None)
+        if not callable(cleanup):
+            return
+        try:
+            messages = cleanup()
+        except (AttributeError, OSError, RuntimeError) as error:
+            logger.warning("Cleanup of launched applications failed: %s", error)
+            return
+        for message in messages:
+            logger.info("Cleanup of launched applications: %s", message)
 
     def run_replay(
         self,

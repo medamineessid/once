@@ -74,12 +74,17 @@ def test_registry_approved_app_launches_and_closes_by_pid(tmp_path: Path) -> Non
     launched_argvs: list[list[str]] = []
     own_window = _FakeWindow(_FakeElementInfo("Sample Tool", process_id=7777, handle=101))
     other_window = _FakeWindow(_FakeElementInfo("User Window", process_id=9999, handle=202))
-    desktop = _FakeDesktop([own_window, other_window])
+    desktop = _FakeDesktop([other_window])
+
+    def launch(argv: list[str]) -> _FakeProcess:
+        launched_argvs.append(argv)
+        desktop._windows.append(own_window)
+        return _FakeProcess(7777)
 
     actions = PywinautoDesktopActions(
         desktop_factory=lambda: desktop,
         approvals=registry,
-        popen=lambda argv: launched_argvs.append(argv) or _FakeProcess(7777),
+        popen=launch,
         is_visible=lambda w: not w.closed,
         has_owner=lambda _w: False,
         process_alive=lambda pid: pid == 9999 or not own_window.closed,
@@ -188,11 +193,16 @@ def test_mixed_desktop_and_report_workflow_runs_as_partially_performed(tmp_path:
     registry.approve(exe, display_name="Sample Tool")
 
     own_window = _FakeWindow(_FakeElementInfo("Sample Tool", process_id=7777, handle=101))
-    desktop = _FakeDesktop([own_window])
+    desktop = _FakeDesktop([])
+
+    def launch(_argv: list[str]) -> _FakeProcess:
+        desktop._windows.append(own_window)
+        return _FakeProcess(7777)
+
     actions = PywinautoDesktopActions(
         desktop_factory=lambda: desktop,
         approvals=registry,
-        popen=lambda _argv: _FakeProcess(7777),
+        popen=launch,
         is_visible=lambda w: not w.closed,
         has_owner=lambda _w: False,
         process_alive=lambda _pid: not own_window.closed,

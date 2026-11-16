@@ -44,6 +44,8 @@ SHORTCUT_CODES: dict[str, str] = {
 POLL_INTERVAL_SECONDS = 0.25
 #: Bound on how long one close step may wait for a window to appear or go.
 CLOSE_TIMEOUT_SECONDS = 10.0
+#: Bounded wait for a control to publish the value it just accepted.
+READBACK_TIMEOUT_SECONDS = 1.0
 MAX_ARGUMENTS = 16
 
 GW_OWNER = 4
@@ -69,6 +71,12 @@ def _handle_of(wrapper: Any) -> int:
     """The Win32 handle of a top-level wrapper, or 0 when it has none."""
     handle = getattr(getattr(wrapper, "element_info", None), "handle", None)
     return handle if isinstance(handle, int) else 0
+
+
+def _window_token(wrapper: Any) -> int:
+    """Stable per-window token used to distinguish new windows from pre-existing ones."""
+    handle = _handle_of(wrapper)
+    return handle if handle else id(wrapper)
 
 
 def _windows_api() -> Any:
@@ -177,6 +185,10 @@ class PywinautoDesktopActions:
         self._mouse_click = mouse_click or self._default_mouse_click
         #: executable path -> (pid, close_supported) of exactly what this run launched.
         self._launched: dict[str, tuple[int, bool]] = {}
+        #: window tokens that already existed before each launch, so close never
+        #: touches a user's pre-existing document (Notepad hosts many windows in
+        #: one process on Windows 11). None means the snapshot failed.
+        self._prelaunch_handles: dict[str, frozenset[int] | None] = {}
 
     # ------------------------------------------------------------ dispatch
 
@@ -236,6 +248,7 @@ class PywinautoDesktopActions:
         approval, refusal = self._approval_for(executable)
         if refusal is not None:
             return refusal
+        baseline = self._snapshot_window_tokens()
         argv = [str(executable), *arguments]
         try:
             process = self._popen(argv)
@@ -246,7 +259,9 @@ class PywinautoDesktopActions:
                 message=f"The application could not be launched: {error}",
                 evidence=(f"executable={executable}",),
             )
-        self._launched[_executable_key(executable)] = (process.pid, approval.close_supported)
+        key = _executable_key(executable)
+        self._launched[key] = (process.pid, approval.close_supported)
+        self._prelaunch_handles[key] = baseline
         return StepResult(
             step_id="",
             status=StepStatus.SUCCEEDED,
@@ -364,16 +379,31 @@ class PywinautoDesktopActions:
                 ),
                 evidence=(f"process_id={pid}", "close_supported=false"),
             )
+        baseline = self._prelaunch_handles.get(_executable_key(Path(recorded)))
+        if baseline is None:
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=(
+                    "Once could not confirm which window belonged to this run, so "
+                    "it left the application open rather than closing a window it "
+                    "might not own."
+                ),
+                evidence=(f"process_id={pid}", "window_ownership_verified=false"),
+            )
         deadline = self._clock() + CLOSE_TIMEOUT_SECONDS
         closed = 0
         requested: set[int] = set()
         while True:
-            if not self._process_alive(pid):
+            visible = self._new_visible_windows(Path(recorded), pid, baseline)
+            if not self._process_alive(pid) and not visible:
                 if closed == 0:
                     return StepResult(
                         step_id="",
                         status=StepStatus.SUCCEEDED,
-                        message="The application had already exited.",
+                        message=(
+                            "The launch process had already exited and no new window was observed."
+                        ),
                         evidence=(f"process_id={pid}", "exited=true"),
                     )
                 return StepResult(
@@ -382,7 +412,6 @@ class PywinautoDesktopActions:
                     message="The application windows were closed.",
                     evidence=(f"process_id={pid}", f"windows_closed={closed}", "exited=true"),
                 )
-            visible = self._visible_windows(pid)
             if not visible:
                 if closed:
                     return StepResult(
@@ -436,16 +465,62 @@ class PywinautoDesktopActions:
                 closed += 1
             self._sleep(self._poll_interval)
 
-    def _visible_windows(self, pid: int) -> list[Any]:
-        """Visible, unowned top-level windows of exactly one process id."""
-        found = [
-            wrapper
-            for wrapper in self._desktop_factory().windows()
-            if window_matches(wrapper, {"process_id": pid})
-            and self._is_visible(wrapper)
-            and not self._has_owner(wrapper)
-        ]
-        return sorted(found, key=_handle_of)
+    def _snapshot_window_tokens(self) -> frozenset[int] | None:
+        """Remember every window that existed before a launch.
+
+        Returning None when the desktop cannot be enumerated is deliberate:
+        close then refuses instead of guessing that every visible window of a
+        reused process belongs to this run.
+        """
+        try:
+            return frozenset(
+                _window_token(wrapper) for wrapper in self._desktop_factory().windows()
+            )
+        except AttributeError, OSError, RuntimeError, ValueError:
+            return None
+
+    def _new_visible_windows(
+        self, executable: Path, pid: int, baseline: frozenset[int]
+    ) -> list[Any]:
+        """Visible, unowned windows created by this launch, never older ones.
+
+        Windows 11 Notepad can host several documents in one process, so a pid
+        match alone is not enough. A window also qualifies when its process
+        image is exactly the executable this run launched (the packaged-app
+        handoff case), and only when it did not exist in the pre-launch snapshot.
+        """
+        key = _executable_key(executable)
+        found: list[Any] = []
+        for wrapper in self._desktop_factory().windows():
+            info = wrapper.element_info
+            window_pid = getattr(info, "process_id", None)
+            owned = window_pid == pid
+            if not owned and isinstance(window_pid, int) and window_pid > 0:
+                image = self._process_image(window_pid)
+                owned = bool(image) and _executable_key(Path(image)) == key
+            if (
+                owned
+                and _window_token(wrapper) not in baseline
+                and self._is_visible(wrapper)
+                and not self._has_owner(wrapper)
+            ):
+                found.append(wrapper)
+        return sorted(found, key=_window_token)
+
+    def close_launched_applications(self) -> tuple[str, ...]:
+        """Close only windows created by applications this run launched.
+
+        Used after a failed or cancelled run. Every attempt is bounded by the
+        normal close timeout, a pre-existing window is never touched, and the
+        returned plain-language messages are logged by the controller.
+        """
+        messages: list[str] = []
+        for key in tuple(self._launched):
+            result = self.close_application(json.dumps({"executable": key}))
+            messages.append(result.message)
+            self._launched.pop(key, None)
+            self._prelaunch_handles.pop(key, None)
+        return tuple(messages)
 
     # ---------------------------------------------------------------- wait
 
@@ -733,30 +808,23 @@ class PywinautoDesktopActions:
             raise ExecutionError(
                 "The target control is a password field, so entering text was refused for secrecy."
             )
+        value_pattern = None
         try:
             value_pattern = self._pattern(element, "value")
             value_pattern.SetValue(text)
-            read_back = self._readback(value_pattern)
-        except ExecutionError:
-            # Controls like RichEditD2DPT expose TextPattern/keyboard input instead of ValuePattern
-            try:
-                element.set_focus()
-                element.type_keys("^a{BACKSPACE}", with_spaces=True)
-                escaped = text.replace("{", "{{").replace("}", "}}")
-                element.type_keys(escaped, with_spaces=True)
+            if self._readback_matches(value_pattern, text):
                 return StepResult(
                     step_id="",
                     status=StepStatus.SUCCEEDED,
-                    message="The text was entered into the focused text control.",
-                    evidence=("chars=" + str(len(text)), "readback_confirmed=true"),
+                    message="The text was entered and confirmed by reading the control.",
+                    evidence=(
+                        "chars=" + str(len(text)),
+                        "readback_confirmed=true",
+                        "input_method=value_pattern",
+                    ),
                 )
-            except (AttributeError, OSError, RuntimeError, ValueError) as error:
-                return StepResult(
-                    step_id="",
-                    status=StepStatus.FAILED,
-                    message=f"The text could not be entered: {error}",
-                    evidence=("chars=" + str(len(text)),),
-                )
+        except ExecutionError:
+            pass  # Controls like RichEditD2DPT need focused keyboard input.
         except (AttributeError, OSError, RuntimeError, ValueError) as error:
             return StepResult(
                 step_id="",
@@ -764,7 +832,34 @@ class PywinautoDesktopActions:
                 message=f"The text could not be entered: {error}",
                 evidence=("chars=" + str(len(text)),),
             )
-        if read_back != text:
+
+        # The value pattern may exist but publish the value asynchronously, or
+        # not implement SetValue at all. Try focused keyboard input, then read
+        # the same control back; never claim a readback that did not happen.
+        try:
+            element.set_focus()
+            element.type_keys("^a{BACKSPACE}", with_spaces=True)
+            escaped = text.replace("{", "{{").replace("}", "}}")
+            element.type_keys(escaped, with_spaces=True)
+        except (AttributeError, OSError, RuntimeError, ValueError) as error:
+            return StepResult(
+                step_id="",
+                status=StepStatus.FAILED,
+                message=f"The text could not be entered: {error}",
+                evidence=("chars=" + str(len(text)),),
+            )
+        if value_pattern is not None:
+            if self._readback_matches(value_pattern, text):
+                return StepResult(
+                    step_id="",
+                    status=StepStatus.SUCCEEDED,
+                    message="The text was entered and confirmed by reading the control.",
+                    evidence=(
+                        "chars=" + str(len(text)),
+                        "readback_confirmed=true",
+                        "input_method=keyboard",
+                    ),
+                )
             return StepResult(
                 step_id="",
                 status=StepStatus.FAILED,
@@ -777,9 +872,36 @@ class PywinautoDesktopActions:
         return StepResult(
             step_id="",
             status=StepStatus.SUCCEEDED,
-            message="The text was entered and confirmed by reading the control.",
-            evidence=("chars=" + str(len(text)), "readback_confirmed=true"),
+            message=(
+                "The text was entered into the focused control, but this control "
+                "does not expose a value to read back."
+            ),
+            evidence=(
+                "chars=" + str(len(text)),
+                "readback_confirmed=false",
+                "input_method=keyboard",
+            ),
         )
+
+    @staticmethod
+    def _text_readback_matches(readback: object, text: str) -> bool:
+        """Compare typed text, tolerating only a control-added final line break."""
+        if readback == text:
+            return True
+        return isinstance(readback, str) and readback.rstrip("\r\n") == text
+
+    def _readback_matches(self, pattern: Any, text: str) -> bool:
+        """Wait briefly for the control to publish the accepted value."""
+        deadline = self._clock() + READBACK_TIMEOUT_SECONDS
+        while True:
+            try:
+                if self._text_readback_matches(self._readback(pattern), text):
+                    return True
+            except AttributeError, OSError, RuntimeError, ValueError:
+                return False
+            if self._clock() >= deadline:
+                return False
+            self._sleep(0.05)
 
     # ------------------------------------------------------------- shortcut
 

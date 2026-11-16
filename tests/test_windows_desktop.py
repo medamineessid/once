@@ -70,6 +70,7 @@ class FakeElementInfo:
         control_type="",
         process_id=1,
         is_password=False,
+        handle=None,
     ) -> None:
         self.name = name
         self.class_name = class_name
@@ -77,6 +78,7 @@ class FakeElementInfo:
         self.control_type = control_type
         self.process_id = process_id
         self.is_password = is_password
+        self.handle = process_id if handle is None else handle
 
 
 class FakeRect:
@@ -152,6 +154,24 @@ class FakeDesktop:
 
     def windows(self) -> list[FakeWrapper]:
         return [wrapper for wrapper in self._windows if not getattr(wrapper, "closed", False)]
+
+
+class DeferredDesktop(FakeDesktop):
+    """Hide test windows from the pre-launch snapshot only.
+
+    Production windows are created after launch; these fixtures model that so a
+    test window is a new window, not one that existed before the run.
+    """
+
+    def __init__(self, windows: list[FakeWrapper]) -> None:
+        super().__init__(windows)
+        self._snapshot_taken = False
+
+    def windows(self) -> list[FakeWrapper]:
+        if not self._snapshot_taken:
+            self._snapshot_taken = True
+            return []
+        return super().windows()
 
 
 class Clock:
@@ -264,7 +284,7 @@ def close_provider(
     approvals=None,
 ) -> PywinautoDesktopActions:
     """Provider bound to one fake desktop surface with launch and close access."""
-    desktop = FakeDesktop(windows)
+    desktop = DeferredDesktop(windows)
     if clock is None:
         clock = Clock()
     overrides: dict[str, object] = {
@@ -320,6 +340,31 @@ def test_type_text_sets_value_and_confirms_readback() -> None:
     provider, _clock = provider_with([editor])
     result = provider.type_text(
         json.dumps({**{"window": WINDOW_IDENTITY, "element": TEXT_ELEMENT}, "text": "hello once"})
+    )
+    assert result.status is StepStatus.SUCCEEDED
+    assert "readback_confirmed=true" in result.evidence
+
+
+def test_type_text_accepts_a_control_added_final_line_break() -> None:
+    """RichEdit controls append CR; that is not different entered text."""
+
+    class RichEditPointers(FakePointers):
+        def SetValue(self, text: str) -> None:
+            self._value = text + "\r"
+
+    editor = FakeWrapper(
+        FakeElementInfo(class_name="RICHEDIT50W", control_type="Edit"), enabled=True
+    )
+    editor.iface_value = RichEditPointers()
+    provider, _clock = provider_with([editor])
+    result = provider.type_text(
+        json.dumps(
+            {
+                "window": WINDOW_IDENTITY,
+                "element": {"class_name": "RICHEDIT50W", "control_type": "Edit"},
+                "text": "once test",
+            }
+        )
     )
     assert result.status is StepStatus.SUCCEEDED
     assert "readback_confirmed=true" in result.evidence
@@ -776,6 +821,73 @@ def test_close_succeeds_when_the_app_already_exited() -> None:
     assert "exited=true" in result.evidence
 
 
+def test_close_leaves_a_preexisting_window_of_the_same_process_alone() -> None:
+    """Windows 11 Notepad can host the user's document and ours in one pid."""
+    old = FakeWindow(FakeElementInfo(name="User's document", process_id=4242, handle=1), [])
+    fresh = FakeWindow(FakeElementInfo(name="Our document", process_id=4242, handle=2), [])
+
+    class GrowingDesktop(FakeDesktop):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.calls = 0
+
+        def windows(self):
+            self.calls += 1
+            return [old] if self.calls == 1 else [old, fresh]
+
+    desktop = GrowingDesktop()
+    provider = PywinautoDesktopActions(
+        desktop_factory=lambda: desktop,
+        approvals=FakeApprovals(),
+        popen=lambda _argv: FakeProcess(),
+        is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
+        has_owner=lambda _wrapper: False,
+        process_alive=lambda _pid: True,
+        sleep=lambda _seconds: None,
+    )
+    launched = provider.launch_application(json.dumps({"executable": sys.executable}))
+    assert launched.status is StepStatus.SUCCEEDED
+
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
+
+    assert result.status is StepStatus.SUCCEEDED
+    assert fresh.closed is True
+    assert old.closed is False, "a pre-existing document must never be closed"
+    assert "windows_closed=1" in result.evidence
+
+
+def test_cleanup_closes_only_windows_created_by_the_launch() -> None:
+    old = FakeWindow(FakeElementInfo(name="User's document", process_id=4242, handle=1), [])
+    fresh = FakeWindow(FakeElementInfo(name="Our document", process_id=4242, handle=2), [])
+
+    class GrowingDesktop(FakeDesktop):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.calls = 0
+
+        def windows(self):
+            self.calls += 1
+            return [old] if self.calls == 1 else [old, fresh]
+
+    desktop = GrowingDesktop()
+    provider = PywinautoDesktopActions(
+        desktop_factory=lambda: desktop,
+        approvals=FakeApprovals(),
+        popen=lambda _argv: FakeProcess(),
+        is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
+        has_owner=lambda _wrapper: False,
+        process_alive=lambda _pid: True,
+        sleep=lambda _seconds: None,
+    )
+    provider.launch_application(json.dumps({"executable": sys.executable}))
+
+    messages = provider.close_launched_applications()
+
+    assert fresh.closed is True
+    assert old.closed is False
+    assert messages == ("The application windows were closed.",)
+
+
 def test_launch_refuses_when_hash_changes() -> None:
     provider = PywinautoDesktopActions(
         desktop_factory=lambda: FakeDesktop([]),
@@ -804,7 +916,8 @@ def test_type_text_falls_back_to_keyboard_entry_when_value_pattern_missing() -> 
         )
     )
     assert result.status is StepStatus.SUCCEEDED
-    assert "readback_confirmed=true" in result.evidence
+    assert "readback_confirmed=false" in result.evidence
+    assert "input_method=keyboard" in result.evidence
     assert "typed via fallback" in editor.focused_keys
 
 

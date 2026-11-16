@@ -184,10 +184,14 @@ class FakeWindow:
 
 
 class FakeDesktop:
-    def __init__(self, windows: list[FakeWindow]) -> None:
+    def __init__(self, windows: list[FakeWindow], *, defer_until_after_launch: bool = True) -> None:
         self._windows = windows
+        self._snapshot_taken = not defer_until_after_launch
 
     def windows(self) -> list[FakeWindow]:
+        if not self._snapshot_taken:
+            self._snapshot_taken = True
+            return []
         return [window for window in self._windows if not window.closed]
 
 
@@ -300,10 +304,17 @@ def test_launching_a_second_process_replaces_the_registered_pid() -> None:
     """The registered pid is the newest launch, so close never guesses."""
     first = FakeWindow(FakeElementInfo("Chrome one", 1111))
     second = FakeWindow(FakeElementInfo("Chrome two", 2222))
+    desktop = FakeDesktop([], defer_until_after_launch=False)
     pids = iter((1111, 2222))
+
+    def fake_popen(_argv: list[str]) -> FakeProcess:
+        process = process_with_pid(next(pids))
+        desktop._windows.append(first if process.pid == 1111 else second)
+        return process
+
     provider = approved_provider(
-        **fake_surface(FakeDesktop([first, second]), {1111, 2222}),
-        popen=lambda argv: process_with_pid(next(pids)),
+        **fake_surface(desktop, {1111, 2222}),
+        popen=fake_popen,
     )
 
     provider.launch_application(APP_TARGET)
@@ -402,7 +413,7 @@ def test_close_reports_a_process_that_already_exited() -> None:
     result = provider.close_application(NOTEPAD_CLOSE)
 
     assert result.status is StepStatus.SUCCEEDED
-    assert result.message == "The application had already exited."
+    assert result.message == "The launch process had already exited and no new window was observed."
     assert "exited=true" in result.evidence
     assert not any(item.startswith("windows_closed=") for item in result.evidence)
 
