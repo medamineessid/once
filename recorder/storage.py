@@ -7,6 +7,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from engine.errors import WorkflowValidationError
+from engine.fs import atomic_write_text
 
 from .models import RecordedEvent, RecordedEventKind, Recording, UIElementInfo
 from .redaction import redact_events
@@ -19,23 +20,45 @@ class RecordingStore:
         self._directory = directory
         self._directory.mkdir(parents=True, exist_ok=True)
 
+    def _path_for(self, recording_id: str) -> Path:
+        """Resolve one recording file, refusing names that leave the folder."""
+        if (
+            not recording_id
+            or recording_id in {".", ".."}
+            or "/" in recording_id
+            or "\\" in recording_id
+            or Path(recording_id).name != recording_id
+        ):
+            raise WorkflowValidationError("Recording name is not valid.")
+        directory = self._directory.resolve()
+        candidate = (self._directory / f"{recording_id}.json").resolve()
+        if not candidate.is_relative_to(directory):
+            raise WorkflowValidationError("Recording is not stored in the Once data folder.")
+        return candidate
+
     def save(self, recording: Recording) -> Path:
         """Redact and save one recording as UTF-8 JSON."""
         safe = Recording(
             recording.recording_id, recording.started_at_ns, redact_events(recording.events)
         )
-        path = self._directory / f"{safe.recording_id}.json"
+        path = self._path_for(safe.recording_id)
         payload = {
             "recording_id": safe.recording_id,
             "started_at_ns": safe.started_at_ns,
             "events": [asdict(event) for event in safe.events],
         }
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        try:
+            atomic_write_text(
+                path,
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            )
+        except OSError as error:
+            raise WorkflowValidationError(f"Could not save recording: {path}.") from error
         return path
 
     def load(self, recording_id: str) -> Recording:
         """Load one recording and reject malformed or unknown JSON."""
-        path = self._directory / f"{recording_id}.json"
+        path = self._path_for(recording_id)
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             events = tuple(
@@ -76,7 +99,7 @@ class RecordingStore:
     def delete(self, recording_id: str) -> None:
         """Delete one explicitly selected local recording."""
         try:
-            (self._directory / f"{recording_id}.json").unlink()
+            self._path_for(recording_id).unlink()
         except FileNotFoundError as error:
             raise WorkflowValidationError(f"Recording was not found: {recording_id}.") from error
 

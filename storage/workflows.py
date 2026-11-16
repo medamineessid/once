@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Final
 
 from engine.errors import WorkflowValidationError
+from engine.fs import atomic_write_text
 from engine.workflow import (
     DEFAULT_STEP_TIMEOUT_SECONDS,
     PostconditionKind,
@@ -125,7 +126,7 @@ def save_workflow(workflow: Workflow, path: Path) -> None:
         raise WorkflowValidationError("Workflow files must use the .json extension.")
     payload = json.dumps(workflow_to_dict(workflow), indent=2, ensure_ascii=False) + "\n"
     try:
-        path.write_text(payload, encoding="utf-8")
+        atomic_write_text(path, payload)
     except OSError as error:
         raise WorkflowValidationError(f"Could not save workflow: {path}.") from error
 
