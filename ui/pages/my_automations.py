@@ -26,7 +26,12 @@ from ui.components.banner import Banner
 from ui.components.cards import Chip
 from ui.components.confirm import InlineConfirm
 from ui.components.delete_confirm import DeleteConfirmDialog, automation_delete_message
-from ui.components.formatting import human_timestamp, status_display
+from ui.components.formatting import (
+    friendly_step_display,
+    friendly_step_status,
+    human_timestamp,
+    status_display,
+)
 from ui.components.pageheader import PageHeader
 from ui.strings import (
     DELETE_ACTION,
@@ -230,8 +235,13 @@ class MyAutomationsPage(QWidget):
     # ------------------------------------------------------------ read paths
 
     def _show_workflow_details(self, workflow: Workflow) -> None:
-        lines = [f"{workflow.name} ({workflow.workflow_id})"]
-        lines.extend(f"{step.kind.value} - {step.name}: {step.message}" for step in workflow.steps)
+        lines = [workflow.name]
+        for index, step in enumerate(workflow.steps, start=1):
+            title, action_label, clean_desc = friendly_step_display(step)
+            line = f"{index}. {action_label}: {title}"
+            if clean_desc and clean_desc != title:
+                line += f" — {clean_desc}"
+            lines.append(line)
         self._details_label.setText("\n".join(lines))
 
     def _on_selection_changed(self) -> None:
@@ -286,7 +296,7 @@ class MyAutomationsPage(QWidget):
         except WorkflowValidationError as error:
             self._show_page_error(str(error))
             return
-        lines = [f"Preview (read-only): {workflow.name} ({preview.workflow_id})"]
+        lines = [f"Preview (read-only): {workflow.name}"]
         lines.extend(f" - {step}" for step in preview.steps)
         if preview.executable:
             lines.append("Status: this replay can be executed.")
@@ -415,10 +425,8 @@ class MyAutomationsPage(QWidget):
         evidence = (
             f" [{'; '.join(step_result.evidence)}]" if step_result.evidence else ""  # type: ignore[attr-defined]
         )
-        line = (
-            f"{step_result.step_id}: {step_result.status.value}"  # type: ignore[attr-defined]
-            f" - {step_result.message}{evidence}"  # type: ignore[attr-defined]
-        )
+        label = friendly_step_status(getattr(step_result.status, "value", ""))
+        line = f"{label} — {step_result.message}{evidence}"  # type: ignore[attr-defined]
         self._details_label.setText(f"{self._details_label.text()}\n{line}")
 
     def _on_run_finished(self, run: object) -> None:

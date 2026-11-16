@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import Qt
@@ -281,15 +282,37 @@ def test_details_match_selected_automation(qtbot):
 
     page._workflow_list.setCurrentRow(0)
     first_details = page._details_label.text()
-    assert "alpha-workflow" in first_details
-    assert "REPORT" in first_details
+    assert "Alpha workflow" in first_details
+    assert "Note: Inspect workflow" in first_details
     assert "alpha-workflow definition accepted." in first_details
+    assert "Alpha workflow (alpha-workflow)" not in first_details
+    assert "REPORT" not in first_details
 
     page._workflow_list.setCurrentRow(1)
     second_details = page._details_label.text()
     assert second_details != first_details
-    assert "beta-workflow" in second_details
+    assert "Beta workflow" in second_details
     assert "alpha-workflow definition accepted." not in second_details
+
+
+def test_live_progress_uses_plain_labels_not_ids_or_enum_names(qtbot):
+    service = FakeService(two_saved_workflows())
+    page = make_page(qtbot, service)
+    page._details_label.setText("Running 'Alpha workflow'...")
+
+    page._on_run_progress(
+        SimpleNamespace(
+            step_id="inspect-internal-id",
+            status=SimpleNamespace(value="SUCCEEDED"),
+            message="The step finished.",
+            evidence=(),
+        )
+    )
+
+    text = page._details_label.text()
+    assert "Done — The step finished." in text
+    assert "inspect-internal-id" not in text
+    assert "SUCCEEDED" not in text
 
 
 def test_open_uses_saved_path_and_shows_read_only_steps(qtbot):
