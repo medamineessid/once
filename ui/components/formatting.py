@@ -133,6 +133,10 @@ def clean_step_message(message: str) -> str:
     return cleaned
 
 
+# A malformed target payload is expected input for a recorder draft.
+_TARGET_PARSE_ERRORS = (TypeError, ValueError)
+
+
 def friendly_step_display(step: object) -> tuple[str, str, str]:
     """Return ``(friendly_title, action_label, clean_description)`` for a WorkflowStep."""
     import json
@@ -162,7 +166,7 @@ def friendly_step_display(step: object) -> tuple[str, str, str]:
                     title = "Type text"
                 elif kind_val == "PRESS_SHORTCUT" and target.get("keys"):
                     title = f'Press "{target["keys"]}"'
-            except (TypeError, ValueError):
+            except _TARGET_PARSE_ERRORS:
                 pass
         if not title:
             title = raw_msg or action_label
