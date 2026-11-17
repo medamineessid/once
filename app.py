@@ -11,20 +11,75 @@ import logging.handlers
 import os
 import sqlite3
 import sys
+import tempfile
 from pathlib import Path
 
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtGui import QFont, QFontInfo
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QWidget
 
 from controller.recording import RecordingService
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig, load_verifier_config
 from engine.errors import StorageError
+from ui.fonts import load_fonts
 from ui.main_window import MainWindow
 from ui.shell import MainWindow as ShellMainWindow
 
 SMOKE_TEST_FLAG = "--smoke-test"
 SHELL_FLAG = "--shell"
 CLASSIC_FLAG = "--classic"
+SCREENSHOT_FLAG = "--screenshot"
+PAGE_FLAG = "--page"
+DIAGNOSE_FLAG = "--diagnose"
+
+_PAGE_WIDGETS = {
+    "home": "home_page",
+    "automations": "my_automations_page",
+    "activity": "activity_page",
+    "settings": "settings_page",
+    "details": "review_page",
+}
+_PAGE_INDEX = {
+    "home": 0,
+    "automations": 1,
+    "activity": 2,
+    "settings": 3,
+    "details": 4,
+}
+_APP_OWN_FLAGS = {
+    SMOKE_TEST_FLAG,
+    SHELL_FLAG,
+    CLASSIC_FLAG,
+    SCREENSHOT_FLAG,
+    PAGE_FLAG,
+    DIAGNOSE_FLAG,
+}
+
+
+def _flag_value(args: list[str], flag: str) -> str | None:
+    """Return the value after ``flag``, or None when absent."""
+    if flag not in args:
+        return None
+    index = args.index(flag)
+    return args[index + 1] if index + 1 < len(args) else None
+
+
+def _strip_app_args(args: list[str]) -> list[str]:
+    """Drop Once's own flags and their values before Qt sees them."""
+    cleaned: list[str] = []
+    skip_next = False
+    for arg in args:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in (SCREENSHOT_FLAG, PAGE_FLAG):
+            skip_next = True
+            continue
+        if arg in _APP_OWN_FLAGS:
+            continue
+        cleaned.append(arg)
+    return cleaned
 
 
 def setup_logging(app_data_dir: Path) -> Path:
@@ -77,13 +132,16 @@ def build_window(
     """
     smoke_test = SMOKE_TEST_FLAG in args
     use_shell = SHELL_FLAG in args
-    qt_args = [
-        sys.argv[0],
-        *(arg for arg in args if arg not in (SMOKE_TEST_FLAG, SHELL_FLAG, CLASSIC_FLAG)),
-    ]
+    capture = SCREENSHOT_FLAG in args or DIAGNOSE_FLAG in args
+    qt_args = [sys.argv[0], *_strip_app_args(args)]
 
     app = build_application(qt_args)
-    app_data_dir = _app_data_dir()
+    families = load_fonts()
+    if "Inter" in families:
+        app.setFont(QFont("Inter"))
+    # Capture/diagnose runs use a throwaway data folder so the user's real
+    # history and recordings are never touched by an automated run.
+    app_data_dir = Path(tempfile.mkdtemp(prefix="once-capture-")) if capture else _app_data_dir()
     setup_logging(app_data_dir)
     logging.getLogger(__name__).info(
         "Once started (smoke_test=%s, shell=%s)", smoke_test, use_shell
@@ -146,6 +204,29 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     window.show()
 
+    if DIAGNOSE_FLAG in args:
+        page_name = _flag_value(args, PAGE_FLAG) or "home"
+        _select_page(window, page_name)
+        app.processEvents()
+        _print_diagnostics(window, page_name)
+        window.close()
+        app.processEvents()
+        service.close()
+        return 0
+
+    screenshot_path = _flag_value(args, SCREENSHOT_FLAG)
+    if screenshot_path:
+        _select_page(window, _flag_value(args, PAGE_FLAG) or "home")
+        app.processEvents()
+        QTest.qWait(800)
+        window.grab().save(screenshot_path)
+        app.processEvents()
+        window.close()
+        app.processEvents()
+        service.close()
+        print(f"Saved screenshot to {screenshot_path}")
+        return 0
+
     if smoke_test:
         # Construct the real window, flush pending Qt work, then leave without
         # waiting for a user to close the window. Any initialisation failure
@@ -159,6 +240,67 @@ def main(argv: list[str] | None = None) -> int:
     exit_code = app.exec()
     service.close()
     return exit_code
+
+
+def _select_page(window: object, name: str) -> None:
+    """Show one of the stacked pages by short name."""
+    from ui.shell import ShellPages
+
+    index = _PAGE_INDEX.get(name.casefold())
+    if index is None:
+        raise SystemExit(f"Unknown page {name!r}. Choose one of: {', '.join(_PAGE_INDEX)}")
+    workspace = getattr(window, "workspace", None)
+    if workspace is not None:
+        workspace.setCurrentIndex(index)
+    set_checked = getattr(getattr(window, "sidebar", None), "set_checked", None)
+    if callable(set_checked):
+        set_checked(index)
+    _ = ShellPages
+
+
+def _describe(label: str, widget: QWidget) -> None:
+    font = widget.font()
+    info = QFontInfo(font)
+    text_value = getattr(widget, "text", None)
+    text = text_value() if callable(text_value) else ""
+    print(
+        f"  {label:<22} family={info.family()!r} px={info.pixelSize()} "
+        f"devicePixelRatio={widget.devicePixelRatioF():.2f} "
+        f"text={text[:40]!r}"
+    )
+
+
+def _print_diagnostics(window: object, page_name: str) -> None:
+    """Print real font/icon measurements for the visible page."""
+    print(f"DIAGNOSE page={page_name}")
+    workspace = getattr(window, "workspace", None)
+    active = workspace.currentWidget() if workspace is not None else None
+    scope = active if isinstance(active, QWidget) else window
+    # Titles and micro-labels by object name on the active page.
+    for object_name in ("pageTitle", "heroLine", "heroLineAccent", "heroMicro", "pageMicro"):
+        widget = scope.findChild(QWidget, object_name)
+        if widget is not None:
+            _describe(object_name, widget)
+    # Body text: the first QLabel that is not a known display object.
+    known = {"pageTitle", "heroLine", "heroLineAccent", "heroMicro", "pageMicro"}
+    for label in scope.findChildren(QLabel):
+        if label.objectName() not in known and label.isVisible() and label.text():
+            _describe("body", label)
+            break
+    # Sidebar label text lives on the QToolButton itself.
+    sidebar_button = window.findChild(QWidget, "sidebarHomeButton")
+    if sidebar_button is not None:
+        _describe("sidebarLabel", sidebar_button)
+        icon = sidebar_button.icon()
+        if not icon.isNull():
+            from PySide6.QtCore import QSize
+
+            dpr = window.devicePixelRatioF()
+            pixmap = icon.pixmap(QSize(20, 20), dpr)
+            print(
+                f"  {'sidebarIcon':<22} px={pixmap.width()}x{pixmap.height()} "
+                f"devicePixelRatio={pixmap.devicePixelRatio():.2f}"
+            )
 
 
 def _load_verifier_setup(app_data_dir: Path) -> tuple[VerifierConfig | None, str | None]:
