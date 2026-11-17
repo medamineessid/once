@@ -144,6 +144,7 @@ class ActivityPage(QWidget):
             parent=self,
         )
         layout.addWidget(self._empty_state)
+        layout.addStretch(1)
         self._refresh()
 
     def _row_facts(self, run: object) -> tuple[str, str, str, str, str, str]:

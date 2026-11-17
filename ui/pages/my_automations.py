@@ -206,6 +206,7 @@ class MyAutomationsPage(QWidget):
         self._details_label.setObjectName("automationDetailsLabel")
         self._details_label.setWordWrap(True)
         layout.addWidget(self._details_label)
+        layout.addStretch(1)
         self._refresh()
 
     # ------------------------------------------------------------- helpers
@@ -463,6 +464,7 @@ class MyAutomationsPage(QWidget):
         if self._service is None:
             self._micro_label.setText("0 SAVED AUTOMATIONS")
             self._details_label.setText(MY_EMPTY)
+            self._workflow_list.setVisible(False)
             return
         saved_paths = tuple(self._service.list_saved())
         self._micro_label.setText(
@@ -497,6 +499,7 @@ class MyAutomationsPage(QWidget):
             item.setSizeHint(hint)
             self._workflow_list.addItem(item)
             self._workflow_list.setItemWidget(item, row)
+        self._workflow_list.setVisible(bool(saved_paths))
         self._workflow_list.setFixedHeight(max(84, min(320, 28 + len(saved_paths) * 64)))
         if unreadable:
             self._banner.show_message("warning", MY_UNREADABLE_TITLE, MY_UNREADABLE_BODY)
