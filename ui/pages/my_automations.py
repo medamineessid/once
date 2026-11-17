@@ -32,6 +32,7 @@ from ui.components.formatting import (
     human_timestamp,
     status_display,
 )
+from ui.components.hero import MicroLabel
 from ui.components.pageheader import PageHeader
 from ui.strings import (
     DELETE_ACTION,
@@ -145,6 +146,8 @@ class MyAutomationsPage(QWidget):
         layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
         layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop)
+        self._micro_label = MicroLabel("0 saved automations", self)
+        layout.addWidget(self._micro_label)
         self._header = PageHeader(MY_TITLE, MY_SUBTITLE, primary_label=MY_NEW_ACTION, parent=self)
         self._title_label = self._header.title_label
         self._subtitle_label = self._header.description_label
@@ -458,9 +461,13 @@ class MyAutomationsPage(QWidget):
     def _refresh(self) -> None:
         self._workflow_list.clear()
         if self._service is None:
+            self._micro_label.setText("0 SAVED AUTOMATIONS")
             self._details_label.setText(MY_EMPTY)
             return
         saved_paths = tuple(self._service.list_saved())
+        self._micro_label.setText(
+            f"{len(saved_paths)} SAVED AUTOMATION{'S' if len(saved_paths) != 1 else ''}"
+        )
         unreadable = 0
         for path in saved_paths:
             saved_name = self._service.workflow_name(path.stem)

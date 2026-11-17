@@ -33,7 +33,10 @@ TYPE_BODY_PX = 14
 TYPE_CAPTION_PX = 13
 TYPE_FOOTER_PX = 11
 
-FONT_STACK = '"Segoe UI", "SF Pro Display", system-ui, sans-serif'
+UI_FONT = "Inter"
+DISPLAY_FONT = "Anton"
+FONT_STACK = '"Inter", "Segoe UI", system-ui, sans-serif'
+DISPLAY_FONT_STACK = '"Anton", "Inter", system-ui, sans-serif'
 
 # --- Color tokens (single source for both stylesheet and painted widgets) ----
 BG_APP = "#F5F6F8"
@@ -49,6 +52,21 @@ ACCENT_SOFT = "#EEF2FF"
 PRIMARY_BTN = "#111827"
 TEXT_STRONG = "#1D2733"
 TEXT_BODY = "#525A66"
+DIALOG_SCALE = 0.98
+STAGGER_LIMIT = 3
+DURATION_DIALOG_MS = 220
+DURATION_PAGE_MS = 300
+DURATION_RUNNING_PULSE_MS = 400
+DURATION_STAGGER_MS = 60
+PAGE_SLIDE_PX = 16
+LEMON = "#F7DC3C"
+GLACIER_600 = "#2472B0"
+GLACIER_BLUE = "#2472B0"
+NAVY = "#0B1F33"
+WHITE = "#FFFFFF"
+HERO_BLUE = "#3E9BE6"
+HERO_BLUE_CONTRAST = "#2472B0"
+TYPE_HERO_PX = 128
 TEXT_FAINT = "#525A66"
 TEXT_SIDEBAR = "#3A3A3A"
 TEXT_SIDEBAR_HOVER = "#1D1D1D"
@@ -63,6 +81,32 @@ TINT_STOP = "#FDECEC"
 TINT_START = "#FCF6E3"
 TINT_FINISH = "#F2F4F7"
 TINT_NOTE = "#FBF7DC"
+
+COLOR_TOKENS = {
+    "BG_APP": BG_APP,
+    "BG_CANVAS": BG_CANVAS,
+    "DOT_GRID": DOT_GRID,
+    "SURFACE": SURFACE,
+    "SURFACE_ALT": SURFACE_ALT,
+    "BORDER": BORDER,
+    "BORDER_STRONG": BORDER_STRONG,
+    "ACCENT": ACCENT,
+    "ACCENT_TEXT": ACCENT_TEXT,
+    "ACCENT_SOFT": ACCENT_SOFT,
+    "PRIMARY_BTN": PRIMARY_BTN,
+    "TEXT_STRONG": TEXT_STRONG,
+    "TEXT_BODY": TEXT_BODY,
+    "TEXT_FAINT": TEXT_FAINT,
+    "TEXT_SIDEBAR": TEXT_SIDEBAR,
+    "TEXT_SIDEBAR_HOVER": TEXT_SIDEBAR_HOVER,
+    "GLACIER_600": GLACIER_600,
+    "GLACIER_BLUE": GLACIER_BLUE,
+    "NAVY": NAVY,
+    "WHITE": WHITE,
+    "HERO_BLUE": HERO_BLUE,
+    "HERO_BLUE_CONTRAST": HERO_BLUE_CONTRAST,
+    "LEMON": LEMON,
+}
 
 #: Text/surface pairs used by pages; the contrast test walks this list.
 CONTRAST_PAIRS = (
@@ -141,6 +185,16 @@ def _set_stylesheet(app):
         "TINT_FINISH": TINT_FINISH,
         "TINT_NOTE": TINT_NOTE,
         "FONT_STACK": FONT_STACK,
+        "DISPLAY_FONT_STACK": DISPLAY_FONT_STACK,
+        "UI_FONT": UI_FONT,
+        "DISPLAY_FONT": DISPLAY_FONT,
+        "HERO_BLUE": HERO_BLUE,
+        "HERO_BLUE_CONTRAST": HERO_BLUE_CONTRAST,
+        "NAVY": NAVY,
+        "GLACIER_BLUE": GLACIER_BLUE,
+        "WHITE": WHITE,
+        "LEMON": LEMON,
+        "TYPE_HERO_PX": TYPE_HERO_PX,
         "TYPE_HOME_TITLE_PX": TYPE_HOME_TITLE_PX,
         "TYPE_TITLE_PX": TYPE_TITLE_PX,
         "TYPE_QUESTION_PX": TYPE_QUESTION_PX,
@@ -235,9 +289,10 @@ _STYLESHEET_TEMPLATE = Template("""
         margin-top: 8px;
     }
     QLabel#pageTitle {
-        font-size: ${TYPE_TITLE_PX}px;
-        font-weight: 600;
-        color: #1D1D1D;
+        font-size: ${TYPE_HOME_TITLE_PX}px;
+        font-weight: 400;
+        color: ${NAVY};
+        font-family: $DISPLAY_FONT_STACK;
     }
     QLabel#pageSubtitle {
         font-size: ${TYPE_SUBTITLE_PX}px;
@@ -802,6 +857,36 @@ _STYLESHEET_TEMPLATE = Template("""
         font-size: ${TYPE_CAPTION_PX}px;
         color: ${STATUS_ERROR};
         font-weight: 600;
+        font-family: $FONT_STACK;
+    }
+    QFrame#heroPanel {
+        background: ${HERO_BLUE_CONTRAST};
+        border-radius: 18px;
+    }
+    QLabel#heroMicro {
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        color: ${WHITE};
+        font-family: $FONT_STACK;
+    }
+    QLabel#heroLine {
+        font-size: ${TYPE_HERO_PX}px;
+        font-weight: 400;
+        color: ${WHITE};
+        font-family: $DISPLAY_FONT_STACK;
+    }
+    QLabel#heroLineAccent {
+        font-size: ${TYPE_HERO_PX}px;
+        font-weight: 400;
+        color: ${LEMON};
+        font-family: $DISPLAY_FONT_STACK;
+    }
+    QLabel#pageMicro {
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        color: ${GLACIER_BLUE};
         font-family: $FONT_STACK;
     }
 """)

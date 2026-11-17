@@ -8,6 +8,7 @@ existing configuration untouched and shows a plain-language reason.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import override
 
 from PySide6.QtWidgets import (
     QDialog,
@@ -26,12 +27,19 @@ from controller.verifier_config import (
     VerifierConfig,
     save_verifier_config,
 )
+from ui.motion import fade_dialog
 
 ARGUMENTS_PLACEHOLDER = "One argument per line, exactly one {input}."
 
 
 class VerifierConfigDialog(QDialog):
     """Collect and persist the acceptance checker configuration."""
+
+    @override
+    def showEvent(self, event) -> None:
+        """Fade and scale the dialog in when it appears."""
+        super().showEvent(event)
+        fade_dialog(self)
 
     def __init__(
         self,

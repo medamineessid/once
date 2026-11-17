@@ -25,9 +25,13 @@ def icon_pixmap(
     draw_fn,
     size: int = 20,
     color: QColor | None = None,
+    device_pixel_ratio: float = 1.0,
 ) -> QPixmap:
-    """Render one glyph into a crisp square pixmap."""
-    pixmap = QPixmap(size, size)
+    """Render one glyph into a crisp square pixmap at the screen's DPR."""
+    ratio = max(1.0, float(device_pixel_ratio))
+    physical = max(1, round(size * ratio))
+    pixmap = QPixmap(physical, physical)
+    pixmap.setDevicePixelRatio(ratio)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)

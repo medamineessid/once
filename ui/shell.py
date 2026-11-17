@@ -9,6 +9,7 @@ from typing import override
 from PySide6.QtCore import QSize, Qt, QThread, Signal
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -42,6 +43,7 @@ from ui.components.icons import (
     icon_pixmap,
 )
 from ui.components.spacer import Spacer
+from ui.fonts import load_fonts
 from ui.pages import (
     ActivityPage,
     CreateAutomationPage,
@@ -104,7 +106,9 @@ class SidebarButton(QToolButton):
         self.setText(text)
         self.setObjectName(object_name)
         if glyph is not None:
-            self.setIcon(QIcon(icon_pixmap(glyph, 20)))
+            app = QApplication.instance()
+            ratio = float(app.devicePixelRatio()) if app is not None else 1.0
+            self.setIcon(QIcon(icon_pixmap(glyph, 20, device_pixel_ratio=ratio)))
         self.setCheckable(True)
         self.setAutoExclusive(False)
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
@@ -213,6 +217,9 @@ class MainWindow(QMainWindow):
         self._demo_thread: QThread | None = None
         self._editor_worker: WorkflowWorker | None = None
         self._editor_thread: QThread | None = None
+        # Register the bundled faces before styling, so display metrics use
+        # Anton/Inter rather than a wider system fallback.
+        load_fonts()
         apply_theme(self)
         self.sidebar = Sidebar(self)
         self.status_footer = StatusFooter(self)
@@ -315,6 +322,7 @@ class MainWindow(QMainWindow):
     def _show_page_home(self) -> None:
         self._show_page(ShellPages.HOME)
         self.home_page.refresh()
+        self.home_page.reveal()
 
     def _show_page_automations(self) -> None:
         self._show_page(ShellPages.MY_AUTOMATIONS)

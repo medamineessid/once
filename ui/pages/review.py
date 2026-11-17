@@ -29,6 +29,7 @@ from ui.components.banner import SEVERITY_ERROR, SEVERITY_INFO, SEVERITY_SUCCESS
 from ui.components.cards import Chip
 from ui.components.delete_confirm import DeleteConfirmDialog, automation_delete_message
 from ui.components.formatting import friendly_step_display
+from ui.components.hero import MicroLabel
 from ui.components.icons import draw_automations_glyph, icon_pixmap
 from ui.editor.canvas import CanvasView
 from ui.strings import (
@@ -80,6 +81,8 @@ class ReviewPage(QWidget):
         layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop)
 
+        self._micro_label = MicroLabel("0 steps", content)
+        layout.addWidget(self._micro_label)
         self._title_label = QLabel(REVIEW_TITLE_DRAFT, content)
         self._title_label.setObjectName("pageTitle")
         layout.addWidget(self._title_label)
@@ -400,6 +403,8 @@ class ReviewPage(QWidget):
         self._delete_button.setVisible(workflow is not None)
         self._approve_button.hide()
         self._goal_label.setText(workflow.name if workflow else "No automation loaded.")
+        step_count = len(workflow.steps) if workflow else 0
+        self._micro_label.setText(f"{step_count} STEP{'S' if step_count != 1 else ''}")
         self._steps_list.clear()
         self._banner.clear()
         self._canvas.set_workflow(workflow)
@@ -423,11 +428,14 @@ class ReviewPage(QWidget):
         self._steps_list.clear()
         if proposal is None:
             self._proposal = None
+            self._micro_label.setText("0 STEPS")
             self._goal_label.setText("No proposal loaded.")
             self._steps_list.addItems(self._empty_steps())
             self._resize_steps_list()
             self._update_action_visibility()
             return
+        step_count = len(proposal.workflow.steps)
+        self._micro_label.setText(f"{step_count} STEP{'S' if step_count != 1 else ''}")
         self._goal_label.setText(f"Goal: {proposal.goal}")
         try:
             preview_proposal(proposal)

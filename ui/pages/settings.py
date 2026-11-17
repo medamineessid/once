@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig
 from ui.components.banner import Banner
+from ui.components.hero import MicroLabel
 from ui.components.verifier_panel import VerifierEditorPanel
 from ui.strings import (
     SETTINGS_CONFIG_SAVED_BODY,
@@ -72,6 +73,8 @@ class SettingsPage(QWidget):
         self._scroll_layout.setSpacing(SPACING_MD)
         self._scroll_layout.setAlignment(Qt.AlignTop)
 
+        self._micro_label = MicroLabel("settings", self)
+        self._scroll_layout.addWidget(self._micro_label)
         self._title_label = QLabel(SETTINGS_TITLE, self)
         self._title_label.setObjectName("pageTitle")
         self._scroll_layout.addWidget(self._title_label)
@@ -119,6 +122,8 @@ class SettingsPage(QWidget):
         verifier_layout.addWidget(self._configure_verifier_button)
         self._scroll_layout.addWidget(self._verifier_group)
 
+        groups = len(self.findChildren(QGroupBox, "settingsGroup"))
+        self._micro_label.setText(f"{groups} SETTING{'S' if groups != 1 else ''}")
         self._scroll_layout.addStretch()
         scroll_area.setWidget(scroll_widget)
         page_layout = QVBoxLayout(self)

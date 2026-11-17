@@ -33,6 +33,7 @@ from ui.components.formatting import (
     human_timestamp,
     status_display,
 )
+from ui.components.hero import MicroLabel
 from ui.components.pageheader import PageHeader
 from ui.strings import (
     ACTIVITY_CLEAR_ALL,
@@ -103,6 +104,8 @@ class ActivityPage(QWidget):
         layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
         layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop)
+        self._micro_label = MicroLabel("0 runs recorded", self)
+        layout.addWidget(self._micro_label)
         self._header = PageHeader(ACTIVITY_TITLE, ACTIVITY_SUBTITLE, parent=self)
         self._title_label = self._header.title_label
         self._subtitle_label = self._header.description_label
@@ -193,9 +196,13 @@ class ActivityPage(QWidget):
         self._history_list.clear()
         if self._service is None:
             self._runs = ()
+            self._micro_label.setText("0 RUNS RECORDED")
             self._apply_empty_state()
             return
         self._runs = self._service.history()
+        self._micro_label.setText(
+            f"{len(self._runs)} RUN{'S' if len(self._runs) != 1 else ''} RECORDED"
+        )
         for run in self._runs:
             name, workflow_id, label, kind, when, status_value = self._row_facts(run)
             run_id = getattr(run, "run_id", "")

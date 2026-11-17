@@ -657,7 +657,6 @@ def test_type_scale_is_declared_once_in_the_theme(qtbot, window):
         TYPE_HOME_TITLE_PX,
         TYPE_QUESTION_PX,
         TYPE_SUBTITLE_PX,
-        TYPE_TITLE_PX,
     )
 
     pages = [
@@ -676,7 +675,7 @@ def test_type_scale_is_declared_once_in_the_theme(qtbot, window):
 
     sheet = QApplication.instance().styleSheet()
     for rule, size in (
-        ("QLabel#pageTitle", TYPE_TITLE_PX),
+        ("QLabel#pageTitle", TYPE_HOME_TITLE_PX),
         ("QLabel#pageSubtitle", TYPE_SUBTITLE_PX),
         ("QLabel#homeTitle", TYPE_HOME_TITLE_PX),
         ("QLabel#questionLabel", TYPE_QUESTION_PX),

@@ -112,7 +112,10 @@ def test_pages_follow_the_page_template(qtbot, window):
         window.create_automation_page,
     )
     for page in pages:
-        titles = [w for w in page.findChildren(QLabel) if w.objectName() == "pageTitle"]
+        # Home's title is its hero display line; every other page uses
+        # the standard pageTitle label.
+        title_names = {"heroLine", "pageTitle"} if page is window.home_page else {"pageTitle"}
+        titles = [w for w in page.findChildren(QLabel) if w.objectName() in title_names]
         assert titles, f"{type(page).__name__} has no page title"
         secondary = [w for w in page.findChildren(QLabel) if w.objectName() in secondary_names]
         assert secondary, f"{type(page).__name__} has no guiding line"

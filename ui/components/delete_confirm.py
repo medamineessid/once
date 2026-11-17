@@ -8,10 +8,12 @@ pre-checked "also delete its runs" choice so the default removes both.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import override
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QCheckBox, QMessageBox, QWidget
 
+from ui.motion import fade_dialog
 from ui.strings import DELETE_ACTION, DELETE_CANCEL, DELETE_CONFIRM_TITLE
 
 
@@ -67,6 +69,12 @@ class DeleteConfirmDialog(QMessageBox):
             self._runs_check = QCheckBox(f"Also delete its {runs_count} {_run_noun(runs_count)}")
             self._runs_check.setChecked(True)
             self.setCheckBox(self._runs_check)
+
+    @override
+    def showEvent(self, event) -> None:
+        """Fade and scale the dialog in when it appears."""
+        super().showEvent(event)
+        fade_dialog(self)
 
     @property
     def runs_checkbox(self) -> QCheckBox | None:

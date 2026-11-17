@@ -22,7 +22,8 @@ from ui.components.formatting import (
     human_timestamp,
     status_display,
 )
-from ui.components.pageheader import PageHeader
+from ui.components.hero import Hero
+from ui.motion import reveal_lines
 from ui.strings import (
     DELETE_ACTION,
     HOME_CARD_CREATE_ACTION,
@@ -34,12 +35,10 @@ from ui.strings import (
     HOME_RECENT_EMPTY,
     HOME_RECENT_LIST_TITLE,
     HOME_SUBTITLE,
-    HOME_TITLE,
 )
 from ui.styles import SPACING_LG, SPACING_SM, SPACING_XL, SPACING_XS
 
 _RECENT_RUN_COUNT = 5  # rows the welcome screen shows; the full feed lives on Activity
-_HOME_MAX_WIDTH = 920
 
 
 class HomePage(QWidget):
@@ -60,21 +59,28 @@ class HomePage(QWidget):
 
     def _init_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
+        outer.setContentsMargins(SPACING_LG, SPACING_XL, SPACING_LG, SPACING_XL)
         outer.setSpacing(SPACING_LG)
         outer.setAlignment(Qt.AlignTop)
 
         content = QWidget(self)
-        content.setMaximumWidth(_HOME_MAX_WIDTH)
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(SPACING_LG)
 
-        self._header = PageHeader(HOME_TITLE, HOME_SUBTITLE, parent=content)
-        # Tests read the page title through the same attributes as before.
-        self._title_label = self._header.title_label
-        self._subtitle_label = self._header.description_label
-        layout.addWidget(self._header)
+        saved = len(self._service.list_saved()) if self._service is not None else 0
+        self._hero = Hero(
+            f"{saved} saved automation{'s' if saved != 1 else ''} ready",
+            (("Automate", False), ("anything.", True)),
+            parent=content,
+        )
+        layout.addWidget(self._hero)
+        # Tests read the page title and subtitle through the same attributes.
+        self._title_label = self._hero.line_labels[0]
+        self._subtitle_label = QLabel(HOME_SUBTITLE, content)
+        self._subtitle_label.setObjectName("pageSubtitle")
+        self._subtitle_label.setWordWrap(True)
+        layout.addWidget(self._subtitle_label)
 
         cards_row = QHBoxLayout()
         cards_row.setContentsMargins(0, 0, 0, 0)
@@ -147,6 +153,10 @@ class HomePage(QWidget):
     def refresh(self) -> None:
         """Reload the recent runs shown on this read-only list."""
         self._refresh_activity()
+
+    def reveal(self) -> None:
+        """Play the hero line reveal; instant when animations are disabled."""
+        reveal_lines(self._hero.line_labels)
 
     def _recent_rows(
         self,
