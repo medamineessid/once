@@ -1,7 +1,7 @@
 {
-  "status": "FAILED",
-  "triggered": false,
-  "elapsed_seconds": 4.41,
+  "status": "CANCELLED",
+  "triggered": true,
+  "elapsed_seconds": 4.45,
   "steps": [
     {
       "step_id": "launch",
@@ -16,7 +16,7 @@
     {
       "step_id": "close",
       "status": "SKIPPED",
-      "message": "Skipped because an earlier step failed."
+      "message": "Skipped because the workflow was cancelled."
     }
   ],
   "remaining_charmap_windows": []
