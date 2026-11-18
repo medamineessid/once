@@ -1,0 +1,23 @@
+{
+  "status": "FAILED",
+  "triggered": false,
+  "elapsed_seconds": 4.41,
+  "steps": [
+    {
+      "step_id": "launch",
+      "status": "SUCCEEDED",
+      "message": "The application was launched."
+    },
+    {
+      "step_id": "wait",
+      "status": "FAILED",
+      "message": "The identified window did not appear within 4.0 seconds. after 1 attempt(s)."
+    },
+    {
+      "step_id": "close",
+      "status": "SKIPPED",
+      "message": "Skipped because an earlier step failed."
+    }
+  ],
+  "remaining_charmap_windows": []
+}

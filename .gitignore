@@ -50,3 +50,10 @@ dist/
 # PyInstaller generated specs
 app.spec
 once-app.spec
+
+# Local screenshot scratch dirs (design deliverables under shots/design-* and
+# the real-desktop proof JSON under shots/after/ stay tracked)
+shots/ui-before/
+shots/ui-after/
+shots/ui-polish-before/
+shots/ui-polish-after/
