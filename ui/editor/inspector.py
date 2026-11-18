@@ -43,7 +43,7 @@ def _target_text(step: WorkflowStep) -> str:
         return step.target
     try:
         parsed = json.loads(step.target)
-    except json.JSONDecodeError, TypeError:
+    except (json.JSONDecodeError, TypeError):
         return EDITOR_INSPECTOR_TARGET_UNREADABLE
     if isinstance(parsed, dict):
         pairs = ", ".join(f"{key}={value}" for key, value in sorted(parsed.items()))

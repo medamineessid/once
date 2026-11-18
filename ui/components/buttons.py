@@ -137,7 +137,7 @@ class ActionButton(QPushButton):
     def _on_scale_value(self, value: object) -> None:
         try:
             self._set_scale(float(value))  # type: ignore[arg-type]
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return
 
     def _shift_arrow(self, shifted: bool) -> None:

@@ -23,5 +23,5 @@ class PywinautoElementProvider:
                 class_name=wrapper.element_info.class_name or None,
                 is_password=bool(getattr(wrapper.element_info, "is_password", False)),
             )
-        except AttributeError, ImportError, OSError, RuntimeError:
+        except (AttributeError, ImportError, OSError, RuntimeError):
             return None

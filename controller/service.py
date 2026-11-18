@@ -149,7 +149,7 @@ class WorkflowService:
                 from integrations.kill_switch import HotkeyKillSwitch
 
                 self._kill_switch: object | None = HotkeyKillSwitch()
-            except ImportError, OSError, RuntimeError:
+            except (ImportError, OSError, RuntimeError):
                 self._kill_switch = None
         else:
             self._kill_switch = kill_switch
@@ -421,7 +421,7 @@ class WorkflowService:
             try:
                 kill_switch.start()
                 return kill_switch
-            except OSError, RuntimeError:
+            except (OSError, RuntimeError):
                 return None
         return None
 
@@ -1027,7 +1027,7 @@ class WorkflowService:
             return None
         try:
             return load_workflow(candidate).name
-        except WorkflowValidationError, OSError:
+        except (WorkflowValidationError, OSError):
             return None
 
     def history(self) -> tuple[WorkflowRun, ...]:

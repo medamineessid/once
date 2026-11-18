@@ -476,7 +476,7 @@ class PywinautoDesktopActions:
             return frozenset(
                 _window_token(wrapper) for wrapper in self._desktop_factory().windows()
             )
-        except AttributeError, OSError, RuntimeError, ValueError:
+        except (AttributeError, OSError, RuntimeError, ValueError):
             return None
 
     def _new_visible_windows(
@@ -897,7 +897,7 @@ class PywinautoDesktopActions:
             try:
                 if self._text_readback_matches(self._readback(pattern), text):
                     return True
-            except AttributeError, OSError, RuntimeError, ValueError:
+            except (AttributeError, OSError, RuntimeError, ValueError):
                 return False
             if self._clock() >= deadline:
                 return False

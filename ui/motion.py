@@ -47,7 +47,7 @@ def animations_enabled() -> bool:
         enabled = c_int(1)
         ok = windll.user32.SystemParametersInfoW(_SPI_GETCLIENTAREAANIMATION, 0, byref(enabled), 0)
         return bool(enabled.value) if ok else True
-    except AttributeError, OSError, ArgumentError:
+    except (AttributeError, OSError, ArgumentError):
         return True
 
 
