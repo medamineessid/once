@@ -270,6 +270,22 @@ def test_unreadable_file_shows_file_name_and_warning_never_crashes(qtbot) -> Non
     assert "could not be read" in page._banner.body_text
 
 
+def test_every_row_fits_inside_the_list(qtbot):
+    """A fixed list height used to clip the last automation off the bottom."""
+    workflows = {
+        Path(f"wf-{index}.json"): make_workflow(f"wf-{index}", f"Automation {index}")
+        for index in range(4)
+    }
+    service = FakeService(workflows)
+    page = make_page(qtbot, service)
+    QTest.qWait(100)
+
+    view = page._workflow_list
+    last = view.visualItemRect(view.item(view.count() - 1))
+    assert view.count() == 4
+    assert last.bottom() < view.height(), (last, view.height())
+
+
 def test_refresh_picks_up_newly_saved_automation(qtbot):
     service = FakeService({})
     page = make_page(qtbot, service)

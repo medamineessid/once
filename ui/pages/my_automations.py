@@ -76,7 +76,7 @@ from ui.strings import (
     MY_UNREADABLE_BODY,
     MY_UNREADABLE_TITLE,
 )
-from ui.styles import ROW_HEIGHT, SPACING_LG, SPACING_SM, SPACING_XL
+from ui.styles import SPACING_LG, SPACING_SM, SPACING_XL
 from ui.workers import WorkflowWorker, cancel_and_join
 
 
@@ -87,6 +87,10 @@ def _saved_on_text(path: Path) -> str:
     except OSError:
         return ""
     return datetime.fromtimestamp(stamp).strftime("%Y-%m-%d")
+
+
+#: The list never grows past this; beyond it the page scrolls instead.
+MAX_LIST_HEIGHT = 560
 
 
 class AutomationRow(QWidget):
@@ -662,16 +666,13 @@ class MyAutomationsPage(QWidget):
                 on_delete=lambda idx=index: self._delete_row(idx),
                 parent=self._workflow_list,
             )
-            hint = row.sizeHint()
-            hint.setHeight(ROW_HEIGHT + 34)
-            item.setSizeHint(hint)
+            item.setSizeHint(row.sizeHint())
             self._workflow_list.addItem(item)
             self._workflow_list.setItemWidget(item, row)
             self._rows.append(row)
         self._workflow_list.setVisible(bool(saved_paths))
         self._empty_state.setVisible(not saved_paths)
-        height = max(ROW_HEIGHT + 34, min(560, 16 + count * (ROW_HEIGHT + 38)))
-        self._workflow_list.setFixedHeight(height)
+        self._fit_rows()
         if unreadable:
             # An icon carries the severity; the banner never prints the word
             # "Warning" as plain text.
@@ -682,6 +683,29 @@ class MyAutomationsPage(QWidget):
         self._details_label.setVisible(True)
         self._details_label.setText(MY_DETAILS_EMPTY)
         del blocked
+
+    def _fit_rows(self) -> None:
+        """Size the list to the rows it holds.
+
+        A row's height only settles once its stylesheet padding and fonts are
+        applied, so measure the rendered rows instead of guessing: a fixed
+        guess used to clip the last automation off the bottom of the list.
+        """
+        if self._workflow_list is None or not self._rows:
+            return
+        spacing = self._workflow_list.spacing()
+        total = 2 * self._workflow_list.frameWidth()
+        for index, row in enumerate(self._rows):
+            row.ensurePolished()
+            measured = row.sizeHint().height()
+            self._workflow_list.item(index).setSizeHint(row.sizeHint())
+            total += measured
+        total += spacing * max(0, self._workflow_list.count() - 1)
+        self._workflow_list.setFixedHeight(min(MAX_LIST_HEIGHT, total))
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().showEvent(event)
+        self._fit_rows()
 
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service
