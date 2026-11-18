@@ -144,6 +144,30 @@ def _default_process_image(pid: int) -> str | None:
         kernel32.CloseHandle(handle)
 
 
+def _element_label(element: object) -> str | None:
+    """How a person refers to the control a step was looking for.
+
+    "the 'Save' button" reads like a sentence; "Button automation_id=Save"
+    does not, and the label is the only part a non-technical user recognises.
+    """
+    if not isinstance(element, dict):
+        return None
+    name = element.get("name") or element.get("automation_id")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    kind = element.get("control_type")
+    kind_text = kind.replace("_", " ").strip().lower() if isinstance(kind, str) else "control"
+    return f"the '{name.strip()}' {kind_text or 'control'}"
+
+
+def _window_label(window: object) -> str | None:
+    """The window's own title when the step named one."""
+    if not isinstance(window, dict):
+        return None
+    title = window.get("title")
+    return title.strip() if isinstance(title, str) and title.strip() else None
+
+
 def _load_parsed(target_json: str, what: str) -> dict:
     try:
         parsed = json.loads(target_json)
@@ -676,13 +700,13 @@ class PywinautoDesktopActions:
             raise ExecutionError("The identified window is ambiguous, so nothing was done.")
         parent = window_matches_list[0]
         candidates = [w for w in parent.descendants() if element_matches(w, target.get("element"))]
+        label = _element_label(target.get("element")) or what
+        window_title = _window_label(target.get("window")) or "that window"
         if not candidates:
-            raise ExecutionError(
-                f"The identified {what} element was not found, so nothing was done."
-            )
+            raise ExecutionError(f"Could not find {label} in {window_title}.")
         if len(candidates) > 1:
             raise ExecutionError(
-                f"The identified {what} element is ambiguous, so nothing was done."
+                f"More than one {label} matches in {window_title}, so nothing was done."
             )
         element = candidates[0]
         try:

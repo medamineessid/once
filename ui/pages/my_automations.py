@@ -45,6 +45,12 @@ from ui.components.formatting import (
     is_generic_automation_name,
     status_display,
 )
+from ui.components.parameter_dialog import ParameterDialog
+from ui.components.parameters import (
+    apply_parameter_values,
+    missing_values,
+    parameter_names,
+)
 from ui.strings import (
     DELETE_ACTION,
     MY_BANNER_ERROR_TITLE,
@@ -496,6 +502,10 @@ class MyAutomationsPage(QWidget):
         except WorkflowValidationError as error:
             self._show_page_error(str(error))
             return
+        filled = self._ask_for_parameters(workflow)
+        if filled is None:
+            return
+        workflow = filled
         if self._approval_panel.show_for(workflow):
             # Mutating desktop automations wait here: the approval panel is
             # the run gate, so the run starts only from the panel's Approve.
@@ -504,6 +514,24 @@ class MyAutomationsPage(QWidget):
             return
         self.run_requested.emit(saved_path)
         self._start_run(workflow)
+
+    def _ask_for_parameters(self, workflow: Workflow) -> Workflow | None:
+        """Ask for any value the automation left open, or None when cancelled."""
+        names = parameter_names(workflow)
+        if not names:
+            return workflow
+        values = ParameterDialog(names, parent=self).ask()
+        if values is None:
+            self._details_label.setVisible(True)
+            self._details_label.setText("Nothing ran: this automation needs a value first.")
+            return None
+        missing = missing_values(workflow, values)
+        if missing:
+            self._show_page_error(
+                f"Every value is needed before '{missing[0].replace('_', ' ')}' can be used."
+            )
+            return None
+        return apply_parameter_values(workflow, values)
 
     # ----------------------------------------------------- desktop approval
 

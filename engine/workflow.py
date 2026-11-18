@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -13,6 +14,7 @@ from uuid import uuid4
 
 from .errors import ExecutionError, WorkflowValidationError
 
+RETRY_DELAY_SECONDS = 0.4
 MAX_WORKFLOW_STEPS = 100
 MAX_TEXT_LENGTH = 500
 
@@ -705,6 +707,9 @@ def _validate_verify_file_text_target(step: WorkflowStep) -> None:
 class WorkflowRunner:
     """Execute known step kinds in order and retain an inspectable run result."""
 
+    def __init__(self, sleep: Callable[[float], None] | None = None) -> None:
+        self._sleep = sleep or time.sleep
+
     @staticmethod
     def validate(workflow: Workflow) -> None:
         """Reject malformed definitions before any step can start."""
@@ -954,6 +959,9 @@ class WorkflowRunner:
                 result = postcondition
             attempts.append(f"attempt {attempt}: {result.message}")
             if attempt < step.max_attempts:
+                # A retry without a pause only repeats the same miss. Wait
+                # briefly so a slow window or control can appear.
+                self._sleep(RETRY_DELAY_SECONDS)
                 continue
             return StepResult(
                 step.step_id,

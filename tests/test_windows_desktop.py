@@ -422,7 +422,7 @@ def test_ambiguous_elements_are_refused_without_guessing() -> None:
     first = FakeWrapper(FakeElementInfo(class_name="DemoEditClass", control_type="Document"))
     second = FakeWrapper(FakeElementInfo(class_name="DemoEditClass", control_type="Document"))
     provider, _clock = provider_with([first, second])
-    with pytest.raises(Exception, match="ambiguous"):
+    with pytest.raises(Exception, match="More than one"):
         provider.type_text(
             json.dumps(
                 {
@@ -436,7 +436,7 @@ def test_ambiguous_elements_are_refused_without_guessing() -> None:
 
 def test_missing_element_fails_closed() -> None:
     provider, _clock = provider_with([])
-    with pytest.raises(Exception, match="was not found"):
+    with pytest.raises(Exception, match="Could not find"):
         provider.type_text(
             json.dumps(
                 {

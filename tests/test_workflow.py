@@ -6,6 +6,7 @@ import pytest
 
 from engine.errors import WorkflowValidationError
 from engine.workflow import (
+    RETRY_DELAY_SECONDS,
     PostconditionKind,
     StepKind,
     StepStatus,
@@ -171,6 +172,7 @@ def test_workflow_runner_rejects_symlink_target(tmp_path) -> None:
 def test_workflow_runner_retries_and_records_attempt_evidence() -> None:
     class EventuallySuccessfulRunner(WorkflowRunner):
         def __init__(self) -> None:
+            super().__init__(sleep=lambda _seconds: None)
             self.calls = 0
 
         def _run_once(self, step, allowed_root):
@@ -246,3 +248,46 @@ def test_workflow_runner_cancels_between_retry_attempts() -> None:
 
     assert run.status is WorkflowStatus.CANCELLED
     assert run.results[0].status is StepStatus.SKIPPED
+
+
+def test_a_retry_waits_between_attempts() -> None:
+    """A second attempt must give a slow window time to appear, not just repeat."""
+    waits: list[float] = []
+
+    class SlowFirstRunner(WorkflowRunner):
+        def __init__(self) -> None:
+            super().__init__(sleep=waits.append)
+            self.calls = 0
+
+        def _run_once(self, step, allowed_root):
+            self.calls += 1
+            if self.calls == 1:
+                return super()._run_once(
+                    WorkflowStep(step.step_id, step.name, StepKind.FAIL, "not yet"), allowed_root
+                )
+            return super()._run_once(step, allowed_root)
+
+    workflow = Workflow(
+        "retry-wait",
+        "Retry wait",
+        (WorkflowStep("s1", "Report", StepKind.REPORT, "done", max_attempts=2),),
+    )
+
+    run = SlowFirstRunner().run(workflow)
+
+    assert run.results[0].status is StepStatus.OBSERVED
+    assert waits == [RETRY_DELAY_SECONDS]
+
+
+def test_missing_control_message_names_the_control_and_window() -> None:
+    """The failure a user sees should say what was missing and where."""
+    from integrations.windows_desktop import _element_label, _window_label
+
+    label = _element_label({"name": "Save", "control_type": "Button"})
+    assert label == "the 'Save' Button".replace("Button", "button")
+    assert _element_label({"automation_id": "Close", "control_type": "Button"}) == (
+        "the 'Close' button"
+    )
+    assert _element_label({}) is None
+    assert _window_label({"title": "Notepad"}) == "Notepad"
+    assert _window_label({}) is None
