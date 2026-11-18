@@ -85,8 +85,9 @@ def test_close_during_automation_run_cancels_and_joins_thread(qtbot, tmp_path, m
     recorder: list[str] = []
     monkeypatch.setattr(service, "run_workflow", slow_run_factory(recorder))
 
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    run_button = page._rows[0].run_button
+    QTest.mouseClick(run_button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(run_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: page._thread is not None, timeout=5000)
 
     window.close()
@@ -109,8 +110,9 @@ def test_close_after_cancel_request_is_safe(qtbot, tmp_path, monkeypatch):
     page._workflow_list.setCurrentRow(0)
     monkeypatch.setattr(service, "run_workflow", slow_run_factory([]))
 
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    run_button = page._rows[0].run_button
+    QTest.mouseClick(run_button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(run_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(lambda: page._thread is not None, timeout=5000)
     page._worker.cancel()
     page._worker.cancel()

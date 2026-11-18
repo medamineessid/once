@@ -7,15 +7,13 @@ from pathlib import Path
 from typing import override
 
 from PySide6.QtCore import QSize, Qt, QThread, Signal
-from PySide6.QtGui import QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QApplication,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QStackedWidget,
     QToolBar,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -35,15 +33,10 @@ from ui.components.footer import (
     FOOTER_RUNNING,
     StatusFooter,
 )
-from ui.components.icons import (
-    draw_activity_glyph,
-    draw_automations_glyph,
-    draw_home_glyph,
-    draw_settings_glyph,
-    icon_pixmap,
-)
+from ui.components.sidebar_item import SidebarItem
 from ui.components.spacer import Spacer
 from ui.fonts import load_fonts
+from ui.motion import fade_slide
 from ui.pages import (
     ActivityPage,
     CreateAutomationPage,
@@ -74,7 +67,7 @@ from ui.strings import (
     SIDEBAR_HOME,
     SIDEBAR_SETTINGS,
 )
-from ui.styles import SPACING_LG, SPACING_MD, apply_theme
+from ui.styles import SIDEBAR_WIDTH, SPACING_LG, SPACING_MD, apply_theme
 from ui.workers import WorkflowWorker, cancel_and_join
 
 
@@ -97,22 +90,13 @@ class ShellPages:
         ]
 
 
-class SidebarButton(QToolButton):
+class SidebarButton(SidebarItem):
+    """Named alias kept for the shell tests: a painted sidebar row."""
+
     clicked_custom = Signal()
 
-    def __init__(self, text: str, object_name: str, glyph=None, parent=None):
-        """Object name keyed by the theme so styling lives in one place."""
-        super().__init__(parent)
-        self.setText(text)
-        self.setObjectName(object_name)
-        if glyph is not None:
-            app = QApplication.instance()
-            ratio = float(app.devicePixelRatio()) if app is not None else 1.0
-            self.setIcon(QIcon(icon_pixmap(glyph, 20, device_pixel_ratio=ratio)))
-        self.setCheckable(True)
-        self.setAutoExclusive(False)
-        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    def __init__(self, text: str, object_name: str, icon_name: str, parent=None):
+        super().__init__(text, object_name, icon_name, parent)
         self.clicked.connect(self.clicked_custom.emit)
 
 
@@ -126,33 +110,31 @@ class Sidebar(QToolBar):
         super().__init__(parent)
         self.setObjectName("sidebar")
         self.setOrientation(Qt.Orientation.Vertical)
-        self.setIconSize(QSize(20, 20))
+        self.setIconSize(QSize(24, 24))
         self.setMovable(False)
         self.setFloatable(False)
-        logo = QLabel("Once")
+        logo = QLabel("ONCE")
         logo.setObjectName("onceLogo")
         self.addWidget(logo)
         self.addWidget(Spacer())
-        self._home_button = SidebarButton(
-            SIDEBAR_HOME, "sidebarHomeButton", draw_home_glyph, parent=None
-        )
+        self._home_button = SidebarButton(SIDEBAR_HOME, "sidebarHomeButton", "house", parent=None)
         self._home_button.clicked_custom.connect(self.homeClicked.emit)
         self.addWidget(self._home_button)
         self._automations_button = SidebarButton(
             SIDEBAR_AUTOMATIONS,
             "sidebarAutomationsButton",
-            draw_automations_glyph,
+            "arrows-down-up",
             parent=None,
         )
         self._automations_button.clicked_custom.connect(self.automationsClicked.emit)
         self.addWidget(self._automations_button)
         self._activity_button = SidebarButton(
-            SIDEBAR_ACTIVITY, "sidebarActivityButton", draw_activity_glyph, parent=None
+            SIDEBAR_ACTIVITY, "sidebarActivityButton", "pulse", parent=None
         )
         self._activity_button.clicked_custom.connect(self.activityClicked.emit)
         self.addWidget(self._activity_button)
         self._settings_button = SidebarButton(
-            SIDEBAR_SETTINGS, "sidebarSettingsButton", draw_settings_glyph, parent=None
+            SIDEBAR_SETTINGS, "sidebarSettingsButton", "sliders", parent=None
         )
         self._settings_button.clicked_custom.connect(self.settingsClicked.emit)
         self.addWidget(self._settings_button)
@@ -164,7 +146,7 @@ class Sidebar(QToolBar):
         ):
             button.setAutoRepeat(False)
         self.addWidget(Spacer())
-        footer = QLabel("Local app")
+        footer = QLabel("LOCAL · OFFLINE BY DEFAULT")
         footer.setObjectName("sidebarFooter")
         self.addWidget(footer)
 
@@ -261,7 +243,7 @@ class MainWindow(QMainWindow):
         side_layout.setSpacing(0)
         side_layout.addWidget(self.sidebar, stretch=1)
         side_layout.addWidget(self.status_footer)
-        side_panel.setFixedWidth(232)
+        side_panel.setFixedWidth(SIDEBAR_WIDTH)
         main_panel = QWidget(self)
         main_panel.setObjectName("mainPanel")
         main_layout = QVBoxLayout(main_panel)
@@ -318,6 +300,9 @@ class MainWindow(QMainWindow):
         self.workspace.setCurrentIndex(page)
         self.sidebar.set_checked(page)
         self._current_page = page
+        # One page transition for every navigation path: 260ms fade + 16px rise,
+        # instantly skipped when Windows animations are turned off.
+        fade_slide(self.workspace.currentWidget())
 
     def _show_page_home(self) -> None:
         self._show_page(ShellPages.HOME)

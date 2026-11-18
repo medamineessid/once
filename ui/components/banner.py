@@ -16,18 +16,20 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui.strings import BANNER_ERROR, BANNER_INFO, BANNER_SUCCESS, BANNER_WARNING
+from ui.components.phosphor_icons import render_icon_pixmap
+from ui.styles import STATUS_ERROR, STATUS_OK, STATUS_RUNNING, STATUS_WARNING
 
 SEVERITY_INFO = "info"
 SEVERITY_SUCCESS = "success"
 SEVERITY_WARNING = "warning"
 SEVERITY_ERROR = "error"
 
-_SEVERITY_NAMES = {
-    SEVERITY_INFO: BANNER_INFO,
-    SEVERITY_SUCCESS: BANNER_SUCCESS,
-    SEVERITY_WARNING: BANNER_WARNING,
-    SEVERITY_ERROR: BANNER_ERROR,
+#: One icon per severity: the banner never prints "Warning" as text.
+_SEVERITY_ICONS = {
+    SEVERITY_INFO: ("pulse", STATUS_RUNNING),
+    SEVERITY_SUCCESS: ("check", STATUS_OK),
+    SEVERITY_WARNING: ("warning", STATUS_WARNING),
+    SEVERITY_ERROR: ("warning", STATUS_ERROR),
 }
 
 
@@ -44,7 +46,7 @@ class Banner(QFrame):
         self._layout.setContentsMargins(12, 10, 12, 10)
         self._layout.setSpacing(12)
         self._badge = QLabel(self)
-        self._badge.setObjectName("bannerBadge")
+        self._badge.setObjectName("bannerIcon")
         self._title = QLabel(self)
         self._title.setObjectName("bannerTitle")
         self._body = QLabel(self)
@@ -75,10 +77,14 @@ class Banner(QFrame):
         dismiss_button: bool = True,
     ) -> None:
         """Show a message. Severity is one of the module constants."""
-        if severity not in _SEVERITY_NAMES:
+        if severity not in _SEVERITY_ICONS:
             severity = SEVERITY_INFO
         self.setProperty("severity", severity)
-        self._badge.setText(_SEVERITY_NAMES[severity])
+        icon_name, colour = _SEVERITY_ICONS[severity]
+        self._badge.setPixmap(
+            render_icon_pixmap(icon_name, weight="Fill", logical_size=24, color=colour)
+        )
+        self._badge.setFixedSize(24, 24)
         self._title.setText(title)
         self._body.setText(body)
         self._body.setVisible(bool(body))

@@ -52,15 +52,15 @@ def test_create_rename_save_lists_opens_runs_and_activity_shows_name(qtbot, tmp_
     assert row._name_label.text() == "My test automation"
 
     window.my_automations_page._workflow_list.setCurrentRow(0)
-    qtbot.mouseClick(window.my_automations_page._open_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.my_automations_page._rows[0].open_button, Qt.MouseButton.LeftButton)
     assert window.workspace.currentWidget() is window.review_page
     assert window.review_page._goal_label.text() == "My test automation"
 
     window._show_page_automations()
     window.my_automations_page._workflow_list.setCurrentRow(0)
-    qtbot.mouseClick(window.my_automations_page._run_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.my_automations_page._rows[0].run_button, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
-    qtbot.mouseClick(window.my_automations_page._run_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.my_automations_page._rows[0].run_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(
         lambda: (
             "Run Observation only — nothing was performed"

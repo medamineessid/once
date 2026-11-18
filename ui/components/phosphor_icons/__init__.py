@@ -29,10 +29,10 @@ EMPTY_STATE_ICON_LOGICAL_SIZE: Final = 48
 #: Names required by the design. Each must exist in both weights.
 REQUIRED_ICONS: Final = (
     "house",
-    "rows-arrow-up-down",
+    "arrows-down-up",
     "pulse",
     "sliders",
-    "record-circle",
+    "record",
     "plus",
     "play",
     "arrow-right",

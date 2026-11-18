@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
 
 from controller.service import WorkflowService
 from engine.errors import OnceError
+from ui.components.band import PageBand
+from ui.components.buttons import ActionButton
 from ui.components.cards import Chip, EmptyState
 from ui.components.delete_confirm import (
     DeleteConfirmDialog,
@@ -33,8 +35,6 @@ from ui.components.formatting import (
     human_timestamp,
     status_display,
 )
-from ui.components.hero import MicroLabel
-from ui.components.pageheader import PageHeader
 from ui.strings import (
     ACTIVITY_CLEAR_ALL,
     ACTIVITY_DETAILS_EMPTY,
@@ -101,33 +101,42 @@ class ActivityPage(QWidget):
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
-        layout.setSpacing(SPACING_LG)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.setAlignment(Qt.AlignTop)
-        self._micro_label = MicroLabel("0 runs recorded", self)
-        layout.addWidget(self._micro_label)
-        self._header = PageHeader(ACTIVITY_TITLE, ACTIVITY_SUBTITLE, parent=self)
-        self._title_label = self._header.title_label
-        self._subtitle_label = self._header.description_label
-        layout.addWidget(self._header)
+        # Colour-blocked header band: the title sits inside the band, cropped at
+        # its edge, and the body below fills the width with no dead gaps.
+        self._band = PageBand(
+            ACTIVITY_TITLE,
+            micro="0 runs recorded",
+            description=ACTIVITY_SUBTITLE,
+            parent=self,
+        )
+        self._micro_label = self._band.micro_label
+        self._title_label = self._band.title_label
+        self._subtitle_label = self._band.description_label
+        layout.addWidget(self._band)
+
+        body = QWidget(self)
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(SPACING_XL, SPACING_LG, SPACING_XL, SPACING_LG)
+        body_layout.setSpacing(SPACING_MD)
+        layout.addWidget(body, stretch=1)
 
         controls = QHBoxLayout()
         controls.setSpacing(SPACING_SM)
         controls.addStretch(1)
-        self._clear_all_button = QPushButton(ACTIVITY_CLEAR_ALL, self)
-        self._clear_all_button.setObjectName("secondaryActionButton")
-        self._clear_all_button.setMinimumHeight(34)
+        self._clear_all_button = ActionButton(ACTIVITY_CLEAR_ALL, variant="secondary", parent=body)
         self._clear_all_button.clicked.connect(self._clear_all_runs)
         controls.addWidget(self._clear_all_button)
-        layout.addLayout(controls)
+        body_layout.addLayout(controls)
 
-        self._history_list = QListWidget(self)
+        self._history_list = QListWidget(body)
         self._history_list.setObjectName("activitiesList")
         self._history_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._history_list.itemSelectionChanged.connect(self._on_selection_changed)
-        layout.addWidget(self._history_list, stretch=1)
-        layout.addSpacing(SPACING_SM)
-        self._details_container = QFrame(self)
+        body_layout.addWidget(self._history_list, stretch=1)
+        self._details_container = QFrame(body)
         self._details_container.setObjectName("detailsContainer")
         details_layout = QVBoxLayout(self._details_container)
         details_layout.setContentsMargins(SPACING_LG, SPACING_LG, SPACING_LG, SPACING_LG)
@@ -136,15 +145,16 @@ class ActivityPage(QWidget):
         self._details_label.setObjectName("activityDetailsLabel")
         self._details_label.setWordWrap(True)
         details_layout.addWidget(self._details_label)
-        layout.addWidget(self._details_container)
+        body_layout.addWidget(self._details_container)
 
         self._empty_state = EmptyState(
             ACTIVITY_EMPTY_HEADING,
             ACTIVITY_EMPTY_BODY,
-            parent=self,
+            icon_name="pulse",
+            parent=body,
         )
-        layout.addWidget(self._empty_state)
-        layout.addStretch(1)
+        body_layout.addWidget(self._empty_state)
+        body_layout.addStretch(1)
         self._refresh()
 
     def _row_facts(self, run: object) -> tuple[str, str, str, str, str, str]:
@@ -197,13 +207,12 @@ class ActivityPage(QWidget):
         self._history_list.clear()
         if self._service is None:
             self._runs = ()
-            self._micro_label.setText("0 RUNS RECORDED")
+            self._band.set_micro("0 runs recorded")
             self._apply_empty_state()
             return
         self._runs = self._service.history()
-        self._micro_label.setText(
-            f"{len(self._runs)} RUN{'S' if len(self._runs) != 1 else ''} RECORDED"
-        )
+        count = len(self._runs)
+        self._band.set_micro(f"{count} run{'s' if count != 1 else ''} recorded")
         for run in self._runs:
             name, workflow_id, label, kind, when, status_value = self._row_facts(run)
             run_id = getattr(run, "run_id", "")

@@ -80,10 +80,12 @@ def test_first_time_journey_through_entry_point_creates_and_runs(entry_shell, qt
     assert window.my_automations_page._workflow_list.count() == 1
 
     # 4. Run the saved automation from My automations.
-    window.my_automations_page._workflow_list.setCurrentRow(0)
-    qtbot.mouseClick(window.my_automations_page._run_button, Qt.MouseButton.LeftButton)
+    page = window.my_automations_page
+    page._workflow_list.setCurrentRow(0)
+    run_button = page._rows[0].run_button
+    qtbot.mouseClick(run_button, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
-    qtbot.mouseClick(window.my_automations_page._run_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(run_button, Qt.MouseButton.LeftButton)
     # The one-step automation only reports, so the run is observation only.
     qtbot.waitUntil(
         lambda: "Run Observation only" in window.my_automations_page._details_label.text(),

@@ -151,10 +151,16 @@ def make_page(qtbot, service: FakeService) -> MyAutomationsPage:
     return page
 
 
-def click_run(page) -> None:
+def row_run_button(page, index: int = 0):
+    """The visible Run control of one row (each row owns its own actions)."""
+    return page._rows[index].run_button
+
+
+def click_run(page, index: int = 0) -> None:
     """The Run control is an inline confirm: click to arm, click to confirm."""
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    button = row_run_button(page, index)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
 def test_page_lists_saved_automations(qtbot):
@@ -384,12 +390,13 @@ def test_run_arm_only_click_starts_nothing(qtbot):
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
 
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    button = row_run_button(page, 0)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
 
-    assert page._run_button.is_armed() is True
-    assert page._run_button.text() == MY_RUN_CONFIRM
+    assert button.is_armed() is True
+    assert button.text() == MY_RUN_CONFIRM
     assert service.run_calls() == []
-    assert page._run_button.isEnabled() is True
+    assert button.isEnabled() is True
 
 
 def test_load_error_is_surfaced_and_runs_nothing(qtbot):
@@ -406,7 +413,7 @@ def test_load_error_is_surfaced_and_runs_nothing(qtbot):
     assert "File is not a valid workflow." in page._banner.body_text
     assert "File is not a valid workflow." in page._details_label.text()
     assert service.run_calls() == []
-    assert page._run_button.isEnabled() is True
+    assert row_run_button(page, 0).isEnabled() is True
 
 
 def test_run_with_confirmation_calls_run_once_with_loaded_workflow(qtbot):
@@ -415,16 +422,17 @@ def test_run_with_confirmation_calls_run_once_with_loaded_workflow(qtbot):
     service = FakeService(two_saved_workflows())
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
-    assert page._run_button.isEnabled() is True
+    button = row_run_button(page, 0)
+    assert button.isEnabled() is True
 
     click_run(page)
-    assert page._run_button.isEnabled() is False
-    assert page._run_button.text() == MY_RUN_RUNNING
+    assert row_run_button(page, 0).isEnabled() is False
+    assert row_run_button(page, 0).text() == MY_RUN_RUNNING
     service.release.set()
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
 
-    assert page._run_button.isEnabled() is True
-    assert page._run_button.text() == "Run"
+    assert row_run_button(page, 0).isEnabled() is True
+    assert row_run_button(page, 0).text() == "Run"
     assert service.run_calls() == [service.workflows[Path("alpha-workflow.json")]]
 
 
@@ -436,11 +444,11 @@ def test_run_button_stays_disabled_until_run_finishes(qtbot):
 
     click_run(page)
     assert page._preview_button.isEnabled() is False
-    assert page._open_button.isEnabled() is False
+    assert page._rows[0].open_button.isEnabled() is False
     service.release.set()
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
     assert page._preview_button.isEnabled() is True
-    assert page._open_button.isEnabled() is True
+    assert page._rows[0].open_button.isEnabled() is True
 
 
 def test_failing_run_shows_banner_error(qtbot):
@@ -457,7 +465,7 @@ def test_failing_run_shows_banner_error(qtbot):
     assert page._banner.isVisible()
     assert "Controlled failure injection from the test." in page._banner.body_text
     assert "Controlled failure injection from the test." in page._details_label.text()
-    assert page._run_button.isEnabled() is True
+    assert row_run_button(page, 0).isEnabled() is True
 
 
 def test_run_shows_finished_run_status(qtbot):

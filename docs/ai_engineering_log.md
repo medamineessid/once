@@ -1651,3 +1651,37 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
 - Verification: targeted kill switch, controller service, and desktop provider tests passed (52 passed in 1.29s); full pytest suite passed (641 passed, 2 skipped); ruff check and ruff format passed.
 - Outcome: PASSED
 - Human review:
+## 2026-11-18 — Design v4: navy rail, lemon wordmark, banded page headers (commit: pending)
+- Task: Make every screen share one intense, consistent system — navy sidebar with
+  the lemon Anton wordmark and a lemon active pill, Anton page titles inside a
+  colour band, one button system, real-data stat blocks, and motion that is
+  instant when Windows animations are off.
+- AI contribution: rewrote the token set and whole stylesheet in
+  `ui/styles/__init__.py`; added `ui/components/band.py`, `ui/components/buttons.py`
+  and `ui/components/sidebar_item.py`; rewrote the hero with clipped Anton lines,
+  a 128px lemon record circle and an outlined Build button; reworked Home,
+  My automations, Activity, Settings, and Review onto bands and section cards;
+  moved Run/Open/Delete onto each automation row; added derived automation titles
+  and "Clear unnamed drafts"; added `tests/test_design_v4.py` (22 tests).
+- Defect found: (1) `QPropertyAnimation(b"_animated_scale")` on a Python property
+  printed "you're trying to animate a non-existing property", and repainting the
+  button inside `paintEvent` printed "QWidget::repaint: Recursive repaint
+  detected" / "QPainter::begin: Paint device returned engine == 0"; replaced with
+  a `QVariantAnimation` plus `style().drawControl(CE_PushButton)`. (2) A
+  word-wrapped guiding line was added with an alignment flag, so its wrapped
+  height was never reserved and the band clipped it; the label now fills the
+  column. (3) The sidebar focus ring used the lemon active colour, which read as
+  a second selected item; it now uses the hover text colour. (4) `_refresh()` in
+  My automations cleared the list with signals live, which reloaded the file the
+  page had just deleted and showed a stale "not found" error; the refresh now
+  blocks the list's signals.
+- Verification: `pytest -q --durations=10` printed
+  `752 passed, 2 skipped in 104.95s (0:01:44)`; `ruff format .` and
+  `ruff check .` printed `All checks passed!` and `232 files already formatted`;
+  `python app.py --screenshot shots/design-v4/<page>.png --page <page>` captured
+  home, automations, activity, settings, details (inspected); `python app.py
+  --diagnose --page activity` printed `pageTitle family='Anton' px=72`,
+  `sidebarIcon px=24x24 gap=14px`, `emptyStateIcon px=48x48`, and
+  `grep -c "qt.qpa.fonts"` on that output printed `0`.
+- Outcome: PASSED
+- Human review:

@@ -50,6 +50,7 @@ HOME_RUN_CANCELLED = "Cancelled"
 MY_TITLE = "My automations"
 MY_SUBTITLE = "Open, preview and run the automations you have saved."
 MY_NEW_ACTION = "New automation"
+MY_CLEAR_DRAFTS = "Clear unnamed drafts"
 MY_EMPTY = "No saved automations yet. Create one from Home."
 MY_DETAILS_EMPTY = "Select an automation to see its details."
 MY_RUN = "Run"
@@ -99,10 +100,11 @@ SETTINGS_NO_DATA_DIR_BODY = (
 )
 
 # --- Banners (what happened / what to do next) -------------------------------
-BANNER_INFO = "Info"
-BANNER_SUCCESS = "Success"
-BANNER_WARNING = "Warning"
-BANNER_ERROR = "Error"
+# The banner shows a severity icon, never the word: text badges read as labels.
+BANNER_INFO = "info"
+BANNER_SUCCESS = "success"
+BANNER_WARNING = "warning"
+BANNER_ERROR = "error"
 
 # --- Create automation -------------------------------------------------------
 CREATE_TITLE = "Create automation"

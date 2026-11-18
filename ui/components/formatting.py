@@ -201,3 +201,96 @@ def friendly_or_id(name: str | None, workflow_id: str, today: date | None = None
     """Prefer a workflow's saved name; fall back to its raw identifier."""
     cleaned = (name or "").strip()
     return cleaned if cleaned else workflow_id
+
+
+#: Names that carry no information: a saved draft or an untouched editor name.
+GENERIC_AUTOMATION_NAMES: frozenset[str] = frozenset(
+    {
+        "",
+        "automation",
+        "new automation",
+        "untitled",
+        "untitled automation",
+        "recorded task draft",
+        "recorded automation",
+        "draft",
+    }
+)
+
+
+def is_generic_automation_name(name: str | None) -> bool:
+    """True when a saved name says nothing about what the automation does."""
+    return (name or "").strip().casefold() in GENERIC_AUTOMATION_NAMES
+
+
+def _meaningful_phrases(steps: Iterable[object]) -> list[str]:
+    """Short verb phrases for the steps that actually act on the desktop."""
+    import json
+    from pathlib import Path
+
+    phrases: list[str] = []
+    for step in steps:
+        kind_val = getattr(getattr(step, "kind", None), "value", "")
+        if kind_val in ("REPORT", "FAIL"):
+            continue
+        target_raw = getattr(step, "target", None)
+        executable = ""
+        if target_raw:
+            try:
+                target = json.loads(target_raw)
+            except _TARGET_PARSE_ERRORS:
+                target = {}
+            if isinstance(target, dict) and target.get("executable"):
+                executable = Path(str(target["executable"])).stem
+        if kind_val == "LAUNCH_APPLICATION" and executable:
+            phrases.append(f"Open {executable}")
+        elif kind_val == "CLOSE_APPLICATION":
+            continue  # closing is the end of the story, not its name
+        elif kind_val == "TYPE_TEXT":
+            phrases.append("type text")
+        elif kind_val == "CLICK_UI_ELEMENT":
+            title = friendly_step_display(step)[0]
+            phrases.append(title[0].lower() + title[1:])
+        elif kind_val == "PRESS_SHORTCUT":
+            phrases.append("press a shortcut")
+        elif kind_val == "LAUNCH_BROWSER":
+            phrases.append("open the browser")
+        elif kind_val == "NAVIGATE_BROWSER":
+            phrases.append("open a page")
+        else:
+            title = friendly_step_display(step)[0]
+            if title:
+                phrases.append(title[0].lower() + title[1:])
+        if len(phrases) == 2:
+            break
+    return phrases
+
+
+def derived_automation_title(steps: Iterable[object]) -> str:
+    """Name an automation after what it does: "Open Notepad, type text".
+
+    Used when the saved name is generic, so a list of drafts reads as real
+    tasks instead of a column of "New automation" rows.
+    """
+    phrases = _meaningful_phrases(steps)
+    if not phrases:
+        return ""
+    title = ", ".join(phrases)
+    return title if len(title) <= 80 else title[:77] + "..."
+
+
+def automation_display_name(
+    saved_name: str | None,
+    steps: Iterable[object] | None = None,
+    *,
+    fallback: str = "",
+) -> str:
+    """The name a person should see: saved name, else derived, else fallback."""
+    cleaned = (saved_name or "").strip()
+    if cleaned and not is_generic_automation_name(cleaned):
+        return cleaned
+    if steps is not None:
+        derived = derived_automation_title(steps)
+        if derived:
+            return derived
+    return cleaned or fallback

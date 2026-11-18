@@ -149,10 +149,11 @@ def listed_texts(panel: DesktopApprovalPanel) -> list[str]:
     return [panel._step_list.item(index).text() for index in range(panel._step_list.count())]
 
 
-def click_run(page: MyAutomationsPage) -> None:
-    """The Run control is an inline confirm: click to arm, click to confirm."""
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+def click_run(page: MyAutomationsPage, index: int = 0) -> None:
+    """The row's Run control is an inline confirm: arm, then confirm."""
+    button = page._rows[index].run_button
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
 def make_desktop_service(tmp_path) -> tuple[WorkflowService, FakeDesktopActions]:
@@ -354,7 +355,7 @@ def test_cancelling_the_panel_runs_nothing(qtbot, tmp_path) -> None:
     assert desktop.calls == []
     assert tuple(service.history()) == ()
     # The page is usable again: a new run can be requested after a decline.
-    assert page._run_button.isEnabled() is True
+    assert page._rows[0].run_button.isEnabled() is True
 
 
 def test_selection_change_hides_a_waiting_panel_and_stops_its_approval(qtbot, tmp_path) -> None:
@@ -372,7 +373,7 @@ def test_selection_change_hides_a_waiting_panel_and_stops_its_approval(qtbot, tm
     assert Path(page._workflow_list.item(1).data(Qt.UserRole)).name == "typing-flow.json"
     page._workflow_list.setCurrentRow(1)
 
-    click_run(page)
+    click_run(page, 1)
     qtbot.waitUntil(lambda: page._approval_panel.isVisibleTo(page), timeout=5000)
     page._workflow_list.setCurrentRow(0)
 

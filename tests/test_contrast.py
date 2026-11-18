@@ -11,9 +11,7 @@ a compact format that works with pytest.
 
 from __future__ import annotations
 
-import os
 import re
-from pathlib import Path
 
 import pytest
 
@@ -126,36 +124,54 @@ class TestContrastPairsStructure:
             assert bg, "Background cannot be empty"
 
 
-def test_no_lemon_as_text_color():
-    """No component should use the LEMON token as a text color.
+#: Every stylesheet rule that paints lemon text, with the surface it sits on.
+#: Lemon is a fill/display colour: it may not be used as small text on any
+#: light surface (lemon on white is 1.38:1, lemon on glacier 1.52:1).
+LEMON_TEXT_RULES = {
+    "QLabel#onceLogo": "#0B1F33",  # navy rail behind the wordmark
+    "QLabel#heroLineAccent": "#2472B0",  # 128px display line on the sky hero
+    "QPushButton#confirmButton": "#0B1F33",  # navy fill, lemon label
+    'QPushButton#runRowButton[armed="true"]': "#0B1F33",
+}
 
-    LEMON (#F7DC3C) is a forbidden text color per the design spec:
-    lemon on white is 1.38:1 and lemon on glacier is 1.52:1,
-    both far below WCAG minimums. The token is only permitted as
-    an accent/background, never as text.
-    """
-    ui_dir = Path(__file__).parent.parent / "ui"
-    lemon_pattern = re.compile(r"LEMON|#F7DC3C", re.IGNORECASE)
 
-    problematic_files = []
-    for root, _dirs, files in os.walk(ui_dir):
-        for fname in files:
-            if fname.endswith(".py"):
-                fpath = Path(root) / fname
-                try:
-                    content = fpath.read_text(encoding="utf-8")
-                    if lemon_pattern.search(content):
-                        # Allow LEMON token import/definition in styles/__init__.py
-                        # Normalize path separators for cross-platform comparison
-                        normalized = Path(str(fpath)).as_posix()
-                        if "ui/styles/__init__.py" not in normalized:
-                            problematic_files.append(str(fpath.relative_to(ui_dir)))
+def _render_rules() -> dict[str, str]:
+    """Split the rendered stylesheet into selector -> block body."""
+    from ui.styles import render_stylesheet
 
-                except Exception as e:
-                    import logging
+    sheet = render_stylesheet()
+    rules: dict[str, str] = {}
+    for chunk in sheet.split("}"):
+        if "{" not in chunk:
+            continue
+        selector_text, body = chunk.split("{", 1)
+        selector = " ".join(selector_text.split())
+        rules[selector] = body
+    return rules
 
-                    logging.warning(f"Error checking LEMON token: {e}")
 
-    assert len(problematic_files) == 0, (
-        f"Found LEMON token used outside ui/styles/__init__.py: {problematic_files}"
-    )
+def test_lemon_text_is_declared_and_legible() -> None:
+    """Lemon text only where its surface supports it; never small on light."""
+    rules = _render_rules()
+    lemon_text = re.compile(rf"(?m)^\s*color:\s*{LEMON}", re.IGNORECASE)
+    lemon_users = {selector for selector, body in rules.items() if lemon_text.search(body)}
+    undeclared = lemon_users - set(LEMON_TEXT_RULES)
+    assert undeclared == set(), f"lemon text used without a declared surface: {sorted(undeclared)}"
+
+    for selector, surface in LEMON_TEXT_RULES.items():
+        ratio = contrast_ratio(LEMON, surface)
+        body = rules.get(selector, "")
+        assert ratio >= 3.0, f"{selector}: lemon on {surface} is {ratio:.2f}:1"
+        if ratio < 4.5:
+            # Below 4.5:1 lemon text is only allowed at display size.
+            size = re.search(r"font-size:\s*(\d+)px", body)
+            assert size is not None, f"{selector}: no font-size token found"
+            assert int(size.group(1)) >= 24, (
+                f"{selector}: lemon at {size.group(1)}px on {surface} is {ratio:.2f}:1"
+            )
+
+
+def test_lemon_text_is_not_used_without_a_rule_declaration() -> None:
+    """The forbidden pairs stay forbidden: lemon as small text on light."""
+    assert contrast_ratio(LEMON, WHITE) < 4.5
+    assert contrast_ratio(LEMON, GLACIER_600) < 4.5

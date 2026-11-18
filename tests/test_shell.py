@@ -69,8 +69,13 @@ def test_home_page_shows_welcome_and_empty_activity(qtbot, window):
     assert "automate" in title.casefold()
     assert "choose how" in subtitle.casefold()
     assert home._activity_empty.isVisible() is True
-    assert home._record_button.text() == "Start with a recording"
-    assert home.findChildren(QPushButton, "primaryActionButton")
+    # v4 design: the hero carries a lemon circle Record control and an outlined
+    # Build control; there is no card row and no full-width button bars.
+    assert home._record_button.text() == "Record"
+    assert home._record_button.objectName() == "circleButton"
+    assert home._create_automation_button.text() == "Build"
+    assert home._create_automation_button.objectName() == "heroSecondaryButton"
+    assert home.findChildren(QPushButton, "circleButton")
 
 
 def test_create_automation_page_has_description_input(qtbot, window):
@@ -217,8 +222,8 @@ def test_settings_page_opens_from_sidebar(qtbot, window):
     qtbot.wait(50)
     settings = window.settings_page
     assert window.workspace.currentIndex() == ShellPages.SETTINGS
-    assert settings._authorized_group.isVisible() is True
-    assert settings._verifier_group.isVisible() is True
+    assert settings._authorized_card.isVisible() is True
+    assert settings._verifier_card.isVisible() is True
     assert window.sidebar._settings_button.isChecked() is True
 
 
@@ -338,9 +343,7 @@ def test_sidebar_click_home_returns_to_home(qtbot, window):
 
 def test_home_build_button_opens_manual_editor(qtbot, window):
     build_button = next(
-        button
-        for button in window.home_page.findChildren(QPushButton)
-        if button.text() == "Build an automation"
+        button for button in window.home_page.findChildren(QPushButton) if button.text() == "Build"
     )
     qtbot.mouseClick(build_button, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
@@ -384,7 +387,7 @@ def test_open_button_click_shows_opened_workflow_on_the_review_page(qtbot, tmp_p
     page.refresh()
     page._workflow_list.setCurrentRow(0)
 
-    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(page._rows[0].open_button, Qt.MouseButton.LeftButton)
 
     assert window.workspace.currentWidget() is window.review_page
     assert "List invoices" in window.review_page._goal_label.text()
@@ -398,7 +401,7 @@ def test_review_edit_button_opens_saved_workflow_in_editor(qtbot, tmp_path):
     page = window.my_automations_page
     page.refresh()
     page._workflow_list.setCurrentRow(0)
-    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(page._rows[0].open_button, Qt.MouseButton.LeftButton)
 
     assert window.review_page._edit_button.isVisible()
     qtbot.mouseClick(window.review_page._edit_button, Qt.MouseButton.LeftButton)
@@ -415,9 +418,9 @@ def test_saved_review_resets_recording_review_title(qtbot, tmp_path):
     page = window.my_automations_page
     page.refresh()
     page._workflow_list.setCurrentRow(0)
-    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(page._rows[0].open_button, Qt.MouseButton.LeftButton)
 
-    assert window.review_page._title_label.text() == "Automation details"
+    assert window.review_page._title_label.text() == "AUTOMATION DETAILS"
 
 
 def test_review_cancel_button_click_returns_home(qtbot, window):
@@ -455,7 +458,7 @@ def test_sidebar_has_four_nav_items_brand_and_one_footer(qtbot, window):
     buttons = [w for w in widgets if isinstance(w, QToolButton)]
     labels = [w for w in widgets if isinstance(w, QLabel) and not isinstance(w, Spacer)]
     assert [b.text() for b in buttons] == ["Home", "My automations", "Activity", "Settings"]
-    assert [label.text() for label in labels] == ["Once", "Local app"]
+    assert [label.text() for label in labels] == ["ONCE", "LOCAL · OFFLINE BY DEFAULT"]
 
 
 def _ui_sources() -> dict[Path, str]:
@@ -637,6 +640,8 @@ def test_review_edit_and_approve_are_hidden_until_j6(qtbot, window):
 def test_pages_use_spacing_tokens_for_margins(qtbot, window):
     from ui.styles import SPACING_VALUES
 
+    # 0 is a valid page margin: colour-blocked band pages bleed to the edge.
+    allowed = SPACING_VALUES | {0}
     layouts = [
         window.home_page.layout(),
         window.my_automations_page.layout(),
@@ -648,13 +653,14 @@ def test_pages_use_spacing_tokens_for_margins(qtbot, window):
     for layout in layouts:
         margins = layout.contentsMargins()
         for value in (margins.left(), margins.top(), margins.right(), margins.bottom()):
-            assert value in SPACING_VALUES
+            assert value in allowed
 
 
 def test_type_scale_is_declared_once_in_the_theme(qtbot, window):
     from ui.styles import (
         TYPE_CAPTION_PX,
         TYPE_HOME_TITLE_PX,
+        TYPE_PAGE_TITLE_PX,
         TYPE_QUESTION_PX,
         TYPE_SUBTITLE_PX,
     )
@@ -675,7 +681,7 @@ def test_type_scale_is_declared_once_in_the_theme(qtbot, window):
 
     sheet = QApplication.instance().styleSheet()
     for rule, size in (
-        ("QLabel#pageTitle", TYPE_HOME_TITLE_PX),
+        ("QLabel#pageTitle", TYPE_PAGE_TITLE_PX),
         ("QLabel#pageSubtitle", TYPE_SUBTITLE_PX),
         ("QLabel#homeTitle", TYPE_HOME_TITLE_PX),
         ("QLabel#questionLabel", TYPE_QUESTION_PX),

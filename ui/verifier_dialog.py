@@ -79,7 +79,7 @@ class VerifierConfigDialog(QDialog):
         form.addRow("Worktree directory for reruns", root_row)
 
         save_button = QPushButton("Save configuration", self)
-        save_button.setObjectName("saveVerifierConfigButton")
+        save_button.setObjectName("primaryActionButton")
         save_button.clicked.connect(self.apply_config)
         cancel_button = QPushButton("Cancel", self)
         cancel_button.clicked.connect(self.reject)

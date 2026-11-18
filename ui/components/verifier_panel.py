@@ -83,7 +83,7 @@ class VerifierEditorPanel(QFrame):
         form.addRow("Worktree directory for reruns", root_row)
 
         self._save_button = QPushButton("Save configuration", self)
-        self._save_button.setObjectName("saveVerifierConfigButton")
+        self._save_button.setObjectName("primaryActionButton")
         self._save_button.clicked.connect(self._on_save_clicked)
         close_button = QPushButton("Close", self)
         close_button.setObjectName("ghostButton")

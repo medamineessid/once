@@ -39,6 +39,12 @@ def clear_runs_message(count: int) -> str:
     return f"Delete all {count} {_run_noun(count)}? This cannot be undone."
 
 
+def clear_drafts_message(count: int) -> str:
+    """Name how many unnamed drafts a clear action removes."""
+    draft_word = "draft" if count == 1 else "drafts"
+    return f"Delete {count} unnamed {draft_word}? This cannot be undone."
+
+
 def automation_delete_message(name: str, run_count: int) -> str:
     """Name the automation and, when present, how many runs go with it."""
     if run_count <= 0:

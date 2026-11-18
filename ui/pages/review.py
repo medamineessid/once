@@ -25,11 +25,11 @@ from controller.approvals import ApplicationIdentity
 from controller.service import WorkflowService, classify_workflow_steps
 from engine.errors import OnceError, WorkflowValidationError
 from engine.workflow import Workflow
+from ui.components.band import PageBand
 from ui.components.banner import SEVERITY_ERROR, SEVERITY_INFO, SEVERITY_SUCCESS, Banner
 from ui.components.cards import Chip
 from ui.components.delete_confirm import DeleteConfirmDialog, automation_delete_message
 from ui.components.formatting import friendly_step_display
-from ui.components.hero import MicroLabel
 from ui.components.icons import draw_automations_glyph, icon_pixmap
 from ui.editor.canvas import CanvasView
 from ui.strings import (
@@ -81,11 +81,10 @@ class ReviewPage(QWidget):
         layout.setSpacing(SPACING_LG)
         layout.setAlignment(Qt.AlignTop)
 
-        self._micro_label = MicroLabel("0 steps", content)
-        layout.addWidget(self._micro_label)
-        self._title_label = QLabel(REVIEW_TITLE_DRAFT, content)
-        self._title_label.setObjectName("pageTitle")
-        layout.addWidget(self._title_label)
+        self._band = PageBand(REVIEW_TITLE_DRAFT, micro="0 steps", tone="alt", parent=content)
+        self._micro_label = self._band.micro_label
+        self._title_label = self._band.title_label
+        layout.addWidget(self._band)
 
         self._banner = Banner(content)
         layout.addWidget(self._banner)
@@ -397,14 +396,14 @@ class ReviewPage(QWidget):
         self._proposal = None
         self._saved_workflow = workflow
         self._pending_identities = ()
-        self._title_label.setText(REVIEW_TITLE_SAVED)
+        self._band.set_title(REVIEW_TITLE_SAVED)
         self._edit_button.setVisible(workflow is not None)
         self._run_button.setVisible(workflow is not None)
         self._delete_button.setVisible(workflow is not None)
         self._approve_button.hide()
         self._goal_label.setText(workflow.name if workflow else "No automation loaded.")
         step_count = len(workflow.steps) if workflow else 0
-        self._micro_label.setText(f"{step_count} STEP{'S' if step_count != 1 else ''}")
+        self._band.set_micro(f"{step_count} step{'s' if step_count != 1 else ''}")
         self._steps_list.clear()
         self._banner.clear()
         self._canvas.set_workflow(workflow)
@@ -422,20 +421,20 @@ class ReviewPage(QWidget):
         self._edit_button.hide()
         self._run_button.hide()
         self._delete_button.hide()
-        self._title_label.setText(REVIEW_TITLE_DRAFT)
+        self._band.set_title(REVIEW_TITLE_DRAFT)
         self._canvas.set_workflow(None)
         self._banner.clear()
         self._steps_list.clear()
         if proposal is None:
             self._proposal = None
-            self._micro_label.setText("0 STEPS")
+            self._band.set_micro("0 steps")
             self._goal_label.setText("No proposal loaded.")
             self._steps_list.addItems(self._empty_steps())
             self._resize_steps_list()
             self._update_action_visibility()
             return
         step_count = len(proposal.workflow.steps)
-        self._micro_label.setText(f"{step_count} STEP{'S' if step_count != 1 else ''}")
+        self._band.set_micro(f"{step_count} step{'s' if step_count != 1 else ''}")
         self._goal_label.setText(f"Goal: {proposal.goal}")
         try:
             preview_proposal(proposal)

@@ -1,10 +1,7 @@
-"""Settings page — application configuration only.
+"""Settings — the same page language as everywhere else: band + section cards.
 
-Per the UX brief, unfinished features are hidden, not faked: Settings shows
-the authorized-folder choice and the acceptance-checker configuration,
-edited inline (no blocking dialogs). Recording, Gemini, coding-agent, and
-Advanced placeholders were removed because none of them had real behaviour
-behind them.
+Unfinished features stay hidden, not faked: Settings shows the authorized-folder
+choice and the acceptance-checker configuration, edited inline.
 """
 
 from __future__ import annotations
@@ -12,20 +9,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (
-    QFileDialog,
-    QGroupBox,
-    QLabel,
-    QPushButton,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QFileDialog, QLabel, QScrollArea, QVBoxLayout, QWidget
 
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig
+from ui.components.band import PageBand
 from ui.components.banner import Banner
-from ui.components.hero import MicroLabel
+from ui.components.buttons import ActionButton
+from ui.components.cards import SectionCard
 from ui.components.verifier_panel import VerifierEditorPanel
 from ui.strings import (
     SETTINGS_CONFIG_SAVED_BODY,
@@ -35,7 +26,7 @@ from ui.strings import (
     SETTINGS_SUBTITLE,
     SETTINGS_TITLE,
 )
-from ui.styles import SPACING_MD, SPACING_SM, SPACING_XL
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_XL
 
 
 class SettingsPage(QWidget):
@@ -61,6 +52,18 @@ class SettingsPage(QWidget):
         self._verifier_panel.reconfigure(app_data_dir, verifier_config)
 
     def _init_ui(self) -> None:
+        page_layout = QVBoxLayout(self)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.setSpacing(0)
+
+        self._band = PageBand(
+            SETTINGS_TITLE, micro="settings", description=SETTINGS_SUBTITLE, tone="alt", parent=self
+        )
+        self._micro_label = self._band.micro_label
+        self._title_label = self._band.title_label
+        self._subtitle_label = self._band.description_label
+        page_layout.addWidget(self._band)
+
         scroll_area = QScrollArea(self)
         scroll_area.setObjectName("settingsScroll")
         scroll_area.setWidgetResizable(True)
@@ -69,67 +72,55 @@ class SettingsPage(QWidget):
         scroll_widget = QWidget(self)
         scroll_widget.setObjectName("settingsWidget")
         self._scroll_layout = QVBoxLayout(scroll_widget)
-        self._scroll_layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
+        self._scroll_layout.setContentsMargins(SPACING_XL, SPACING_LG, SPACING_XL, SPACING_XL)
         self._scroll_layout.setSpacing(SPACING_MD)
         self._scroll_layout.setAlignment(Qt.AlignTop)
 
-        self._micro_label = MicroLabel("settings", self)
-        self._scroll_layout.addWidget(self._micro_label)
-        self._title_label = QLabel(SETTINGS_TITLE, self)
-        self._title_label.setObjectName("pageTitle")
-        self._scroll_layout.addWidget(self._title_label)
-        self._subtitle_label = QLabel(SETTINGS_SUBTITLE, self)
-        self._subtitle_label.setObjectName("pageSubtitle")
-        self._scroll_layout.addWidget(self._subtitle_label)
-
-        self._banner = Banner(self)
+        self._banner = Banner(scroll_widget)
         self._scroll_layout.addWidget(self._banner)
-        self._scroll_layout.addSpacing(SPACING_MD)
 
-        self._authorized_group = QGroupBox("Authorized folders", self)
-        self._authorized_group.setObjectName("settingsGroup")
-        authorized_layout = QVBoxLayout(self._authorized_group)
-        authorized_layout.setContentsMargins(SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD)
-        authorized_layout.setSpacing(SPACING_SM)
-        self._authorized_label = QLabel("No folder selected.", self._authorized_group)
+        self._authorized_card = SectionCard(
+            "Authorized folders",
+            "Once may only look at folders you choose. Nothing else is read.",
+            parent=scroll_widget,
+        )
+        self._authorized_label = QLabel("No folder selected.", self._authorized_card)
         self._authorized_label.setWordWrap(True)
         self._authorized_label.setObjectName("authorizedLabel")
-        authorized_layout.addWidget(self._authorized_label)
-        self._choose_authorized_button = QPushButton("Choose folder", self._authorized_group)
-        self._choose_authorized_button.setObjectName("secondaryActionButton")
-        self._choose_authorized_button.clicked.connect(self._choose_authorized_folder)
-        authorized_layout.addWidget(self._choose_authorized_button)
-        self._scroll_layout.addWidget(self._authorized_group)
-
-        self._verifier_group = QGroupBox("Acceptance checker", self)
-        self._verifier_group.setObjectName("settingsGroup")
-        verifier_layout = QVBoxLayout(self._verifier_group)
-        verifier_layout.setContentsMargins(SPACING_MD, SPACING_MD, SPACING_MD, SPACING_MD)
-        verifier_layout.setSpacing(SPACING_SM)
-        self._verifier_label = QLabel(
-            "The checker reruns acceptance cases against a proposed change before you approve it.",
-            self._verifier_group,
+        self._authorized_card.content.addWidget(self._authorized_label)
+        self._choose_authorized_button = ActionButton(
+            "Choose folder", variant="secondary", parent=self._authorized_card
         )
-        self._verifier_label.setWordWrap(True)
-        self._verifier_label.setObjectName("verifierIntroLabel")
-        verifier_layout.addWidget(self._verifier_label)
-        self._verifier_panel = VerifierEditorPanel(None, parent=self._verifier_group)
-        self._verifier_panel.saved.connect(self._on_verifier_saved)
-        verifier_layout.addWidget(self._verifier_panel)
-        self._configure_verifier_button = QPushButton("Configure checker…", self._verifier_group)
-        self._configure_verifier_button.setObjectName("secondaryActionButton")
-        self._configure_verifier_button.clicked.connect(self._configure_verifier)
-        verifier_layout.addWidget(self._configure_verifier_button)
-        self._scroll_layout.addWidget(self._verifier_group)
+        self._choose_authorized_button.clicked.connect(self._choose_authorized_folder)
+        self._authorized_card.content.addWidget(
+            self._choose_authorized_button, alignment=Qt.AlignmentFlag.AlignLeft
+        )
+        self._scroll_layout.addWidget(self._authorized_card)
 
-        groups = len(self.findChildren(QGroupBox, "settingsGroup"))
-        self._micro_label.setText(f"{groups} SETTING{'S' if groups != 1 else ''}")
+        self._verifier_card = SectionCard(
+            "Acceptance checker",
+            "The checker reruns acceptance cases against a proposed change before you approve it.",
+            parent=scroll_widget,
+        )
+        self._verifier_panel = VerifierEditorPanel(None, parent=self._verifier_card)
+        self._verifier_panel.saved.connect(self._on_verifier_saved)
+        self._verifier_card.content.addWidget(self._verifier_panel)
+        self._configure_verifier_button = ActionButton(
+            "Configure checker…", variant="secondary", parent=self._verifier_card
+        )
+        self._configure_verifier_button.clicked.connect(self._configure_verifier)
+        self._verifier_card.content.addWidget(
+            self._configure_verifier_button, alignment=Qt.AlignmentFlag.AlignLeft
+        )
+        self._scroll_layout.addWidget(self._verifier_card)
+
+        cards = len(self.findChildren(SectionCard))
+        self._micro_label.setText(f"{cards} setting{'s' if cards != 1 else ''}")
         self._scroll_layout.addStretch()
+        self._scroll_layout.setSpacing(SPACING_MD)
         scroll_area.setWidget(scroll_widget)
-        page_layout = QVBoxLayout(self)
-        page_layout.setContentsMargins(0, 0, 0, 0)
-        page_layout.setSpacing(0)
         page_layout.addWidget(scroll_area, stretch=1)
+        self._verifier_panel.hide()
 
     def _choose_authorized_folder(self) -> None:
         directory = QFileDialog.getExistingDirectory(self, "Choose authorized folder")

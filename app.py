@@ -287,20 +287,20 @@ def _print_diagnostics(window: object, page_name: str) -> None:
         if label.objectName() not in known and label.isVisible() and label.text():
             _describe("body", label)
             break
-    # Sidebar label text lives on the QToolButton itself.
+    # Sidebar label text lives on the painted SidebarItem itself.
     sidebar_button = window.findChild(QWidget, "sidebarHomeButton")
     if sidebar_button is not None:
         _describe("sidebarLabel", sidebar_button)
-        icon = sidebar_button.icon()
-        if not icon.isNull():
-            from PySide6.QtCore import QSize
-
-            dpr = window.devicePixelRatioF()
-            pixmap = icon.pixmap(QSize(20, 20), dpr)
-            print(
-                f"  {'sidebarIcon':<22} px={pixmap.width()}x{pixmap.height()} "
-                f"devicePixelRatio={pixmap.devicePixelRatio():.2f}"
-            )
+        icon_rect = getattr(sidebar_button, "icon_rect", None)
+        text_rect = getattr(sidebar_button, "text_rect", None)
+        if callable(icon_rect) and callable(text_rect):
+            icon = icon_rect()
+            text = text_rect()
+            gap = text.left() - icon.right() - 1
+            print(f"  {'sidebarIcon':<22} px={icon.width()}x{icon.height()} gap={gap}px")
+    empty_icon = window.findChild(QWidget, "emptyIcon")
+    if empty_icon is not None:
+        print(f"  {'emptyStateIcon':<22} px={empty_icon.width()}x{empty_icon.height()}")
 
 
 def _load_verifier_setup(app_data_dir: Path) -> tuple[VerifierConfig | None, str | None]:

@@ -256,12 +256,12 @@ def test_home_delete_button_removes_a_run_and_shows_empty_state(
     page.set_service(service)
     confirm_with(monkeypatch, delete_runs=True)
 
-    buttons = page.findChildren(QPushButton, "deleteRunButton")
+    buttons = page.findChildren(QPushButton, "linkActionButton")
     assert len(buttons) == 1
     QTest.mouseClick(buttons[0], Qt.MouseButton.LeftButton)
 
     assert service.history() == ()
-    assert page.findChildren(QPushButton, "deleteRunButton") == []
+    assert page.findChildren(QPushButton, "linkActionButton") == []
     assert not page._activity_empty.isHidden()
 
 
@@ -280,10 +280,14 @@ def test_my_automations_delete_with_runs_removes_both(qtbot, tmp_path, monkeypat
     page._workflow_list.setCurrentRow(0)
     confirm_with(monkeypatch, delete_runs=True)
 
-    QTest.mouseClick(page._delete_button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(page._rows[0].delete_button, Qt.MouseButton.LeftButton)
 
     assert page._workflow_list.count() == 0
-    assert "No saved automations" in page._details_label.text()
+    # The empty state (icon + heading + one line) replaces the old placeholder
+    # text, and no stale "workflow not found" error may appear after refresh.
+    assert page._empty_state.isVisible() is True
+    assert "No saved automations" in page._empty_state._body.text()
+    assert "not found" not in page._details_label.text()
     assert not saved.exists()
     assert service.history() == ()
 
@@ -300,7 +304,7 @@ def test_my_automations_delete_can_keep_runs(qtbot, tmp_path, monkeypatch) -> No
     page._workflow_list.setCurrentRow(0)
     confirm_with(monkeypatch, delete_runs=False)
 
-    QTest.mouseClick(page._delete_button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(page._rows[0].delete_button, Qt.MouseButton.LeftButton)
 
     assert not saved.exists()
     assert len(service.history()) == 1
