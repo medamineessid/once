@@ -394,8 +394,20 @@ class PywinautoDesktopActions:
         deadline = self._clock() + CLOSE_TIMEOUT_SECONDS
         closed = 0
         requested: set[int] = set()
+        answered_prompts: set[int] = set()
         while True:
             visible = self._new_visible_windows(Path(recorded), pid, baseline)
+            # A close request can be answered by the application's own save
+            # prompt, which keeps the window open. Answer it ("don't save") for
+            # the windows this run created, once each.
+            for wrapper in visible:
+                handle = _handle_of(wrapper)
+                if handle in answered_prompts:
+                    continue
+                if self._discard_save_prompt(wrapper):
+                    answered_prompts.add(handle)
+                    self._sleep(self._poll_interval)
+                    break
             if not self._process_alive(pid) and not visible:
                 if closed == 0:
                     return StepResult(
@@ -454,16 +466,57 @@ class PywinautoDesktopActions:
                 wrapper = pending[0]
                 requested.add(_handle_of(wrapper))
                 try:
-                    wrapper.close()
+                    # An application may answer the close with its own
+                    # "save your changes?" prompt. The run only ever closes a
+                    # window it created moments ago, so declining that save is
+                    # what "close it" meant; it also never writes a file.
+                    discarded = self._discard_save_prompt(wrapper)
+                    if not discarded:
+                        wrapper.close()
+                    closed += 1
                 except (AttributeError, OSError, RuntimeError, ValueError) as error:
-                    return StepResult(
-                        step_id="",
-                        status=StepStatus.FAILED,
-                        message=f"The application window did not close: {error}",
-                        evidence=(f"process_id={pid}", f"windows_closed={closed}"),
-                    )
-                closed += 1
+                    # The window can disappear while we ask it to (the prompt
+                    # answered, or the app exited on its own). That is the
+                    # outcome the step wanted; only a window that is still
+                    # there is a failure.
+                    if wrapper in self._new_visible_windows(Path(recorded), pid, baseline):
+                        detail = str(error) or type(error).__name__
+                        return StepResult(
+                            step_id="",
+                            status=StepStatus.FAILED,
+                            message=f"The application window did not close: {detail}",
+                            evidence=(f"process_id={pid}", f"windows_closed={closed}"),
+                        )
+                    closed += 1
             self._sleep(self._poll_interval)
+
+    def _discard_save_prompt(self, wrapper: Any) -> bool:
+        """Decline an application's save prompt and close the window it guards.
+
+        Windows' save-changes prompt is a three-button cluster: save, don't
+        save, cancel, exposed as PrimaryButton / SecondaryButton / CloseButton
+        regardless of the UI language. Only a prompt inside a window this run
+        created is ever answered, and only with "don't save": the run's own
+        text is the only content at stake and no file is written.
+        """
+        try:
+            buttons = {
+                str(getattr(getattr(item, "element_info", None), "automation_id", "")): item
+                for item in wrapper.descendants()
+                if str(getattr(getattr(item, "element_info", None), "control_type", "")) == "Button"
+            }
+        except (AttributeError, OSError, RuntimeError, ValueError):
+            return False
+        required = {"PrimaryButton", "SecondaryButton", "CloseButton"}
+        if not required.issubset(buttons):
+            return False
+        discard = buttons["SecondaryButton"]
+        invoke = getattr(discard, "invoke", None)
+        if callable(invoke):
+            invoke()
+        else:
+            discard.click_input()
+        return True
 
     def _snapshot_window_tokens(self) -> frozenset[int] | None:
         """Remember every window that existed before a launch.
@@ -484,10 +537,13 @@ class PywinautoDesktopActions:
     ) -> list[Any]:
         """Visible, unowned windows created by this launch, never older ones.
 
-        Windows 11 Notepad can host several documents in one process, so a pid
-        match alone is not enough. A window also qualifies when its process
-        image is exactly the executable this run launched (the packaged-app
-        handoff case), and only when it did not exist in the pre-launch snapshot.
+        Windows 11 Notepad is a single-instance packaged app: launching its
+        system stub hands the window to an already-running Notepad process, so
+        neither the pid nor the image path of the window owner equals what this
+        run launched. Ownership is therefore the window itself: it must not
+        exist in the pre-launch snapshot, and its process image must be the same
+        file name as the launched executable. A window this run did not create
+        is never touched, because the snapshot rules it out.
         """
         key = _executable_key(executable)
         found: list[Any] = []
@@ -497,7 +553,11 @@ class PywinautoDesktopActions:
             owned = window_pid == pid
             if not owned and isinstance(window_pid, int) and window_pid > 0:
                 image = self._process_image(window_pid)
-                owned = bool(image) and _executable_key(Path(image)) == key
+                if image:
+                    image_path = Path(image)
+                    owned = _executable_key(image_path) == key or (
+                        image_path.name.casefold() == executable.name.casefold()
+                    )
             if (
                 owned
                 and _window_token(wrapper) not in baseline

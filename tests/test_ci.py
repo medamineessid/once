@@ -33,8 +33,10 @@ def test_ci_workflow_targets_supported_python_version() -> None:
     text = WORKFLOW_PATH.read_text(encoding="utf-8")
     pyproject_text = PYPROJECT_PATH.read_text(encoding="utf-8")
 
-    # pyproject.toml targets py314
-    assert 'target-version = "py314"' in pyproject_text
+    # Ruff targets the minimum the project supports (3.12), not the newest
+    # interpreter CI happens to run: targeting 3.14 lets the formatter emit
+    # syntax that 3.12 and 3.13 reject, such as `except A, B:`.
+    assert 'target-version = "py312"' in pyproject_text
 
     # Workflow specifies Python 3.14
     assert "python-version: '3.14'" in text or 'python-version: "3.14"' in text

@@ -19,7 +19,8 @@ import pytest
 
 from engine.errors import ExecutionError
 from engine.workflow import ApprovedApplication, StepStatus
-from integrations.windows_desktop import PywinautoDesktopActions
+from integrations.windows_desktop import PywinautoDesktopActions, _window_token
+from integrations.windows_desktop import _executable_key as provider_launch_key
 
 # ---------------------------------------------------------------------------
 # Windows-only lane B integration imports pywinauto lazily inside _pattern.
@@ -108,6 +109,10 @@ class FakeWrapper:
         self._rect = rect or FakeRect(10, 20, 110, 60)
         self.focused_keys: list[str] = []
         self.selected = False
+        self.clicked = False
+
+    def invoke(self) -> None:
+        self.clicked = True
 
     def rectangle(self) -> FakeRect:
         return self._rect
@@ -998,3 +1003,108 @@ def test_exact_title_normalises_unicode_replacement_characters() -> None:
         json.dumps({"window": {"title": "R\ufffdsultats - App"}, "keys": "ctrl+s"})
     )
     assert result.status is StepStatus.SUCCEEDED
+
+
+def test_close_closes_a_handed_off_window_with_the_same_image_name() -> None:
+    """Windows 11 Notepad: the window belongs to an already-running Notepad.
+
+    The launched stub is a different pid (and a different install path) from the
+    process that ends up hosting the window, so ownership is decided by "new
+    since launch" plus the same image file name.
+    """
+    handed_off = FakeWindow(FakeElementInfo(name="once test - Notepad", process_id=777), [])
+    provider = close_provider(
+        [handed_off],
+        is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
+        has_owner=lambda wrapper: False,
+    )
+    provider._process_image = lambda pid: f"C:/Program Files/Elsewhere/{Path(sys.executable).name}"
+    provider.launch_application(json.dumps({"executable": sys.executable}))
+
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
+
+    assert result.status is StepStatus.SUCCEEDED
+    assert handed_off.closed is True
+    assert "windows_closed=1" in result.evidence
+
+
+def test_close_never_touches_a_same_image_window_that_existed_before_launch() -> None:
+    """A Notepad tab the user already had open is not this run's to close."""
+    pre_existing = FakeWindow(FakeElementInfo(name="my notes - Notepad", process_id=777), [])
+    provider = close_provider(
+        [pre_existing],
+        is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
+        has_owner=lambda wrapper: False,
+    )
+    provider._process_image = lambda pid: f"C:/Program Files/Elsewhere/{Path(sys.executable).name}"
+    provider._prelaunch_handles[provider_launch_key(sys.executable)] = frozenset(
+        {_window_token(pre_existing)}
+    )
+    provider._launched[provider_launch_key(sys.executable)] = (FakeProcess.pid, True)
+
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
+
+    # The user's own window is never touched. With no window of this launch to
+    # close, the step reports that honestly instead of claiming a close.
+    assert pre_existing.closed is False
+    assert result.status is StepStatus.FAILED
+    assert "never appeared" in result.message
+
+
+def test_close_declines_the_save_prompt_of_its_own_window() -> None:
+    """A typed-into document asks to save on close; the run answers "don't save".
+
+    Without this the window stays open behind the prompt and a Close step that
+    did its job reports a timeout instead of a closed application.
+    """
+
+    class PromptingWindow(FakeWindow):
+        def __init__(self, info, children) -> None:
+            super().__init__(info, children)
+            self.prompt_visible = True
+
+        def close(self) -> None:
+            # The first close raises the app's save prompt instead of closing.
+            if self.prompt_visible:
+                self.prompt_visible = False
+                return
+            self.closed = True
+
+    prompt_buttons = [
+        FakeWrapper(
+            FakeElementInfo(
+                name="Enregistrer", automation_id="PrimaryButton", control_type="Button"
+            )
+        ),
+        FakeWrapper(
+            FakeElementInfo(
+                name="Ne pas enregistrer", automation_id="SecondaryButton", control_type="Button"
+            )
+        ),
+        FakeWrapper(
+            FakeElementInfo(name="Annuler", automation_id="CloseButton", control_type="Button")
+        ),
+    ]
+    window = PromptingWindow(
+        FakeElementInfo(name="once test - Notepad", process_id=777), prompt_buttons
+    )
+
+    # Clicking "don't save" is what actually closes the window behind the prompt.
+    def discard_and_close() -> None:
+        prompt_buttons[1].clicked = True
+        window.closed = True
+
+    prompt_buttons[1].invoke = discard_and_close
+    provider = close_provider(
+        [window],
+        is_visible=lambda wrapper: not getattr(wrapper, "closed", False),
+        has_owner=lambda wrapper: False,
+    )
+    provider._process_image = lambda pid: f"C:/Program Files/Elsewhere/{Path(sys.executable).name}"
+    provider.launch_application(json.dumps({"executable": sys.executable}))
+
+    result = provider.close_application(json.dumps({"executable": sys.executable}))
+
+    assert result.status is StepStatus.SUCCEEDED
+    assert prompt_buttons[1].clicked is True, "the discard button must be the one clicked"
+    assert prompt_buttons[0].clicked is False, "the run must never choose to save"

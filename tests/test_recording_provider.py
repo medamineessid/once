@@ -349,7 +349,7 @@ def test_real_recording_filters_os_shell_and_produces_clean_steps() -> None:
 
     actionable = [s for s in proposal.workflow.steps if s.kind is not StepKind.REPORT]
     assert [(s.kind, s.name) for s in actionable] == [
-        (StepKind.LAUNCH_APPLICATION, "Observation 1"),
+        (StepKind.LAUNCH_APPLICATION, "Open WindowsTerminal"),
         (StepKind.CLICK_UI_ELEMENT, "Click Démarrer"),
         (StepKind.CLICK_UI_ELEMENT, "Click Paramètres"),
         (StepKind.CLICK_UI_ELEMENT, "Close Paramètres"),
@@ -368,3 +368,34 @@ def test_real_recording_filters_os_shell_and_produces_clean_steps() -> None:
     # Ensure WindowsTerminal was NOT emitted as CLOSE_APPLICATION (only renamed):
     close_steps = [s for s in proposal.workflow.steps if s.kind is StepKind.CLOSE_APPLICATION]
     assert close_steps == []
+
+
+def test_title_changes_never_become_steps_in_a_draft() -> None:
+    """A window title changing is the app reacting to typing, not a task step."""
+    from recorder.drafts import RawDraft, RawDraftAction
+    from recorder.models import RecordedEventKind
+
+    draft = RawDraft(
+        "recording-titles",
+        (
+            RawDraftAction(
+                sequence=1,
+                description="A Notepad window opened: Sans titre.",
+                source_event=RecordedEventKind.WINDOW_OPEN,
+                process_name="Notepad.exe",
+                window_title="Sans titre - Bloc-notes",
+                executable_path="C:/Windows/System32/notepad.exe",
+            ),
+            RawDraftAction(
+                sequence=2,
+                description="The Notepad.exe window title changed to: *once test.",
+                source_event=RecordedEventKind.WINDOW_TITLE_CHANGED,
+                process_name="Notepad.exe",
+                window_title="*once test - Bloc-notes",
+                executable_path="C:/Windows/System32/notepad.exe",
+            ),
+        ),
+    )
+    proposal = deterministic_recording_provider().analyze(AnalysisRequest(draft))
+
+    assert [step.kind for step in proposal.workflow.steps] == [StepKind.LAUNCH_APPLICATION]

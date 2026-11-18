@@ -121,7 +121,9 @@ def deterministic_recording_provider() -> AnalysisProvider:
             launched: set[str] = set()
             actions = request.draft.actions
             for index, action in enumerate(actions, start=1):
-                steps.append(_step_for_action(action, index, launched, actions))
+                step = _step_for_action(action, index, launched, actions)
+                if step is not None:
+                    steps.append(step)
             workflow = Workflow(
                 workflow_id=f"recording-{request.draft.recording_id}",
                 name="Recorded task draft",
@@ -202,7 +204,7 @@ def _step_for_action(
     index: int,
     launched: set[str],
     all_actions: Sequence[RawDraftAction] = (),
-) -> WorkflowStep:
+) -> WorkflowStep | None:
     """Turn one observation into a validated engine step deterministically."""
     step_id = f"observation-{action.sequence}"
     name = f"Observation {index}"
@@ -227,7 +229,7 @@ def _step_for_action(
             launched.add(executable)
             return WorkflowStep(
                 step_id,
-                name,
+                f"Open {Path(executable).stem}",
                 StepKind.LAUNCH_APPLICATION,
                 f"Launch {Path(executable).stem}.",
                 target=json.dumps({"executable": executable}),
@@ -263,7 +265,7 @@ def _step_for_action(
         if executable in launched:
             return WorkflowStep(
                 step_id,
-                name,
+                f"Close {Path(executable).stem}",
                 StepKind.CLOSE_APPLICATION,
                 f"Close {Path(executable).stem}.",
                 target=json.dumps({"executable": executable}),
@@ -278,7 +280,10 @@ def _step_for_action(
             ),
         )
     if action.source_event is RecordedEventKind.WINDOW_TITLE_CHANGED:
-        return WorkflowStep(step_id, name, StepKind.REPORT, action.description)
+        # A title change is the application reacting to the user's own typing,
+        # not a step the user took. It stays in the recorded evidence but never
+        # becomes a step, so a draft reads as the task, not as a log.
+        return None
     if action.source_event is RecordedEventKind.MOUSE_CLICK:
         element = getattr(action, "element", None)
         auto_id = getattr(element, "automation_id", None) or ""
