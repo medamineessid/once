@@ -1726,3 +1726,22 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   Notepad restored a second same-titled window on this machine).
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-18 — Step 25: automations list keeps every row (commit: bbe759a)
+- Task: a saved automation must never be hidden by the page layout; the list
+  had its scrollbar off, so anything past the second row was unreachable.
+- AI contribution: `MyAutomationsPage._fit_rows()` measures each rendered row
+  and sets the list height from the sum; it runs after a refresh and again in
+  `showEvent`. Added `tests/test_my_automations_page.py::test_every_row_fits_inside_the_list`.
+- Defect found: two earlier attempts were wrong. Computing the height from
+  `row.sizeHint()` inside `_refresh` used 58px because stylesheet padding is
+  not yet applied, giving a 192px list for 2.6 rows; dropping the item size
+  hint entirely then made the delegate fall back to 39px rows. Measured values
+  came from a probe printing `height`, `count`, `sizeHintForRow` and
+  `visualItemRect`, not from guessing.
+- Verification: `pytest -q` printed `783 passed, 3 skipped in 101.68s`;
+  `ruff check .` printed `All checks passed!`; `shots/design-v4/automations-rows.png`
+  shows all three rows; probe output after the fix: `height 288 rows 3 last
+  rect (0, 184, 956, 92)`.
+- Outcome: PASSED
+- Human review:
