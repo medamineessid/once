@@ -1685,3 +1685,44 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `grep -c "qt.qpa.fonts"` on that output printed `0`.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-18 — Step 24: real-desktop record, approve, run (commit: 152af14, b6cbc61, 3f75425)
+- Task: make the advertised flow work on this machine: record "open Notepad, type
+  once test, close it", approve the draft, run it twice, and be able to stop a run
+  with a visible button or Ctrl+Alt+Q.
+- AI contribution: rewrote `integrations/kill_switch.py` to match the combination
+  key by key (pynput's `GlobalHotKeys` parser only matches keys it can name as
+  characters); added the footer Stop control and run-state signals in
+  `ui/components/footer.py`, `ui/shell.py`, `ui/pages/my_automations.py`; extended
+  `CLOSE_APPLICATION` ownership and save-prompt handling in
+  `integrations/windows_desktop.py`; added duration/failure/`Run again` to
+  `ui/pages/activity.py`; added `{name}` run-time values
+  (`ui/components/parameters.py`, `ui/components/parameter_dialog.py`); dropped
+  window-title-change steps from `ai/provider.py`; added
+  `scripts/prove_notepad_flow.py`, `scripts/shot_activity_runs.py`,
+  `tests/test_run_controls.py`, `tests/test_parameters.py`,
+  `tests/test_app_starts.py`.
+- Defect found: (1) the kill switch never triggered — a live probe recorded
+  `triggered: false` and the run was not stopped; (2) Notepad's close reported a
+  timeout with the window still open, because Win11 Notepad is a single-instance
+  packaged app (the window belongs to a process the run never started) and
+  `ValuePattern` typing cannot be undone, so the app's save prompt blocked the
+  close; (3) `engine/workflow.py` retried a step with no pause at all; (4) the
+  formatter had been targeting py314 and rewrote `except (A, B):` into syntax
+  Python 3.12/3.13 reject — fixed by targeting py312 and re-parenthesising five
+  clauses.
+- Verification: `python scripts/prove_notepad_flow.py` printed
+  `draft: 4 steps` (`Open Notepad`, `Type in Éditeur de texte`, `Press CTRL+Z`,
+  `Close Notepad`), `run 1: SUCCEEDED`, `run 2: SUCCEEDED`,
+  `new Notepad windows left behind: 0` twice, `RESULT: PASS`, and wrote
+  `shots/after/notepad-flow.json` (recorded events, draft, both runs, Notepad
+  process lists before/after: 2 and 2). `python scripts/prove_kill_switch.py`
+  printed `status: CANCELLED`, `kill switch triggered: True`,
+  `remaining Character Map windows: 0`, `RESULT: PASS`. `pytest -q` printed
+  `782 passed, 3 skipped in 118.36s`; `ruff check .` printed `All checks passed!`;
+  `ruff format --check .` printed `241 files already formatted`.
+  `ONCE_REAL_DESKTOP=1 pytest tests/test_app_starts.py` printed
+  `7 passed, 2 skipped` (the Notepad e2e skipped with its stated reason:
+  Notepad restored a second same-titled window on this machine).
+- Outcome: PASSED
+- Human review:

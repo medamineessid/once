@@ -8,7 +8,7 @@ Once is a local-first Windows desktop application built with Python and **PySide
 
 ## What Works Today (Current Capabilities)
 
-Once brings together a high-contrast, Linear/Raycast-inspired native desktop interface (`ui/`, documented in [`DESIGN.md`](DESIGN.md)) and a rock-solid, policy-gated execution engine (`engine/`, `controller/`, `integrations/`):
+Once brings together a high-contrast native desktop interface — navy rail, lemon accents, banded Anton page titles (`ui/`, documented in [`DESIGN.md`](DESIGN.md)) — and a rock-solid, policy-gated execution engine (`engine/`, `controller/`, `integrations/`):
 
 ### 1. Semantic Task Recording & AI-Assisted Drafts (`Start with a recording`)
 - **Beyond `(x, y)` Coordinates:** Captures window launches, window closes, UIA control clicks (`Button`, `MenuItem`, `CheckBox`, `RadioButton`, `ListItem`, `TabItem`, `Hyperlink`), text entry (`Edit`, `Document`, `ComboBox`), and keyboard shortcuts locally while automatically redacting password fields.
@@ -21,7 +21,7 @@ Once brings together a high-contrast, Linear/Raycast-inspired native desktop int
 - **Full Undo / Redo & Live Execution:** Edit with confidence (`Ctrl+Z` / `Ctrl+Y` / `Ctrl+S`), delete steps, and run saved automations directly from the editor with real-time per-node progress and evidence inspection.
 
 ### 3. Resilient Windows 11 Desktop & Browser Replay
-- **Cryptographic Application Registry (`once.db`):** Launches only executables you have explicitly approved and verifies their SHA-256 digest before every run. `CLOSE_APPLICATION` closes only the process ID (PID) started by that specific run, never touching your other open windows.
+- **Cryptographic Application Registry (`once.db`):** Launches only executables you have explicitly approved and verifies their SHA-256 digest before every run. `CLOSE_APPLICATION` closes only a window that did not exist before the launch and belongs to the launched executable — including Windows 11 Notepad's single-instance handoff — and never a window you already had open. If the application answers with its own save prompt, Once declines it rather than writing a file; a window it cannot prove it owns is left open and reported.
 - **Real-World Windows 11 UIA Tolerance:** Automatically waits up to 5 seconds for newly launched windows to appear, tolerates dirty-indicator title prefixes (such as `*Untitled - Notepad`), and falls back to focused keyboard entry when modern WinUI/DirectUI controls do not expose `ValuePattern`.
 - **Isolated Chrome DevTools Automation:** Supports bounded browser steps (`LAUNCH_BROWSER`, `NAVIGATE_BROWSER`, `INSPECT_PAGE`, `FIND_PAGE_ELEMENT`, `INTERACT_PAGE_ELEMENT`, `WAIT_PAGE`) inside disposable temporary profiles that clean up automatically when the run finishes.
 
@@ -39,7 +39,9 @@ Every run reports an accurate, plain-language outcome (`docs/contracts/run-outco
 - **`Partly performed` (`PARTIALLY_PERFORMED`):** At least one step performed real work and at least one step was `Observation only` (`REPORT`).
 - **`Observation only — nothing was performed` (`OBSERVATION_ONLY`):** The workflow contained only observation notes.
 - **`Failed` (`FAILED`):** A step failed, timed out, or was refused by a safety gate (such as an unapproved executable or SHA-256 mismatch).
-- **`Cancelled` (`CANCELLED`):** Cooperatively stopped by the user before completion.
+- **`Cancelled` (`CANCELLED`):** Cooperatively stopped by the user before completion — from the **Stop** button in the footer, or **Ctrl+Alt+Q** anywhere, which is a global hotkey armed only while a run is live.
+
+Each run in **Activity** shows its name, status, duration, and the first plain-language failure reason, with per-run **Run again** and **Delete**.
 
 ---
 
@@ -47,7 +49,8 @@ Every run reports an accurate, plain-language outcome (`docs/contracts/run-outco
 
 ### Requirements
 - Windows 10 or 11 (x64)
-- Python 3.14 (verified on Python 3.14.3)
+- Python 3.12 or newer; the app and its tests run on 3.14.3 on this machine, and
+  the linter targets 3.12 so nothing emitted here needs a newer interpreter
 
 ### Setup
 
@@ -125,6 +128,9 @@ All user data (SQLite history, approved application hashes, saved workflows, rec
 ---
 
 ## Documentation Map
+
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed, and the real defects fixed while verifying it.
+- [`docs/first_run.md`](docs/first_run.md) — the first-run walkthrough, with the places people actually get stuck.
 
 - [`DESIGN.md`](DESIGN.md) — Native Qt design system, color tokens, typography scale, and canvas/inspector anatomy.
 - [`AGENTS.md`](AGENTS.md) — Architecture boundaries, non-negotiable safety invariants (`S1–S12`, `O1–O8`), and engineering rules.
