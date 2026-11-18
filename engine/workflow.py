@@ -872,7 +872,12 @@ class WorkflowRunner:
             if result.status in PERFORMED_STEP_STATUSES and step.kind is not StepKind.REPORT:
                 performed_any = True
             if result.status not in CONTINUING_STEP_STATUSES:
-                cancelled = is_cancelled()
+                # The retry loop is the only producer of a SKIPPED step result,
+                # and it skips only when the user cancelled, so that case needs no
+                # second probe. Every other non-continuing result still asks the
+                # predicate once: the kill switch can fire while a step is running
+                # and surface as a failure, which must be reported as CANCELLED.
+                cancelled = result.status is StepStatus.SKIPPED or is_cancelled()
                 results.extend(
                     StepResult(
                         step_id=remaining.step_id,
