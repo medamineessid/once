@@ -142,3 +142,53 @@ def test_shell_injects_service_into_activity_page(qtbot, tmp_path):
     qtbot.addWidget(window)
 
     assert window.activity_page._service is service
+
+
+def test_run_row_shows_duration_failure_reason_and_run_again(qtbot, tmp_path):
+    """Each history row answers: how long, why it stopped, and can I repeat it."""
+    service = make_service(tmp_path)
+    folder = tmp_path / "notes"
+    folder.mkdir()
+    failing = Workflow(
+        workflow_id="save-a-note",
+        name="Save a note",
+        steps=(
+            WorkflowStep(
+                step_id="check-saved-file",
+                name="Check the saved file",
+                kind=StepKind.VERIFY_PATH_EXISTS,
+                message="Check the saved file exists.",
+                target=str(folder / "today.txt"),
+            ),
+        ),
+    )
+    run = service.run_workflow(failing, allowed_root=folder)
+    assert run.status.value == "FAILED"
+
+    page = ActivityPage()
+    qtbot.addWidget(page)
+    page.set_service(service)
+    row = page._history_list.itemWidget(page._history_list.item(0))
+
+    caption = row._caption.text()
+    assert "took " in caption
+    assert "Stopped: " in caption
+    # The internal attempt counter is not part of a user-facing reason.
+    assert "attempt(s)" not in caption
+    assert row.rerun_button.text() == "Run again"
+    assert row.rerun_button.isEnabled() is True
+
+
+def test_run_again_emits_the_workflow_id(qtbot, tmp_path):
+    service = make_service(tmp_path)
+    service.run_demo()
+    page = ActivityPage()
+    qtbot.addWidget(page)
+    page.set_service(service)
+    requested: list[str] = []
+    page.rerun_requested.connect(requested.append)
+
+    row = page._history_list.itemWidget(page._history_list.item(0))
+    row.rerun_button.click()
+
+    assert requested == ["demo-local-workflow"]

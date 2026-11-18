@@ -169,6 +169,9 @@ REVIEW_DELETE_ERROR_TITLE = "Automation not deleted"
 
 # --- Destructive actions ----------------------------------------------------
 DELETE_ACTION = "Delete"
+RERUN_ACTION = "Run again"
+STOP_RUN_ACTION = "Stop"
+STOP_RUN_HINT = "Stop after the current step, or press Ctrl+Alt+Q anywhere."
 DELETE_CANCEL = "Cancel"
 DELETE_CONFIRM_TITLE = "Confirm delete"
 

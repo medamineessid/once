@@ -6,6 +6,7 @@ guesswork beyond an optional injected ``now`` so tests stay deterministic.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from datetime import date, datetime
 
@@ -89,6 +90,9 @@ _DEBUG_SUFFIXES = (
     " (executable path not recorded)",
 )
 
+#: Retry bookkeeping the engine appends to a message; it is not user-facing.
+_ATTEMPT_SUFFIX = re.compile(r"\s*after \d+ attempt(?:\(s\)|s)?\.?\s*$")
+
 
 _STEP_STATUS_LABELS: dict[str, str] = {
     "SUCCEEDED": "Done",
@@ -126,9 +130,10 @@ def clean_step_message(message: str) -> str:
     for suffix in _DEBUG_SUFFIXES:
         if cleaned.endswith(suffix):
             cleaned = cleaned[: -len(suffix)].rstrip()
+    cleaned = _ATTEMPT_SUFFIX.sub("", cleaned).rstrip()
+    if cleaned and not cleaned.endswith((".", "!", "?")):
+        cleaned += "."
     # Show captured UI text in double quotes so it reads as data, not UI copy.
-    import re
-
     cleaned = re.sub(r"'([^']+)'", r'"\1"', cleaned)
     return cleaned
 
@@ -195,6 +200,22 @@ def human_timestamp(value: datetime | None, now: datetime | None = None) -> str:
     if local.date() == reference:
         return local.strftime("today at %H:%M")
     return local.strftime("%d %b %Y, %H:%M")
+
+
+def human_duration(started_at: datetime | None, finished_at: datetime | None) -> str:
+    """Elapsed time of one run, in words a person can read at a glance."""
+    if started_at is None or finished_at is None:
+        return ""
+    seconds = max(0.0, (finished_at - started_at).total_seconds())
+    if seconds < 1:
+        return "under a second"
+    if seconds < 60:
+        return f"{seconds:.1f} seconds"
+    minutes, rest = divmod(int(seconds), 60)
+    if minutes < 60:
+        return f"{minutes} min {rest} s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} h {minutes} min"
 
 
 def friendly_or_id(name: str | None, workflow_id: str, today: date | None = None) -> str:

@@ -105,6 +105,7 @@ class AutomationRow(QWidget):
     ):
         super().__init__(parent)
         self.setObjectName("automationRow")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         row = QVBoxLayout(self)
         row.setContentsMargins(SPACING_LG, SPACING_SM, SPACING_LG, SPACING_SM)
         row.setSpacing(SPACING_SM)
@@ -181,6 +182,8 @@ class MyAutomationsPage(QWidget):
     preview_requested = Signal()
     run_requested = Signal(Path)
     created_automation = Signal()
+    #: True while this page owns the live run thread, so the shell can show Stop.
+    run_state_changed = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -286,6 +289,24 @@ class MyAutomationsPage(QWidget):
         self._worker = None
         self._thread = None
         self._set_running(False)
+        self.run_state_changed.emit(False)
+
+    @property
+    def worker(self) -> WorkflowWorker | None:
+        """The live run worker, for the shell's Stop control."""
+        return self._worker
+
+    def run_saved(self, saved_path: Path) -> bool:
+        """Run one saved automation by path, as its own row's Run would."""
+        if self._service is None:
+            return False
+        for index in range(self._workflow_list.count()):
+            item = self._workflow_list.item(index)
+            if item is not None and Path(item.data(Qt.UserRole)) == saved_path:
+                self._run_row(index)
+                return True
+        self._refresh()
+        return False
 
     # ------------------------------------------------------------ read paths
 
@@ -504,8 +525,10 @@ class MyAutomationsPage(QWidget):
         if self._thread is not None:
             return
         name = automation_display_name(workflow.name, workflow.steps)
+        self._details_label.setVisible(True)
         self._details_label.setText(f"Running '{name}'...")
         self._set_running(True)
+        self.run_state_changed.emit(True)
         self._thread = QThread(self)
         self._worker = WorkflowWorker(self._service, workflow, desktop_approval=approval)
         self._worker.moveToThread(self._thread)

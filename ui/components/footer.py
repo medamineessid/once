@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
-from ui.strings import FOOTER_ATTENTION, FOOTER_READY, FOOTER_RUNNING
+from ui.strings import (
+    FOOTER_ATTENTION,
+    FOOTER_READY,
+    FOOTER_RUNNING,
+    STOP_RUN_ACTION,
+    STOP_RUN_HINT,
+)
 from ui.styles import ACCENT, STATUS_ERROR, STATUS_OK
 
 READY = FOOTER_READY
@@ -42,7 +48,9 @@ class StatusDot(QWidget):
 
 
 class StatusFooter(QWidget):
-    """One fixed label: Ready / Running… / Needs attention."""
+    """One fixed label, plus the Stop control that exists only during a run."""
+
+    stop_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -53,9 +61,16 @@ class StatusFooter(QWidget):
         self._dot = StatusDot(self)
         self._text = QLabel(READY, self)
         self._text.setObjectName("statusFooterText")
+        self.stop_button = QPushButton(STOP_RUN_ACTION, self)
+        self.stop_button.setObjectName("destructiveActionButton")
+        self.stop_button.setToolTip(STOP_RUN_HINT)
+        self.stop_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.stop_button.clicked.connect(self.stop_requested.emit)
+        self.stop_button.setVisible(False)
         layout.addWidget(self._dot)
         layout.addWidget(self._text)
         layout.addStretch(1)
+        layout.addWidget(self.stop_button)
         self._state = READY
 
     @property
@@ -70,6 +85,9 @@ class StatusFooter(QWidget):
         self._state = state
         self._dot.set_state(state)
         self._text.setText(state)
+        # Stop exists only while something is running; there is nothing to
+        # stop on a ready or failed footer.
+        self.stop_button.setVisible(state == RUNNING)
 
     @property
     def text(self) -> str:

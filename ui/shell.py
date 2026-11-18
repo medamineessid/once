@@ -279,6 +279,9 @@ class MainWindow(QMainWindow):
         self.review_page.edit_requested.connect(self._open_review_workflow_editor)
         self.review_page.run_requested.connect(self._run_from_editor)
         self.review_page.automation_deleted.connect(self._on_automation_deleted)
+        self.activity_page.rerun_requested.connect(self._rerun_from_activity)
+        self.my_automations_page.run_state_changed.connect(self._on_page_run_state)
+        self.status_footer.stop_requested.connect(self._stop_active_run)
         self._finalise_initial_state()
         self._show_page(ShellPages.HOME)
 
@@ -323,6 +326,37 @@ class MainWindow(QMainWindow):
 
     def _show_page_settings(self) -> None:
         self._show_page(ShellPages.SETTINGS)
+
+    def _on_page_run_state(self, running: bool) -> None:
+        """Mirror an automation page run in the always-visible footer."""
+        self.status_footer.set_state(FOOTER_RUNNING if running else FOOTER_READY)
+
+    def _stop_active_run(self) -> None:
+        """Stop whichever run is live, from the footer or Ctrl+Alt+Q.
+
+        Cancellation is cooperative: the engine checks the flag before every
+        step, so the current step finishes instead of being torn off mid-way.
+        """
+        workers = (self._editor_worker, self._demo_worker, self.my_automations_page.worker)
+        for worker in workers:
+            if worker is not None:
+                worker.cancel()
+
+    def _rerun_from_activity(self, workflow_id: str) -> None:
+        """Run the saved automation behind a history row, through its own gate."""
+        saved = next(
+            (path for path in self._service.list_saved() if path.stem == workflow_id), None
+        )
+        if saved is None:
+            self.banner.show_message(
+                "warning",
+                "That automation is gone",
+                "Its file was deleted, so it cannot run again. Delete this run or pick another.",
+            )
+            self._show_page_activity()
+            return
+        self._show_page_automations()
+        self.my_automations_page.run_saved(saved)
 
     def _finalise_initial_state(self) -> None:
         """Called after all signals are connected so the initial HOME page

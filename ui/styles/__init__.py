@@ -511,6 +511,18 @@ _STYLESHEET_TEMPLATE = Template("""
     QPushButton#linkActionButton:hover {
         color: $NAVY;
     }
+    QPushButton#destructiveLinkButton {
+        background: transparent;
+        border: none;
+        color: $STATUS_ERROR;
+        font-size: ${TYPE_CAPTION_PX}px;
+        font-weight: 700;
+        padding: 2px 4px;
+        font-family: $FONT_STACK;
+    }
+    QPushButton#destructiveLinkButton:hover {
+        text-decoration: underline;
+    }
     QPushButton#ghostButton {
         background: transparent;
         border: none;
@@ -713,7 +725,9 @@ _STYLESHEET_TEMPLATE = Template("""
     }
     QWidget#automationRow,
     QWidget#runRow {
-        background: transparent;
+        background: $SURFACE;
+        border: 1px solid $BORDER;
+        border-radius: 10px;
     }
     QLabel#chip {
         font-size: ${TYPE_CAPTION_PX}px;
@@ -996,8 +1010,8 @@ _STYLESHEET_TEMPLATE = Template("""
     QListWidget#stepsList,
     QListWidget#editorStepsList,
     QListWidget#approvalStepList {
-        background: $SURFACE;
-        border: 1px solid $BORDER;
+        background: transparent;
+        border: none;
         border-radius: 12px;
         padding: 6px;
         font-size: ${TYPE_BODY_PX}px;

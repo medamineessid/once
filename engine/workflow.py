@@ -1110,7 +1110,7 @@ class WorkflowRunner:
             return StepResult(
                 step_id=step.step_id,
                 status=StepStatus.FAILED,
-                message="The target is not an accessible regular file.",
+                message=f"Could not find {target.name} in the authorized folder.",
             )
         if target.stat().st_size > MAX_TEXT_FILE_BYTES:
             return StepResult(
@@ -1192,7 +1192,7 @@ class WorkflowRunner:
             return StepResult(
                 step_id=step.step_id,
                 status=StepStatus.FAILED,
-                message="The target is not an accessible regular file.",
+                message=f"Could not find {target.name} in the authorized folder.",
             )
         stat = target.stat()
         evidence = (
