@@ -32,6 +32,7 @@ Exit codes: 0 append-only (or file absent at base), 1 violation, 2 usage error.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -173,14 +174,46 @@ def is_append_only(base: bytes | None, head: bytes, mode: str = MODE_PREFIX) -> 
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[bytes]:
-    # Justification: argv is fixed by this module, no shell, and the only
-    # variable inputs are the ref and path that git itself validates.
+    # Justification: no shell, argv is a fixed tuple, and every variable value
+    # is checked by _validated_ref/_validated_path before it reaches this call.
     return subprocess.run(("git", *args), capture_output=True, check=False)  # noqa: S603, S607
+
+
+_REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@{}^~+-]*$")
+
+
+def _validated_ref(ref: str) -> str:
+    """Return ref unchanged when it can only name a git revision."""
+    if not _REF_PATTERN.fullmatch(ref):
+        raise ValueError(
+            f"Not a git ref: {ref!r}. Use a branch, tag or commit id such as origin/main."
+        )
+    return ref
+
+
+def _validated_path(path: str) -> str:
+    """Return path unchanged when it can only name a file inside the repository.
+
+    A leading dash would be read as a git option and a ``..`` component would
+    escape the repository, so both are refused instead of being passed on.
+    """
+    normalised = path.replace("\\", "/")
+    parts = normalised.split("/")
+    bad = (
+        not normalised
+        or normalised.startswith("/")
+        or path.startswith("-")
+        or any(part in ("", ".", "..") for part in parts)
+        or any(ord(character) < 32 for character in path)
+    )
+    if bad:
+        raise ValueError(f"Not a repository-relative file path: {path!r}.")
+    return path
 
 
 def exists_at(ref: str, path: str) -> bool:
     """True when path exists in the tree of ref."""
-    return _git("cat-file", "-e", f"{ref}:{path}").returncode == 0
+    return read_at(ref, path) is not None
 
 
 def read_at(ref: str, path: str) -> bytes | None:
@@ -205,18 +238,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if not exists_at(args.base_ref, args.path):
-        print(f"PASS: {args.path} does not exist at {args.base_ref}; nothing to preserve")
+    try:
+        base_ref = _validated_ref(args.base_ref)
+        log_path = _validated_path(args.path)
+    except ValueError as error:
+        parser.error(str(error))
+
+    if not exists_at(base_ref, log_path):
+        print(f"PASS: {log_path} does not exist at {base_ref}; nothing to preserve")
         return EXIT_OK
 
-    base = read_at(args.base_ref, args.path)
+    base = read_at(base_ref, log_path)
     if base is None:
-        print(f"ERROR: could not read {args.path} at {args.base_ref}")
+        print(f"ERROR: could not read {log_path} at {base_ref}")
         return EXIT_USAGE_ERROR
 
-    head = read_at("HEAD", args.path)
+    head = read_at("HEAD", log_path)
     if head is None:
-        print(f"FAIL: {args.path} was deleted since {args.base_ref}")
+        print(f"FAIL: {log_path} was deleted since {base_ref}")
         print("The log is append-only: restore the file and add your entry at the end.")
         return EXIT_APPEND_VIOLATION
 
@@ -226,7 +265,7 @@ def main(argv: list[str] | None = None) -> int:
             marker = "ok" if item.at_boundary else "VIOLATION"
             print(f"  insertion {item.describe()} [{marker}]")
         if not survived:
-            print(f"FAIL: {args.path} lost, reordered or edited an earlier line")
+            print(f"FAIL: {log_path} lost, reordered or edited an earlier line")
             print("The log is append-only: earlier entries must stay exactly as they were.")
             return EXIT_APPEND_VIOLATION
         stray = [item for item in insertions if not item.at_boundary]
@@ -234,15 +273,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"FAIL: {len(stray)} insertion(s) landed inside an existing entry")
             print("Insert new entries between entries or at the end of the file.")
             return EXIT_APPEND_VIOLATION
-        print(f"PASS: {args.path} only gained whole entries since {args.base_ref}")
+        print(f"PASS: {log_path} only gained whole entries since {base_ref}")
         return EXIT_OK
 
     if is_append_only(base, head, MODE_PREFIX):
-        print(f"PASS: {args.path} only grew since {args.base_ref}")
+        print(f"PASS: {log_path} only grew since {base_ref}")
         return EXIT_OK
 
     offset = first_difference(base, head)
-    print(f"FAIL: {args.path} changed earlier content since {args.base_ref} (byte {offset})")
+    print(f"FAIL: {log_path} changed earlier content since {base_ref} (byte {offset})")
     print("The log is append-only: add new entries at the end and do not edit earlier lines.")
     return EXIT_APPEND_VIOLATION
 

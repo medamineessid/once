@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CHECKER_PATH = PROJECT_ROOT / "scripts" / "check_log_append_only.py"
 
@@ -258,3 +260,59 @@ def test_cli_boundary_mode_reports_a_pass(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "PASS" in completed.stdout
     assert "insertion" in completed.stdout
+
+
+# --- argument validation (Sonar S8705: no argument injection) ----------------
+
+
+def test_ref_must_look_like_a_git_revision() -> None:
+    assert checker._validated_ref("origin/main") == "origin/main"
+    assert checker._validated_ref("4bfc619") == "4bfc619"
+    assert checker._validated_ref("refs/heads/lane-a-merged") == "refs/heads/lane-a-merged"
+
+
+def test_ref_starting_with_a_dash_is_refused() -> None:
+    with pytest.raises(ValueError, match="Not a git ref"):
+        checker._validated_ref("--output=/tmp/evil")
+
+
+def test_ref_with_a_space_is_refused() -> None:
+    with pytest.raises(ValueError, match="Not a git ref"):
+        checker._validated_ref("origin/main --upload-pack=calc")
+
+
+def test_path_must_stay_inside_the_repository() -> None:
+    assert checker._validated_path("docs/ai_engineering_log.md") == "docs/ai_engineering_log.md"
+    assert checker._validated_path("docs\\ai_engineering_log.md") == "docs\\ai_engineering_log.md"
+
+
+def test_path_with_parent_traversal_is_refused() -> None:
+    with pytest.raises(ValueError, match="Not a repository-relative file path"):
+        checker._validated_path("docs/../../etc/passwd")
+
+
+def test_absolute_path_is_refused() -> None:
+    with pytest.raises(ValueError, match="Not a repository-relative file path"):
+        checker._validated_path("/etc/passwd")
+
+
+def test_path_starting_with_a_dash_is_refused() -> None:
+    with pytest.raises(ValueError, match="Not a repository-relative file path"):
+        checker._validated_path("-c core.pager=calc")
+
+
+def test_cli_rejects_a_traversing_path(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    _commit(tmp_path, "first entry\n", "first")
+    base = _git(tmp_path, "rev-parse", "HEAD").stdout.strip()
+
+    completed = subprocess.run(
+        (sys.executable, str(CHECKER_PATH), base, "../escape.md"),
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 2, completed.stdout + completed.stderr
+    assert "Not a repository-relative file path" in completed.stderr
