@@ -50,7 +50,7 @@ def test_scan_skips_symlink_when_supported(make_tree):
     link = root / "link.txt"
     try:
         link.symlink_to(root / "real.txt")
-    except OSError, NotImplementedError:
+    except (OSError, NotImplementedError):
         pytest.skip("symbolic links are not available on this machine")
 
     result = scan_folder(root)

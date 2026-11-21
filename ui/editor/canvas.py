@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from engine.workflow import Workflow
+from ui.components.formatting import friendly_step_display
 from ui.editor.layout import (
     FINISH_ID,
     START_ID,
@@ -32,7 +33,18 @@ from ui.editor.layout import (
     NodeSlot,
     auto_layout,
 )
-from ui.styles import ACCENT, ACCENT_TEXT, BORDER, BORDER_STRONG, SURFACE, TEXT_STRONG
+from ui.styles import (
+    ACCENT,
+    ACCENT_TEXT,
+    BORDER,
+    BORDER_STRONG,
+    STATUS_ERROR,
+    STATUS_OK,
+    STATUS_WARNING,
+    SURFACE,
+    TEXT_STRONG,
+    TINT_FINISH,
+)
 
 MARGIN = 40.0
 _ARROW_LEN = 9.0
@@ -67,11 +79,12 @@ class NodeCard(QGraphicsPathItem):
         path.addRoundedRect(QRectF(0.0, 0.0, slot.w, slot.h), 10.0, 10.0)
         self.setPos(slot.x, slot.y)
         self.setPen(QPen(QColor(BORDER_STRONG if terminal else BORDER), _NORMAL_PEN_WIDTH))
-        self.setBrush(QBrush(QColor("#F2F4F7" if terminal else SURFACE)))
+        self.setBrush(QBrush(QColor(TINT_FINISH if terminal else SURFACE)))
         self.setPath(path)
+        self.status = "PENDING" if not terminal else ""
 
         title_item = QGraphicsTextItem(self)
-        title_item.setDefaultTextColor(QColor(TEXT_STRONG if terminal else BORDER_STRONG))
+        title_item.setDefaultTextColor(QColor(TEXT_STRONG))
         title_font = QFont()
         title_font.setPointSize(10)
         title_font.setBold(True)
@@ -87,6 +100,25 @@ class NodeCard(QGraphicsPathItem):
         subtitle_item.setFont(subtitle_font)
         subtitle_item.setPlainText(subtitle)
         subtitle_item.setPos(12.0, slot.h - 26.0)
+        self._title_item = title_item
+        self._subtitle_item = subtitle_item
+
+    def set_status(self, status: str) -> None:
+        """Apply a compact semantic state without adding text to the card."""
+        self.status = status
+        colors = {
+            "RUNNING": ACCENT,
+            "SUCCEEDED": STATUS_OK,
+            "VERIFIED": STATUS_OK,
+            "OBSERVED": STATUS_WARNING,
+            "FAILED": STATUS_ERROR,
+            "SKIPPED": STATUS_WARNING,
+            "CANCELLED": STATUS_WARNING,
+            "PENDING": BORDER,
+        }
+        color = colors.get(status, BORDER)
+        width = _SELECTION_PEN_WIDTH if status == "RUNNING" else _NORMAL_PEN_WIDTH
+        self.setPen(QPen(QColor(color), width))
 
     @override
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value: object) -> object:
@@ -124,7 +156,9 @@ class CanvasView(QGraphicsView):
         self._edges: tuple[object, ...] = ()
         self.chain: tuple[str, ...] = ()
         self._selected_id: str | None = None
+        self._step_statuses: dict[str, str] = {}
         self._zoom = 1.0
+        self._minimap_enabled = True
         self._minimap = QGraphicsView(self)
         self._minimap.setObjectName("canvasMinimap")
         self._minimap.setScene(self._scene)
@@ -134,6 +168,11 @@ class CanvasView(QGraphicsView):
         self._minimap.setFixedSize(160, 96)
         self._minimap.show()
         self.node_moved.connect(self._node_moved)
+
+    def set_minimap_visible(self, visible: bool) -> None:
+        """Show or hide the corner minimap overlay."""
+        self._minimap_enabled = visible
+        self._minimap.setVisible(visible)
 
     @property
     def selected_id(self) -> str | None:
@@ -147,6 +186,7 @@ class CanvasView(QGraphicsView):
         self.edge_lookup.clear()
         self._edges = ()
         self._scene.clear()
+        self._step_statuses.clear()
         if workflow is None:
             self.chain = ()
             self._selected_id = None
@@ -212,6 +252,9 @@ class CanvasView(QGraphicsView):
         self.fit_to_screen()
         # Selection survives a rebuild (any edit) when the member still exists.
         self._selected_id = previous if previous in self.nodes else None
+        for step_id, status in self._step_statuses.items():
+            if step_id in self.nodes:
+                self.nodes[step_id].set_status(status)
         self._apply_selection_visuals()
         self._refresh_edges()
 
@@ -226,6 +269,15 @@ class CanvasView(QGraphicsView):
             return
         self.fitInView(self.scene().sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
         self._zoom = self.transform().m11()
+        self._update_minimap()
+
+    def _update_minimap(self) -> None:
+        if not hasattr(self, "_minimap"):
+            return
+        rect = self.scene().sceneRect()
+        if rect.isEmpty():
+            return
+        self._minimap.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
 
     def _set_zoom(self, value: float) -> None:
         factor = value / self._zoom
@@ -261,7 +313,13 @@ class CanvasView(QGraphicsView):
     @override
     def resizeEvent(self, event: object) -> None:
         super().resizeEvent(event)
-        self._minimap.move(self.viewport().width() - self._minimap.width() - 12, 12)
+        show_mini = self._minimap_enabled and self.viewport().height() >= 340
+        self._minimap.setVisible(show_mini)
+        if show_mini:
+            self._minimap.move(self.viewport().width() - self._minimap.width() - 12, 12)
+            self._update_minimap()
+        if not self._scene.sceneRect().isEmpty():
+            self.fit_to_screen()
 
     @override
     def wheelEvent(self, event: object) -> None:
@@ -278,7 +336,8 @@ class CanvasView(QGraphicsView):
             FINISH_ID: ("Finish", ""),
         }
         for step in workflow.steps:
-            titles[step.step_id] = (step.name, step.kind.value)
+            title, action_label, _desc = friendly_step_display(step)
+            titles[step.step_id] = (title, action_label)
         return titles
 
     # --------------------------------------------------------------- selection
@@ -300,12 +359,10 @@ class CanvasView(QGraphicsView):
         """Restyle the selected card plus its incoming and outgoing edges."""
         for member_id, card in self.nodes.items():
             selected = member_id == self._selected_id
-            card.setPen(
-                QPen(
-                    QColor(ACCENT if selected else BORDER),
-                    _SELECTION_PEN_WIDTH if selected else _NORMAL_PEN_WIDTH,
-                )
-            )
+            if selected:
+                card.setPen(QPen(QColor(ACCENT), _SELECTION_PEN_WIDTH))
+            else:
+                card.set_status(card.status)
         for (from_id, to_id), (edge_item, arrow) in self.edge_lookup.items():
             highlighted = self._selected_id is not None and self._selected_id in (from_id, to_id)
             color = ACCENT if highlighted else BORDER_STRONG
@@ -313,6 +370,21 @@ class CanvasView(QGraphicsView):
             edge_item.setPen(QPen(QColor(color), width))
             arrow.setPen(QPen(QColor(color), width))
             arrow.setBrush(QBrush(QColor(color)))
+
+    def clear_step_statuses(self) -> None:
+        """Reset runtime decorations before a new run."""
+        self._step_statuses.clear()
+        for card in self.nodes.values():
+            if not card.terminal:
+                card.set_status("PENDING")
+
+    def set_step_status(self, step_id: str, status: str) -> None:
+        """Show the latest observable engine state on one step card."""
+        if step_id not in self.nodes or self.nodes[step_id].terminal:
+            return
+        self._step_statuses[step_id] = status
+        self.nodes[step_id].set_status(status)
+        self._apply_selection_visuals()
 
     def _node_at_scene_position(self, position: QPointF) -> str | None:
         """A member whose planned rectangle contains the scene point."""

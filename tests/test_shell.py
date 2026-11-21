@@ -66,10 +66,16 @@ def test_home_page_shows_welcome_and_empty_activity(qtbot, window):
     assert window.workspace.currentIndex() == ShellPages.HOME
     title = home._title_label.text()
     subtitle = home._subtitle_label.text()
-    assert "Once" in title
-    assert "personal assistant" in subtitle
+    assert "automate" in title.casefold()
+    assert "choose how" in subtitle.casefold()
     assert home._activity_empty.isVisible() is True
-    assert home._demo_button.parentWidget().minimumHeight() >= 180
+    # v4 design: the hero carries a lemon circle Record control and an outlined
+    # Build control; there is no card row and no full-width button bars.
+    assert home._record_button.text() == "Record"
+    assert home._record_button.objectName() == "circleButton"
+    assert home._create_automation_button.text() == "Build"
+    assert home._create_automation_button.objectName() == "heroSecondaryButton"
+    assert home.findChildren(QPushButton, "circleButton")
 
 
 def test_create_automation_page_has_description_input(qtbot, window):
@@ -155,9 +161,54 @@ def test_create_page_records_a_task_through_the_real_service(qtbot, tmp_path):
 
     qtbot.mouseClick(page._stop_record_button, Qt.MouseButton.LeftButton)
     assert not recording_service.recording
-    assert page._record_button.isEnabled()
-    assert "Recording saved locally" in page._banner.body_text
+    assert window.workspace.currentWidget() is window.review_page
+    assert window.review_page._approve_button.isVisible()
+    assert window.review_page._approve_button.text() == "Approve draft and edit"
+    assert window.review_page._steps_list.count() == 1
     assert recording_service.list_recordings()
+
+
+def test_recording_review_approval_opens_editable_draft(qtbot, tmp_path):
+    class ReplayableFakeRecorder:
+        def __init__(self, sink: EventSink) -> None:
+            self._sink = sink
+
+        def start(self) -> None:
+            self._sink.append(
+                RecordedEvent(
+                    1,
+                    1,
+                    RecordedEventKind.WINDOW_OPEN,
+                    process_name="app.exe",
+                    window_title="Example App",
+                    executable_path="C:/work/app.exe",
+                    executable_sha256="a" * 64,
+                )
+            )
+
+        def stop(self) -> None:
+            return None
+
+    recording_service = RecordingService(
+        tmp_path / "recordings",
+        recorder_factory=ReplayableFakeRecorder,
+    )
+    window = MainWindow(
+        service=WorkflowService(workflow_directory=tmp_path / "workflows"),
+        recording_service=recording_service,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    window._show_recording()
+
+    qtbot.mouseClick(window.create_automation_page._record_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.create_automation_page._stop_record_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.review_page._approve_applications, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(window.review_page._approve_button, Qt.MouseButton.LeftButton)
+
+    assert window.workspace.currentWidget() is window.editor_page
+    assert window.editor_page._steps_list.count() == 1
+    assert window.editor_page._name_input.text() == "Recorded task draft"
 
 
 def test_sidebar_active_state_after_sidebar_click(qtbot, window):
@@ -171,8 +222,8 @@ def test_settings_page_opens_from_sidebar(qtbot, window):
     qtbot.wait(50)
     settings = window.settings_page
     assert window.workspace.currentIndex() == ShellPages.SETTINGS
-    assert settings._authorized_group.isVisible() is True
-    assert settings._verifier_group.isVisible() is True
+    assert settings._authorized_card.isVisible() is True
+    assert settings._verifier_card.isVisible() is True
     assert window.sidebar._settings_button.isChecked() is True
 
 
@@ -290,16 +341,31 @@ def test_sidebar_click_home_returns_to_home(qtbot, window):
     assert window.sidebar.is_on(ShellPages.HOME)
 
 
-def test_home_create_button_clicks_into_create_flow(qtbot, window):
-    qtbot.mouseClick(window.home_page._create_automation_button, Qt.MouseButton.LeftButton)
+def test_home_build_button_opens_manual_editor(qtbot, window):
+    build_button = next(
+        button for button in window.home_page.findChildren(QPushButton) if button.text() == "Build"
+    )
+    qtbot.mouseClick(build_button, Qt.MouseButton.LeftButton)
     qtbot.wait(50)
-    assert window.workspace.currentWidget() is window.create_automation_page
+    assert window.workspace.currentWidget() is window.editor_page
 
 
-def test_home_demo_button_runs_the_demo_exactly_once(qtbot, tmp_path):
+def test_home_record_button_opens_recording_flow(qtbot, window):
+    record_button = window.home_page._record_button
+    qtbot.mouseClick(record_button, Qt.MouseButton.LeftButton)
+    qtbot.wait(50)
+    page = window.create_automation_page
+    assert window.workspace.currentWidget() is page
+    assert page._title_label.text() == "Record a task"
+    assert page._description_input.isHidden()
+    assert page._record_button.isVisible()
+    assert page._back_button.isVisible()
+
+
+def test_demo_runner_remains_available_for_diagnostics(qtbot, tmp_path):
     window, service = _window_with_service(qtbot, tmp_path)
 
-    qtbot.mouseClick(window.home_page._demo_button, Qt.MouseButton.LeftButton)
+    window._run_demo_from_home()
     qtbot.waitUntil(lambda: len(service.history()) == 1, timeout=10_000)
     # Wait for the demo thread to fully finish before teardown: destroying a
     # running QThread aborts the process under the offscreen platform.
@@ -309,7 +375,8 @@ def test_home_demo_button_runs_the_demo_exactly_once(qtbot, tmp_path):
     runs = service.history()
     assert len(runs) == 1
     assert runs[0].workflow_id == "demo-local-workflow"
-    assert runs[0].status.value == "SUCCEEDED"
+    # The demo only reports, so it observed and performed nothing.
+    assert runs[0].status.value == "OBSERVATION_ONLY"
 
 
 def test_open_button_click_shows_opened_workflow_on_the_review_page(qtbot, tmp_path):
@@ -320,11 +387,40 @@ def test_open_button_click_shows_opened_workflow_on_the_review_page(qtbot, tmp_p
     page.refresh()
     page._workflow_list.setCurrentRow(0)
 
-    qtbot.mouseClick(page._open_button, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(page._rows[0].open_button, Qt.MouseButton.LeftButton)
 
     assert window.workspace.currentWidget() is window.review_page
     assert "List invoices" in window.review_page._goal_label.text()
     assert window.review_page._steps_list.count() == 1
+
+
+def test_review_edit_button_opens_saved_workflow_in_editor(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+    service.save(demo_workflow_for_tests())
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+    qtbot.mouseClick(page._rows[0].open_button, Qt.MouseButton.LeftButton)
+
+    assert window.review_page._edit_button.isVisible()
+    qtbot.mouseClick(window.review_page._edit_button, Qt.MouseButton.LeftButton)
+
+    assert window.workspace.currentWidget() is window.editor_page
+    assert window.editor_page._name_input.text() == "List invoices"
+
+
+def test_saved_review_resets_recording_review_title(qtbot, tmp_path):
+    window, service = _window_with_service(qtbot, tmp_path)
+    window.review_page.load_proposal(None)
+    service.save(demo_workflow_for_tests())
+    window._show_page(ShellPages.MY_AUTOMATIONS)
+    page = window.my_automations_page
+    page.refresh()
+    page._workflow_list.setCurrentRow(0)
+    qtbot.mouseClick(page._rows[0].open_button, Qt.MouseButton.LeftButton)
+
+    assert window.review_page._title_label.text() == "AUTOMATION DETAILS"
 
 
 def test_review_cancel_button_click_returns_home(qtbot, window):
@@ -351,7 +447,7 @@ def test_activity_run_click_shows_its_steps(qtbot, tmp_path):
     )
 
     assert "demo-local-workflow" in page._details_label.text()
-    assert "SUCCEEDED" in page._details_label.text()
+    assert "Observation only — nothing was performed" in page._details_label.text()
 
 
 # --- Layout foundation (B3): structure and honest controls -------------------------------
@@ -362,7 +458,7 @@ def test_sidebar_has_four_nav_items_brand_and_one_footer(qtbot, window):
     buttons = [w for w in widgets if isinstance(w, QToolButton)]
     labels = [w for w in widgets if isinstance(w, QLabel) and not isinstance(w, Spacer)]
     assert [b.text() for b in buttons] == ["Home", "My automations", "Activity", "Settings"]
-    assert [label.text() for label in labels] == ["Once", "Once Assistive Automation"]
+    assert [label.text() for label in labels] == ["ONCE", "LOCAL · OFFLINE BY DEFAULT"]
 
 
 def _ui_sources() -> dict[Path, str]:
@@ -544,6 +640,8 @@ def test_review_edit_and_approve_are_hidden_until_j6(qtbot, window):
 def test_pages_use_spacing_tokens_for_margins(qtbot, window):
     from ui.styles import SPACING_VALUES
 
+    # 0 is a valid page margin: colour-blocked band pages bleed to the edge.
+    allowed = SPACING_VALUES | {0}
     layouts = [
         window.home_page.layout(),
         window.my_automations_page.layout(),
@@ -555,16 +653,16 @@ def test_pages_use_spacing_tokens_for_margins(qtbot, window):
     for layout in layouts:
         margins = layout.contentsMargins()
         for value in (margins.left(), margins.top(), margins.right(), margins.bottom()):
-            assert value in SPACING_VALUES
+            assert value in allowed
 
 
 def test_type_scale_is_declared_once_in_the_theme(qtbot, window):
     from ui.styles import (
         TYPE_CAPTION_PX,
         TYPE_HOME_TITLE_PX,
+        TYPE_PAGE_TITLE_PX,
         TYPE_QUESTION_PX,
         TYPE_SUBTITLE_PX,
-        TYPE_TITLE_PX,
     )
 
     pages = [
@@ -583,7 +681,7 @@ def test_type_scale_is_declared_once_in_the_theme(qtbot, window):
 
     sheet = QApplication.instance().styleSheet()
     for rule, size in (
-        ("QLabel#pageTitle", TYPE_TITLE_PX),
+        ("QLabel#pageTitle", TYPE_PAGE_TITLE_PX),
         ("QLabel#pageSubtitle", TYPE_SUBTITLE_PX),
         ("QLabel#homeTitle", TYPE_HOME_TITLE_PX),
         ("QLabel#questionLabel", TYPE_QUESTION_PX),

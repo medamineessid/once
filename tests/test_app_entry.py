@@ -100,3 +100,13 @@ def test_smoke_test_with_shell_flag_exits_zero(
     exit_code = main(["--shell", "--smoke-test"])
     assert exit_code == 0
     assert (isolation / "Once" / "once.db").is_file()
+
+
+def test_smoke_test_with_classic_flag_exits_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The classic flag explicitly selects the legacy window."""
+    isolation = tmp_path / "appdata-root-classic"
+    monkeypatch.setenv("LOCALAPPDATA", str(isolation))
+    exit_code = main(["--classic", "--smoke-test"])
+    assert exit_code == 0

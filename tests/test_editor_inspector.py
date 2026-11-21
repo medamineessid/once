@@ -51,7 +51,7 @@ def new_session() -> WorkflowEditorSession:
                     name="Open notepad",
                     kind=StepKind.LAUNCH_APPLICATION,
                     message="second",
-                    target='{"application": "notepad"}',
+                    target='{"executable": "C:/work/app.exe"}',
                 ),
             ),
         )

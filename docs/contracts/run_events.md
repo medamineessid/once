@@ -26,7 +26,7 @@ following immutable, ordered events (`RunEvent`, dataclass, frozen):
 |---|---|---|---|---|
 | RUN_STARTED | None | None | "The run started." | empty |
 | STEP_STARTED | step id | None | empty | empty |
-| STEP_SUCCEEDED | step id | real StepStatus value ("SUCCEEDED"/"VERIFIED") | real result message | real result evidence |
+| STEP_SUCCEEDED | step id | real StepStatus value ("SUCCEEDED"/"VERIFIED"/"OBSERVED") | real result message | real result evidence |
 | STEP_FAILED | step id | real value ("FAILED"/"INCONCLUSIVE") | real result message | real result evidence |
 | STEP_SKIPPED | step id | "SKIPPED" | real skip message (failure phrase) | real evidence |
 | STEP_CANCELLED | step id | "SKIPPED" | real skip message (cancelled phrase) | real evidence |
@@ -45,11 +45,15 @@ real `WorkflowRun`; it matches the value persisted by the history store).
    proves the step ran; skipped steps get no started event).
 2. Skipped/cancelled classification keys off the engine's exact skip
    phrases (engineering constant `_CANCELLED_SKIP_PHRASE`).
-3. A closed stream (run finished, or the run call failed) never produces
+3. `OBSERVED` (a `REPORT` step, see docs/contracts/run-outcomes.md) is a
+   success-continuation, not a failure: it is emitted as
+   `STEP_SUCCEEDED` carrying the real `OBSERVED` value, so consumers can
+   still tell an observation from real work.
+4. A closed stream (run finished, or the run call failed) never produces
    further events; every observation made after finishing returns an
    empty tuple. Any unexpected step status is recorded as a failure event
    and logged; nothing is silently dropped.
-4. Evidence strings are engine data (file paths, recorded attempts). The
+5. Evidence strings are engine data (file paths, recorded attempts). The
    local UI may display them; nothing in the pipeline re-executes them
    (O5).
 

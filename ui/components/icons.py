@@ -10,9 +10,11 @@ from __future__ import annotations
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
 
+from ui.styles import SURFACE, TEXT_BODY
+
 
 def _stroke_pen(width: float) -> QPen:
-    pen = QPen(QColor("#4A5568"))
+    pen = QPen(QColor(TEXT_BODY))
     pen.setWidthF(max(1.4, width))
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
@@ -23,13 +25,17 @@ def icon_pixmap(
     draw_fn,
     size: int = 20,
     color: QColor | None = None,
+    device_pixel_ratio: float = 1.0,
 ) -> QPixmap:
-    """Render one glyph into a crisp square pixmap."""
-    pixmap = QPixmap(size, size)
+    """Render one glyph into a crisp square pixmap at the screen's DPR."""
+    ratio = max(1.0, float(device_pixel_ratio))
+    physical = max(1, round(size * ratio))
+    pixmap = QPixmap(physical, physical)
+    pixmap.setDevicePixelRatio(ratio)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    draw_fn(painter, QRectF(1.0, 1.0, size - 2.0, size - 2.0), color or QColor("#4A5568"))
+    draw_fn(painter, QRectF(1.0, 1.0, size - 2.0, size - 2.0), color or QColor(TEXT_BODY))
     painter.end()
     return pixmap
 
@@ -118,7 +124,7 @@ def draw_settings_glyph(painter: QPainter, rect: QRectF, color) -> None:
             QPointF(rect.left(), y),
             QPointF(rect.right(), y),
         )
-        painter.setBrush(QColor("#FFFFFF"))
+        painter.setBrush(QColor(SURFACE))
         knob = QRectF(0, 0, rect.height() * 0.2, rect.height() * 0.2)
         knob.moveCenter(QPointF(rect.left() + rect.width() * inset, y))
         painter.setPen(line_pen)

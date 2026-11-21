@@ -3,19 +3,30 @@
 from __future__ import annotations
 
 import atexit
+import contextlib
+import logging
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 from ai.approval import ApprovedProposal
+from controller.approvals import (
+    ApplicationApprovalStore,
+    ApplicationIdentity,
+    DatabaseApplicationApprovalStore,
+    executable_launch_paths,
+    launch_identities_from_events,
+)
 from engine.acceptance import load_acceptance_cases
 from engine.agent_change import ApprovedChange, ChangeReview, approve_change
-from engine.desktop import DesktopApproval
-from engine.errors import AgentIntegrationError, WorkflowValidationError
+from engine.desktop import DESKTOP_EXECUTION_POLICY, DesktopApproval
+from engine.errors import AgentIntegrationError, StorageError, WorkflowValidationError
 from engine.loop import FixProposer, LoopController, LoopPolicy, LoopRun
 from engine.replay import (
     DESKTOP_INTERACTION_POLICY,
+    MUTATING_DESKTOP_KINDS,
     ReplayExecutor,
     ReplayPreview,
 )
@@ -34,9 +45,11 @@ from engine.workflow import (
     Workflow,
     WorkflowRun,
     WorkflowRunner,
+    WorkflowStatus,
     WorkflowStep,
 )
 from integrations.coding_agent import GitRepository, WorktreeCheckout, run_agent_for_proposal
+from recorder.models import RecordedEvent
 from storage.database import connect
 from storage.history import (
     AgentProposalRecord,
@@ -44,8 +57,72 @@ from storage.history import (
     ProposalVerificationRecord,
     WorktreeRecord,
 )
-from storage.layouts import LayoutLoadResult, load_layout, save_layout
+from storage.layouts import LayoutLoadResult, delete_layout, load_layout, save_layout
 from storage.workflows import load_workflow, save_workflow
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class StepReplayability:
+    """One step's replayability and a plain-language reason."""
+
+    step_id: str
+    kind: str
+    replayable: bool
+    reason: str
+
+
+def classify_workflow_steps(workflow: Workflow) -> tuple[StepReplayability, ...]:
+    """Classify every workflow step as replayable or observation-only.
+
+    A step is replayable when the replay policy allows its kind. Read-only
+    steps replay without mutating anything; mutating desktop steps replay
+    only after the recorded application is approved. Every other step (for
+    example a REPORT observation, or a recorded action the engine cannot
+    convert to a step kind) is observation-only: it is shown to the user but
+    never performed.
+    """
+    results: list[StepReplayability] = []
+    for step in workflow.steps:
+        if step.kind is StepKind.REPORT:
+            results.append(
+                StepReplayability(
+                    step.step_id,
+                    step.kind.value,
+                    False,
+                    "This step only records an observation; nothing is performed.",
+                )
+            )
+        elif step.kind in DESKTOP_INTERACTION_POLICY.allowed_kinds:
+            if step.kind in MUTATING_DESKTOP_KINDS:
+                results.append(
+                    StepReplayability(
+                        step.step_id,
+                        step.kind.value,
+                        True,
+                        "This step performs an action once the application is approved.",
+                    )
+                )
+            else:
+                results.append(
+                    StepReplayability(
+                        step.step_id,
+                        step.kind.value,
+                        True,
+                        "This step is read-only and can be replayed.",
+                    )
+                )
+        else:
+            results.append(
+                StepReplayability(
+                    step.step_id,
+                    step.kind.value,
+                    False,
+                    f"This {step.kind.value} step is not a replayable action.",
+                )
+            )
+    return tuple(results)
 
 
 class WorkflowService:
@@ -61,10 +138,21 @@ class WorkflowService:
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
         layout_connection: sqlite3.Connection | None = None,
+        approval_store: ApplicationApprovalStore | None = None,
+        kill_switch: object | None = None,
     ) -> None:
         self._runner = runner or WorkflowRunner()
         self._replay = ReplayExecutor()
-        self._desktop_replay = ReplayExecutor(DESKTOP_INTERACTION_POLICY)
+        self._desktop_replay = ReplayExecutor(DESKTOP_EXECUTION_POLICY)
+        if kill_switch is None:
+            try:
+                from integrations.kill_switch import HotkeyKillSwitch
+
+                self._kill_switch: object | None = HotkeyKillSwitch()
+            except (ImportError, OSError, RuntimeError):
+                self._kill_switch = None
+        else:
+            self._kill_switch = kill_switch
         if window_inspector is None:
             from integrations.windows_automation import PywinautoWindowInspector
 
@@ -80,7 +168,14 @@ class WorkflowService:
         if desktop_actions is None:
             from integrations.windows_desktop import PywinautoDesktopActions
 
-            self._desktop_actions: DesktopActions | None = PywinautoDesktopActions()
+            approvals_adapter = (
+                approval_store
+                if approval_store is not None and callable(getattr(approval_store, "find", None))
+                else None
+            )
+            self._desktop_actions: DesktopActions | None = PywinautoDesktopActions(
+                approvals=approvals_adapter
+            )
         else:
             self._desktop_actions = desktop_actions
         if browser_actions is None:
@@ -92,6 +187,7 @@ class WorkflowService:
         self._history = history
         self._layout_connection = layout_connection
         self._workflow_directory = workflow_directory
+        self._approval_store = approval_store
         self._allowed_root: Path | None = None
         if workflow_directory is not None:
             workflow_directory.mkdir(parents=True, exist_ok=True)
@@ -119,6 +215,11 @@ class WorkflowService:
         return self._allowed_root
 
     @property
+    def kill_switch(self) -> object | None:
+        """The run-scoped kill switch listener, if available."""
+        return self._kill_switch
+
+    @property
     def layout_storage_configured(self) -> bool:
         """Whether editor metadata has a configured SQLite connection."""
         return self._layout_connection is not None
@@ -134,7 +235,56 @@ class WorkflowService:
             history=history,
             workflow_directory=workflow_directory,
             layout_connection=connection,
+            approval_store=DatabaseApplicationApprovalStore(app_data_dir / "once.db"),
         )
+
+    # ------------------------------------------------- application approvals
+
+    def unapproved_application_identities(
+        self, events: Iterable[RecordedEvent]
+    ) -> tuple[ApplicationIdentity, ...]:
+        """Recorded launch identities the user has not approved even once.
+
+        With no approval store configured (tests, legacy flows) nothing is
+        pending, so existing scripts and reviews keep working unchanged.
+        """
+        if self._approval_store is None:
+            return ()
+        pending: list[ApplicationIdentity] = []
+        for identity in launch_identities_from_events(events):
+            if not identity.describes_something():
+                continue
+            if not self._approval_store.is_approved(identity):
+                pending.append(identity)
+        return tuple(pending)
+
+    def approve_application(self, identity: ApplicationIdentity) -> None:
+        """Write one explicit human approval through the abstraction."""
+        if self._approval_store is not None:
+            self._approval_store.approve(identity)
+
+    def is_application_approved(self, identity: ApplicationIdentity) -> bool:
+        """Whether this identity was approved; true when checks are unconfigured."""
+        if self._approval_store is None:
+            return True
+        return self._approval_store.is_approved(identity)
+
+    def approve_workflow_applications(self, workflow: Workflow) -> None:
+        """Register explicit approval for existing executables in a workflow's launch steps."""
+        if self._approval_store is None:
+            return
+        from storage.app_registry import executable_sha256
+
+        for raw_path in executable_launch_paths(workflow):
+            exe = Path(raw_path)
+            if exe.is_file():
+                self.approve_application(
+                    ApplicationIdentity(
+                        name=exe.stem,
+                        executable_path=str(exe),
+                        executable_sha256=executable_sha256(exe),
+                    )
+                )
 
     @staticmethod
     def demo_workflow() -> Workflow:
@@ -195,9 +345,21 @@ class WorkflowService:
         return WorkflowEditorSession(workflow)
 
     def save_approved(self, proposal: ApprovedProposal) -> Path:
-        """Save only a proposal that passed the explicit approval gate."""
+        """Save only a proposal that passed the explicit approval gate.
+
+        Refuses a workflow that has no steps Once can perform: an
+        observation-only recording is not a runnable automation.
+        """
         if not isinstance(proposal, ApprovedProposal):
             raise WorkflowValidationError("Only an explicitly approved proposal can be saved.")
+        replayable = any(step.replayable for step in classify_workflow_steps(proposal.workflow))
+        if not replayable:
+            raise WorkflowValidationError(
+                "This task has no steps Once can perform. It only records observations, "
+                "so there is nothing to save as a runnable automation. Record the task "
+                "again, or remove the observation-only steps."
+            )
+        self.approve_workflow_applications(proposal.workflow)
         return self.save(proposal.workflow)
 
     def save_layout(
@@ -252,6 +414,24 @@ class WorkflowService:
         """Preview a desktop workflow under the desktop policy without running it."""
         return self._desktop_replay.preview(workflow)
 
+    def _start_kill_switch(self) -> object | None:
+        """Arm the global hotkey kill switch for one replay run."""
+        kill_switch = self._kill_switch
+        if kill_switch is not None and callable(getattr(kill_switch, "start", None)):
+            try:
+                kill_switch.start()
+                return kill_switch
+            except (OSError, RuntimeError):
+                return None
+        return None
+
+    @staticmethod
+    def _stop_kill_switch(kill_switch: object | None) -> None:
+        """Disarm the global hotkey kill switch after a replay run."""
+        if kill_switch is not None and callable(getattr(kill_switch, "stop", None)):
+            with contextlib.suppress(OSError, RuntimeError):
+                kill_switch.stop()
+
     def run_desktop_approved(
         self,
         approval: object,
@@ -277,11 +457,21 @@ class WorkflowService:
                 "Only a workflow approved through the desktop approval gate can "
                 "run desktop actions."
             )
+        self.approve_workflow_applications(approval.workflow)
+        kill_switch = self._start_kill_switch()
+
+        def active_cancel() -> bool:
+            return bool(
+                (cancel_check is not None and cancel_check())
+                or (kill_switch is not None and getattr(kill_switch, "triggered", False))
+            )
+
+        run = None
         try:
             run = self._desktop_replay.execute(
                 approval.workflow,
                 allowed_root=allowed_root,
-                cancel_check=cancel_check,
+                cancel_check=active_cancel,
                 progress_callback=progress_callback,
                 window_inspector=self._window_inspector,
                 ui_element_inspector=self._ui_element_inspector,
@@ -289,11 +479,30 @@ class WorkflowService:
                 browser_actions=self._browser_actions,
             )
         finally:
+            self._stop_kill_switch(kill_switch)
+            if run is None or run.status in (
+                WorkflowStatus.FAILED,
+                WorkflowStatus.CANCELLED,
+            ):
+                self._cleanup_launched_applications()
             if not keep_browsers_after_run:
                 self.close_browser_sessions()
         if self._history is not None:
             self._history.record(run)
         return run
+
+    def _cleanup_launched_applications(self) -> None:
+        """Close only applications launched by a failed or cancelled run."""
+        cleanup = getattr(self._desktop_actions, "close_launched_applications", None)
+        if not callable(cleanup):
+            return
+        try:
+            messages = cleanup()
+        except (AttributeError, OSError, RuntimeError) as error:
+            logger.warning("Cleanup of launched applications failed: %s", error)
+            return
+        for message in messages:
+            logger.info("Cleanup of launched applications: %s", message)
 
     def run_replay(
         self,
@@ -305,14 +514,25 @@ class WorkflowService:
         ui_element_inspector: UIElementInspector | None = None,
     ) -> WorkflowRun:
         """Execute and persist only actions allowed by the replay policy."""
-        run = self._replay.execute(
-            workflow,
-            allowed_root=allowed_root,
-            cancel_check=cancel_check,
-            progress_callback=progress_callback,
-            window_inspector=window_inspector or self._window_inspector,
-            ui_element_inspector=ui_element_inspector or self._ui_element_inspector,
-        )
+        kill_switch = self._start_kill_switch()
+
+        def active_cancel() -> bool:
+            return bool(
+                (cancel_check is not None and cancel_check())
+                or (kill_switch is not None and getattr(kill_switch, "triggered", False))
+            )
+
+        try:
+            run = self._replay.execute(
+                workflow,
+                allowed_root=allowed_root,
+                cancel_check=active_cancel,
+                progress_callback=progress_callback,
+                window_inspector=window_inspector or self._window_inspector,
+                ui_element_inspector=ui_element_inspector or self._ui_element_inspector,
+            )
+        finally:
+            self._stop_kill_switch(kill_switch)
         if self._history is not None:
             self._history.record(run)
         return run
@@ -807,7 +1027,7 @@ class WorkflowService:
             return None
         try:
             return load_workflow(candidate).name
-        except WorkflowValidationError, OSError:
+        except (WorkflowValidationError, OSError):
             return None
 
     def history(self) -> tuple[WorkflowRun, ...]:
@@ -815,6 +1035,75 @@ class WorkflowService:
         if self._history is None:
             return ()
         return tuple(record.run for record in self._history.list_runs())
+
+    def delete_run(self, run_id: str) -> None:
+        """Delete one finished run and its step results from local history."""
+        if self._history is None:
+            raise StorageError("Run history is not available in this copy of Once.")
+        run = next((item for item in self.history() if item.run_id == run_id), None)
+        if run is None:
+            raise StorageError("That run is no longer in your history.")
+        if run.status is WorkflowStatus.RUNNING:
+            raise StorageError(
+                "That run is still in progress. Wait for it to finish, then delete it."
+            )
+        try:
+            removed = self._history.delete_run(run_id)
+        except sqlite3.Error as error:
+            raise StorageError("Could not delete that run from your history.") from error
+        if not removed:
+            raise StorageError("That run is no longer in your history.")
+
+    def clear_runs(self) -> int:
+        """Delete every finished run; refuse while any run is in progress."""
+        if self._history is None:
+            raise StorageError("Run history is not available in this copy of Once.")
+        if any(run.status is WorkflowStatus.RUNNING for run in self.history()):
+            raise StorageError(
+                "A run is still in progress. Wait for it to finish, then clear the history."
+            )
+        try:
+            return self._history.clear_runs()
+        except sqlite3.Error as error:
+            raise StorageError("Could not clear your run history.") from error
+
+    def delete_automation(self, workflow_id: str, *, delete_runs: bool = True) -> None:
+        """Delete one saved automation and, when asked, all of its runs.
+
+        Only files inside the configured Once workflow folder are removed; a
+        name that resolves anywhere else is refused. Editor layout metadata is
+        removed with the automation because it belongs to the same definition.
+        """
+        if self._workflow_directory is None:
+            raise StorageError("Saved automations are not available in this copy of Once.")
+        if workflow_id in {"", ".", ".."} or Path(workflow_id).name != workflow_id:
+            raise StorageError("That automation name is not valid.")
+        directory = self._workflow_directory.resolve()
+        candidate = (self._workflow_directory / f"{workflow_id}.json").resolve()
+        if not candidate.is_relative_to(directory):
+            raise StorageError("That automation is not stored in the Once data folder.")
+        if not candidate.is_file():
+            raise StorageError("That automation is no longer saved.")
+        if delete_runs and any(
+            run.workflow_id == workflow_id and run.status is WorkflowStatus.RUNNING
+            for run in self.history()
+        ):
+            raise StorageError(
+                "This automation is still running. Wait for it to finish, then delete it."
+            )
+        try:
+            candidate.unlink()
+        except OSError as error:
+            raise StorageError("Could not delete this saved automation.") from error
+        try:
+            if delete_runs and self._history is not None:
+                self._history.delete_runs_for_workflow(workflow_id)
+            if self._layout_connection is not None:
+                delete_layout(self._layout_connection, workflow_id)
+        except sqlite3.Error as error:
+            raise StorageError(
+                "The automation file was deleted, but its Once history could not be updated."
+            ) from error
 
     def close(self) -> None:
         """Release controller-owned persistence resources."""

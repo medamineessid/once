@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from engine.errors import WorkflowValidationError
 from engine.workflow import (
+    RETRY_DELAY_SECONDS,
     PostconditionKind,
     StepKind,
     StepStatus,
@@ -31,15 +33,40 @@ def make_workflow(*kinds: StepKind) -> Workflow:
     )
 
 
-def test_workflow_runner_records_successful_steps() -> None:
+def test_workflow_runner_records_reported_steps_as_observations() -> None:
     run = WorkflowRunner().run(make_workflow(StepKind.REPORT, StepKind.REPORT), run_id="run-1")
 
     assert run.run_id == "run-1"
-    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.status is WorkflowStatus.OBSERVATION_ONLY
     assert [result.status for result in run.results] == [
-        StepStatus.SUCCEEDED,
-        StepStatus.SUCCEEDED,
+        StepStatus.OBSERVED,
+        StepStatus.OBSERVED,
     ]
+
+
+def test_workflow_rejects_more_than_the_bounded_step_limit() -> None:
+    workflow = make_workflow(*([StepKind.REPORT] * 101))
+
+    with pytest.raises(WorkflowValidationError, match="more than 100 steps"):
+        WorkflowRunner.validate(workflow)
+
+
+def test_workflow_rejects_overlong_step_names() -> None:
+    workflow = Workflow(
+        "long-name",
+        "Valid name",
+        (
+            WorkflowStep(
+                "step-1",
+                "x" * 501,
+                StepKind.REPORT,
+                "Message",
+            ),
+        ),
+    )
+
+    with pytest.raises(WorkflowValidationError, match="text that is too long"):
+        WorkflowRunner.validate(workflow)
 
 
 def test_workflow_runner_reports_progress_for_completed_steps() -> None:
@@ -51,7 +78,7 @@ def test_workflow_runner_reports_progress_for_completed_steps() -> None:
     )
 
     assert [result.step_id for result in progress] == ["step-0", "step-1"]
-    assert all(result.status is StepStatus.SUCCEEDED for result in progress)
+    assert all(result.status is StepStatus.OBSERVED for result in progress)
 
 
 def test_workflow_runner_stops_after_controlled_failure() -> None:
@@ -62,7 +89,7 @@ def test_workflow_runner_stops_after_controlled_failure() -> None:
 
     assert run.status is WorkflowStatus.FAILED
     assert [result.status for result in run.results] == [
-        StepStatus.SUCCEEDED,
+        StepStatus.OBSERVED,
         StepStatus.FAILED,
         StepStatus.SKIPPED,
     ]
@@ -79,7 +106,7 @@ def test_workflow_runner_cancels_before_remaining_steps() -> None:
 
     assert run.status is WorkflowStatus.CANCELLED
     assert [result.status for result in run.results] == [
-        StepStatus.SUCCEEDED,
+        StepStatus.OBSERVED,
         StepStatus.SKIPPED,
     ]
 
@@ -87,7 +114,7 @@ def test_workflow_runner_cancels_before_remaining_steps() -> None:
 def test_workflow_runner_terminates_empty_workflow() -> None:
     run = WorkflowRunner().run(make_workflow(), run_id="run-4")
 
-    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.status is WorkflowStatus.OBSERVATION_ONLY
     assert run.results == ()
 
 
@@ -145,6 +172,7 @@ def test_workflow_runner_rejects_symlink_target(tmp_path) -> None:
 def test_workflow_runner_retries_and_records_attempt_evidence() -> None:
     class EventuallySuccessfulRunner(WorkflowRunner):
         def __init__(self) -> None:
+            super().__init__(sleep=lambda _seconds: None)
             self.calls = 0
 
         def _run_once(self, step, allowed_root):
@@ -163,7 +191,8 @@ def test_workflow_runner_retries_and_records_attempt_evidence() -> None:
 
     run = EventuallySuccessfulRunner().run(workflow)
 
-    assert run.status is WorkflowStatus.SUCCEEDED
+    assert run.status is WorkflowStatus.OBSERVATION_ONLY
+    assert run.results[0].status is StepStatus.OBSERVED
     assert run.results[0].message.endswith("(attempt 2)")
 
 
@@ -201,8 +230,9 @@ def test_workflow_runner_checks_path_postcondition(tmp_path) -> None:
 
     run = WorkflowRunner().run(workflow, allowed_root=tmp_path)
 
-    assert run.status is WorkflowStatus.SUCCEEDED
-    assert run.results[0].status is StepStatus.SUCCEEDED
+    # A postcondition verifies the observation; it does not turn it into work.
+    assert run.status is WorkflowStatus.OBSERVATION_ONLY
+    assert run.results[0].status is StepStatus.OBSERVED
     assert "size=6" in run.results[0].evidence
 
 
@@ -218,3 +248,46 @@ def test_workflow_runner_cancels_between_retry_attempts() -> None:
 
     assert run.status is WorkflowStatus.CANCELLED
     assert run.results[0].status is StepStatus.SKIPPED
+
+
+def test_a_retry_waits_between_attempts() -> None:
+    """A second attempt must give a slow window time to appear, not just repeat."""
+    waits: list[float] = []
+
+    class SlowFirstRunner(WorkflowRunner):
+        def __init__(self) -> None:
+            super().__init__(sleep=waits.append)
+            self.calls = 0
+
+        def _run_once(self, step, allowed_root):
+            self.calls += 1
+            if self.calls == 1:
+                return super()._run_once(
+                    WorkflowStep(step.step_id, step.name, StepKind.FAIL, "not yet"), allowed_root
+                )
+            return super()._run_once(step, allowed_root)
+
+    workflow = Workflow(
+        "retry-wait",
+        "Retry wait",
+        (WorkflowStep("s1", "Report", StepKind.REPORT, "done", max_attempts=2),),
+    )
+
+    run = SlowFirstRunner().run(workflow)
+
+    assert run.results[0].status is StepStatus.OBSERVED
+    assert waits == [RETRY_DELAY_SECONDS]
+
+
+def test_missing_control_message_names_the_control_and_window() -> None:
+    """The failure a user sees should say what was missing and where."""
+    from integrations.windows_desktop import _element_label, _window_label
+
+    label = _element_label({"name": "Save", "control_type": "Button"})
+    assert label == "the 'Save' Button".replace("Button", "button")
+    assert _element_label({"automation_id": "Close", "control_type": "Button"}) == (
+        "the 'Close' button"
+    )
+    assert _element_label({}) is None
+    assert _window_label({"title": "Notepad"}) == "Notepad"
+    assert _window_label({}) is None

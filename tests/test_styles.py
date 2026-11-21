@@ -17,6 +17,7 @@ from PySide6 import QtCore
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
+    QGraphicsView,
     QGroupBox,
     QLabel,
     QLineEdit,
@@ -41,6 +42,7 @@ _SELECTOR_CLASSES = {
     "QToolButton": QToolButton,
     "QLabel": QLabel,
     "QFrame": QFrame,
+    "QGraphicsView": QGraphicsView,
     "QGroupBox": QGroupBox,
     "QScrollArea": QScrollArea,
     "QPushButton": QPushButton,

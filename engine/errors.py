@@ -34,3 +34,7 @@ class AIProviderError(OnceError):
 
 class AgentIntegrationError(OnceError):
     """A coding-agent proposal could not be produced, verified, or applied."""
+
+
+class StorageError(OnceError):
+    """Local history or saved data could not be read or removed."""

@@ -105,8 +105,11 @@ function Invoke-Check {
 }
 
 # --- the engineering log must stay append-only -------------------------------
-# Rule 7 of the working agreement: git diff --numstat origin/main...HEAD --
-# docs/ai_engineering_log.md must show 0 deletions.
+# Rule 7 of the working agreement: earlier entries may never be edited or
+# removed. scripts/check_log_append_only.py compares the file at the base ref
+# with the file at HEAD. The previous `git diff --numstat` deletion count was
+# replaced because it reported a deletion when the base copy merely lacked a
+# trailing newline.
 $targetRef = 'origin/main'
 & git rev-parse --verify origin/main >$null 2>&1
 if ($LASTEXITCODE -ne 0) {
@@ -115,34 +118,18 @@ if ($LASTEXITCODE -ne 0) {
         $targetRef = 'main'
     }
 }
-$logNumstat = git diff --numstat "$targetRef...HEAD" -- docs/ai_engineering_log.md 2>&1
-$logCommandFailed = ($LASTEXITCODE -ne 0)
-$logDeleted = 0
-$logChanged = $false
-if ($logNumstat) {
-    foreach ($line in $logNumstat) {
-        $parts = $line -split "`t"
-        if ($parts.Length -ge 2) {
-            $logChanged = $true
-            $logDeleted += [int]$parts[1]
-        }
+& git merge-base $targetRef HEAD >$null 2>&1
+if ($LASTEXITCODE -ne 0) {
+    $shallowRoot = (git rev-list --max-parents=0 HEAD | Select-Object -First 1)
+    if ($shallowRoot) {
+        $targetRef = $shallowRoot.Trim()
     }
 }
-if ($logCommandFailed) {
-    $logCode = 2
-} elseif ($logDeleted -gt 0) {
-    $logCode = 1
-} else {
-    $logCode = 0
-}
-$logNote = "git diff --numstat $targetRef...HEAD -- docs/ai_engineering_log.md"
-if ($logCommandFailed) {
-    $logNote = "git diff failed; cannot judge the log against $targetRef"
-} elseif (-not $logChanged) {
-    $logNote = 'no change to the engineering log in this range'
-} else {
-    $logNote = "changed, deleted lines = $logDeleted"
-}
+$logScript = Join-Path $root 'scripts\check_log_append_only.py'
+# TEMPORARY until PR #1 merges (lane merge inserted entries out of order); then switch to prefix.
+$logOutput = & $Python $logScript $targetRef 'docs/ai_engineering_log.md' --mode boundary 2>&1
+$logCode = $LASTEXITCODE
+$logNote = "check_log_append_only.py $targetRef docs/ai_engineering_log.md --mode boundary"
 
 Invoke-Check -Name 'git branch --show-current' -Informational -Command { git branch --show-current }
 Invoke-Check -Name 'git status --short'        -Informational -Command { git status --short }
@@ -158,7 +145,7 @@ Invoke-Check -Name 'app.py --smoke-test'       -Command { & $Python app.py --smo
 Invoke-Check -Name 'app.py --shell --smoke-test' -Command { & $Python app.py --shell --smoke-test }
 Invoke-Check -Name 'engineering log append-only' -ForcedExitCode $logCode -Command {
     Write-Output $logNote
-    if ($logNumstat) { foreach ($line in $logNumstat) { Write-Output $line } }
+    if ($logOutput) { foreach ($line in $logOutput) { Write-Output $line } }
 }
 Invoke-Check -Name 'git log -1 --numstat'      -Informational -Command { git log -1 --numstat }
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -34,11 +35,13 @@ TYPE_TARGET = {
     "element": {"class_name": "DemoEditClass", "control_type": "Edit"},
     "text": "hello once",
 }
-CLICK_TARGET = {
-    "window": WINDOW,
-    "element": {"automation_id": "okButton", "control_type": "Button"},
-}
-LAUNCH_TARGET = {"application": "notepad"}
+CLICK_TARGET = (
+    {
+        "window": WINDOW,
+        "element": {"automation_id": "okButton", "control_type": "Button"},
+    },
+)
+LAUNCH_TARGET = {"executable": sys.executable}
 SHORTCUT_TARGET = {"window": WINDOW, "keys": "ctrl+s"}
 
 
@@ -56,6 +59,13 @@ class FakeDesktopActions:
         self.calls.append(("LAUNCH_APPLICATION", target_json))
         status, message, evidence = self._result(
             "LAUNCH_APPLICATION", "The application was launched."
+        )
+        return make_result(status, message, evidence)
+
+    def close_application(self, target_json: str):
+        self.calls.append(("CLOSE_APPLICATION", target_json))
+        status, message, evidence = self._result(
+            "CLOSE_APPLICATION", "The application windows were closed."
         )
         return make_result(status, message, evidence)
 
@@ -88,7 +98,11 @@ def make_result(status, message, evidence=()):
     return StepResult(step_id="", status=status, message=message, evidence=evidence)
 
 
-def desktop_step(step_id: str, kind: StepKind, target: str, **kw) -> tuple[str, WorkflowStep]:
+def desktop_step(
+    step_id: str, kind: StepKind, target: str | dict[str, object], **kw
+) -> tuple[str, WorkflowStep]:
+    if isinstance(target, dict):
+        target = json.dumps(target)
     return (
         step_id,
         WorkflowStep(
@@ -120,7 +134,8 @@ def test_read_only_policy_rejects_mutating_desktop_steps() -> None:
 
 
 def test_desktop_policy_allows_and_media_pixels_nothing_unapproved() -> None:
-    launch = desktop_step("launch", StepKind.LAUNCH_APPLICATION, json.dumps(LAUNCH_TARGET))[1]
+    target = json.dumps({"executable": sys.executable})
+    launch = desktop_step("launch", StepKind.LAUNCH_APPLICATION, target)[1]
     ReplayExecutor(DESKTOP_INTERACTION_POLICY).validate(Workflow("x", "x", (launch,)))
 
 
@@ -139,26 +154,26 @@ def test_launch_validation_rejects_shell_style_and_relative_executables() -> Non
     with pytest.raises(WorkflowValidationError, match=r"must be a \.exe"):
         WorkflowRunner.validate(Workflow("w2", "w2", (bad_suffix,)))
 
+    # Test that {"application": ...} is rejected as unknown launch fields
     unknown_app = desktop_step(
         "s3", StepKind.LAUNCH_APPLICATION, json.dumps({"application": "cmd.exe"})
     )[1]
-    with pytest.raises(WorkflowValidationError, match="registry does not allow"):
+    with pytest.raises(WorkflowValidationError, match="unknown launch fields"):
         WorkflowRunner.validate(Workflow("w3", "w3", (unknown_app,)))
 
-    both = desktop_step(
-        "s4",
-        StepKind.LAUNCH_APPLICATION,
-        json.dumps({"application": "notepad", "executable": "C:\\Windows\\notepad.exe"}),
+    # Test that valid {"executable": ...} is accepted
+    good = desktop_step(
+        "s4", StepKind.LAUNCH_APPLICATION, json.dumps({"executable": "C:\\Windows\\notepad.exe"})
     )[1]
-    with pytest.raises(WorkflowValidationError, match="exactly one"):
-        WorkflowRunner.validate(Workflow("w4", "w4", (both,)))
+    WorkflowRunner.validate(Workflow("w4", "w4", (good,)))
 
+    # Test that too many arguments are rejected
     too_many_args = desktop_step(
         "s5",
         StepKind.LAUNCH_APPLICATION,
-        json.dumps({"application": "notepad", "arguments": ["a"] * (16 + 1)}),
+        json.dumps({"executable": "C:\Windows\notepad.exe", "arguments": ["a"] * (16 + 1)}),
     )[1]
-    with pytest.raises(WorkflowValidationError, match="arguments"):
+    with pytest.raises(WorkflowValidationError, match="must pass at most 16 arguments as a list"):
         WorkflowRunner.validate(Workflow("w5", "w5", (too_many_args,)))
 
 
@@ -347,6 +362,7 @@ def test_mutating_kinds_constant_covers_all_mutations() -> None:
         frozenset(
             {
                 StepKind.LAUNCH_APPLICATION,
+                StepKind.CLOSE_APPLICATION,
                 StepKind.CLICK_UI_ELEMENT,
                 StepKind.TYPE_TEXT,
                 StepKind.PRESS_SHORTCUT,
@@ -416,3 +432,64 @@ def test_verify_file_text_may_carry_a_path_postcondition(tmp_path: Path) -> None
     )
     with pytest.raises(WorkflowValidationError, match="cannot carry a postcondition"):
         WorkflowRunner.validate(Workflow("w", "w", (verify,)))
+
+
+def test_close_application_validation_requires_a_known_application() -> None:
+    """Close is process-directed: only executable path is allowed."""
+    target = json.dumps({"executable": sys.executable})
+    good = desktop_step("c1", StepKind.CLOSE_APPLICATION, target)
+    WorkflowRunner.validate(Workflow("w", "w", (good[1],)))
+
+    unknown = desktop_step("c2", StepKind.CLOSE_APPLICATION, json.dumps({"application": "cmd"}))
+    with pytest.raises(WorkflowValidationError, match="unknown close fields"):
+        WorkflowRunner.validate(Workflow("w2", "w2", (unknown[1],)))
+
+    empty = desktop_step("c3", StepKind.CLOSE_APPLICATION, json.dumps({}))
+    with pytest.raises(WorkflowValidationError, match="needs the executable path"):
+        WorkflowRunner.validate(Workflow("w3", "w3", (empty[1],)))
+
+    executable = desktop_step(
+        "c4", StepKind.CLOSE_APPLICATION, json.dumps({"executable": "C:\\co\\Code.exe"})
+    )
+    WorkflowRunner.validate(Workflow("w4", "w4", (executable[1],)))
+
+
+def test_launch_validation_accepts_the_vscode_registry_name() -> None:
+    launch = desktop_step(
+        "l1", StepKind.LAUNCH_APPLICATION, json.dumps({"executable": sys.executable})
+    )
+    WorkflowRunner.validate(Workflow("w", "w", (launch[1],)))
+
+
+def test_close_gate_requires_approval_and_lists_the_kind() -> None:
+    close = desktop_step(
+        "c1", StepKind.CLOSE_APPLICATION, json.dumps({"executable": sys.executable})
+    )
+    workflow = Workflow("w", "w", (close[1],))
+
+    with pytest.raises(ExecutionError, match="does not allow"):
+        ReplayExecutor(READ_ONLY_POLICY).validate(workflow)
+
+    approval = approve_desktop_workflow(workflow)
+    assert mutating_kind_names(approval.workflow) == ("CLOSE_APPLICATION",)
+    assert requires_desktop_approval(workflow) is True
+    ReplayExecutor(DESKTOP_INTERACTION_POLICY).validate(workflow)
+
+
+def test_launch_and_close_run_in_order_through_one_fake_provider() -> None:
+    """Launch registers the target; close follows in the same deterministic run."""
+    launch = desktop_step(
+        "l1", StepKind.LAUNCH_APPLICATION, json.dumps({"executable": sys.executable})
+    )
+    close = desktop_step(
+        "c1", StepKind.CLOSE_APPLICATION, json.dumps({"executable": sys.executable})
+    )
+    run, actions = run_with_fakes((launch[1], close[1]))
+
+    assert tuple(result.step_id for result in run.results) == ("l1", "c1")
+    assert all(result.status is StepStatus.SUCCEEDED for result in run.results)
+    assert tuple(kind for kind, _target in actions.calls) == (
+        "LAUNCH_APPLICATION",
+        "CLOSE_APPLICATION",
+    )
+    assert json.loads(actions.calls[1][1]) == {"executable": sys.executable}

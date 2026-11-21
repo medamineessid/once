@@ -1,33 +1,63 @@
-"""My Automations page — manage saved workflows."""
+"""My automations — each saved automation is a row with its own actions.
+
+Rows carry the name (generated from the first meaningful step when the saved
+name says nothing), the saved date, the last status pill, and Run / Open /
+Delete controls. There is no global action bar any more: an action always
+belongs to the row it changes.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import QSignalBlocker, Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from controller.service import WorkflowService
-from engine.errors import WorkflowValidationError
+from engine.errors import OnceError, WorkflowValidationError
 from engine.workflow import Workflow
+from ui.components.approval_panel import DesktopApprovalPanel
+from ui.components.band import PageBand
 from ui.components.banner import Banner
-from ui.components.cards import Chip
+from ui.components.buttons import ActionButton
+from ui.components.cards import Chip, EmptyState
 from ui.components.confirm import InlineConfirm
-from ui.components.formatting import human_timestamp, status_display
-from ui.components.pageheader import PageHeader
+from ui.components.delete_confirm import (
+    DeleteConfirmDialog,
+    automation_delete_message,
+    clear_drafts_message,
+)
+from ui.components.formatting import (
+    automation_display_name,
+    friendly_step_display,
+    friendly_step_status,
+    human_timestamp,
+    is_generic_automation_name,
+    status_display,
+)
+from ui.components.parameter_dialog import ParameterDialog
+from ui.components.parameters import (
+    apply_parameter_values,
+    missing_values,
+    parameter_names,
+)
 from ui.strings import (
+    DELETE_ACTION,
     MY_BANNER_ERROR_TITLE,
+    MY_CLEAR_DRAFTS,
+    MY_DELETE_ERROR_TITLE,
+    MY_DELETE_HINT_BODY,
+    MY_DELETE_HINT_TITLE,
     MY_DETAILS_EMPTY,
     MY_EMPTY,
     MY_LAST_RUN_PREFIX,
@@ -49,8 +79,6 @@ from ui.strings import (
 from ui.styles import SPACING_LG, SPACING_SM, SPACING_XL
 from ui.workers import WorkflowWorker, cancel_and_join
 
-_ROW_HEIGHT = 56
-
 
 def _saved_on_text(path: Path) -> str:
     """Local last-modified date of a saved automation file, or empty."""
@@ -61,8 +89,16 @@ def _saved_on_text(path: Path) -> str:
     return datetime.fromtimestamp(stamp).strftime("%Y-%m-%d")
 
 
+#: The list never grows past this; beyond it the page scrolls instead.
+MAX_LIST_HEIGHT = 560
+
+
 class AutomationRow(QWidget):
-    """One saved automation: Name on the left, last run shape on the right."""
+    """One saved automation: name, saved date, last status, three actions."""
+
+    run_requested = Signal()
+    open_requested = Signal()
+    delete_requested = Signal()
 
     def __init__(
         self,
@@ -71,13 +107,19 @@ class AutomationRow(QWidget):
         chip_kind: str,
         when_text: str = "",
         saved_on: str = "",
+        *,
+        on_run: Callable[[], None] | None = None,
+        on_open: Callable[[], None] | None = None,
+        on_delete: Callable[[], None] | None = None,
         parent=None,
     ):
         super().__init__(parent)
         self.setObjectName("automationRow")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         row = QVBoxLayout(self)
-        row.setContentsMargins(6, 6, 6, 6)
-        row.setSpacing(2)
+        row.setContentsMargins(SPACING_LG, SPACING_SM, SPACING_LG, SPACING_SM)
+        row.setSpacing(SPACING_SM)
+
         top = QHBoxLayout()
         top.setSpacing(SPACING_SM)
         self._name_label = QLabel(title, self)
@@ -89,8 +131,28 @@ class AutomationRow(QWidget):
         top.addWidget(self._name_label)
         top.addStretch(1)
         if chip is not None:
-            top.addWidget(chip)
+            top.addWidget(chip, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        self.run_button = InlineConfirm(
+            MY_RUN, MY_RUN_CONFIRM, confirm_timeout_ms=5000, parent=self
+        )
+        self.run_button.setObjectName("runRowButton")
+        self.run_button.setProperty("variant", "primary")
+        self.open_button = ActionButton(MY_OPEN, variant="secondary", parent=self)
+        self.delete_button = ActionButton(DELETE_ACTION, variant="destructive", parent=self)
+        for button in (self.run_button, self.open_button, self.delete_button):
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+        if on_run is not None:
+            self.run_button.confirmed.connect(lambda: on_run())
+        if on_open is not None:
+            self.open_button.clicked.connect(lambda: on_open())
+        if on_delete is not None:
+            self.delete_button.clicked.connect(lambda: on_delete())
+        top.addWidget(self.run_button)
+        top.addWidget(self.open_button)
+        top.addWidget(self.delete_button)
         row.addLayout(top)
+
         caption_parts: list[str] = []
         if saved_on:
             caption_parts.append(f"{MY_SAVED_PREFIX} {saved_on}")
@@ -106,19 +168,32 @@ class AutomationRow(QWidget):
         row.addWidget(self._caption)
 
     @property
+    def name_text(self) -> str:
+        """The displayed automation name, for tests."""
+        return self._name_label.text()
+
+    @property
     def caption_text(self) -> str:
-        """Captions keep the last-run shape visible next to the filename."""
+        """Captions keep the last-run shape visible next to the name."""
         return self._caption.text()
+
+    def set_running(self, running: bool) -> None:
+        """Disable the row's controls while its run is in flight."""
+        self.run_button.set_running(running, MY_RUN_RUNNING)
+        self.open_button.setEnabled(not running)
+        self.delete_button.setEnabled(not running)
 
 
 class MyAutomationsPage(QWidget):
-    """List saved workflows with name, last status, and actions."""
+    """List saved workflows with per-row name, status, date and actions."""
 
     opened_workflow = Signal(Path)
     workflow_selected = Signal()
     preview_requested = Signal()
     run_requested = Signal(Path)
     created_automation = Signal()
+    #: True while this page owns the live run thread, so the shell can show Stop.
+    run_state_changed = Signal(bool)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -126,60 +201,76 @@ class MyAutomationsPage(QWidget):
         self._workflow_list: QListWidget | None = None
         self._worker: WorkflowWorker | None = None
         self._thread: QThread | None = None
+        self._pending_approval_path: Path | None = None
+        self._rows: list[AutomationRow] = []
         self._init_ui()
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(SPACING_XL, SPACING_XL, SPACING_XL, SPACING_XL)
-        layout.setSpacing(SPACING_LG)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
         layout.setAlignment(Qt.AlignTop)
-        self._header = PageHeader(MY_TITLE, MY_SUBTITLE, primary_label=MY_NEW_ACTION, parent=self)
-        self._title_label = self._header.title_label
-        self._subtitle_label = self._header.description_label
-        layout.addWidget(self._header)
-        if self._header.primary_button is not None:
-            self._header.action_requested.connect(self._create_requested)
-
-        self._banner = Banner(self)
-        layout.addWidget(self._banner)
-
-        self._workflow_list = QListWidget(self)
-        self._workflow_list.setObjectName("workflowList")
-        self._workflow_list.setAlternatingRowColors(True)
-        self._workflow_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self._workflow_list.itemSelectionChanged.connect(self._on_selection_changed)
-        layout.addWidget(self._workflow_list, stretch=1)
-
-        actions_row = QHBoxLayout()
-        actions_row.setSpacing(SPACING_SM)
-        self._open_button = QPushButton(MY_OPEN, self)
-        self._open_button.setObjectName("secondaryActionButton")
-        self._open_button.setMinimumHeight(38)
-        self._open_button.clicked.connect(self._open_selected)
-        self._preview_button = QPushButton(MY_PREVIEW, self)
-        self._preview_button.setObjectName("secondaryActionButton")
-        self._preview_button.setMinimumHeight(38)
-        self._preview_button.clicked.connect(self._preview_selected)
-        self._run_button = InlineConfirm(
-            MY_RUN, MY_RUN_CONFIRM, confirm_timeout_ms=5000, parent=self
+        self._band = PageBand(
+            MY_TITLE,
+            micro="0 saved automations",
+            description=MY_SUBTITLE,
+            primary_label=MY_NEW_ACTION,
+            tone="primary",
+            parent=self,
         )
-        self._run_button.setMinimumHeight(38)
-        self._run_button.confirmed.connect(self._on_run_confirmed)
-        actions_row.addWidget(self._open_button)
-        actions_row.addWidget(self._preview_button)
-        actions_row.addWidget(self._run_button)
-        actions_container = QFrame(self)
-        actions_container.setObjectName("actionsContainer")
-        actions_container_layout = QVBoxLayout(actions_container)
-        actions_container_layout.setContentsMargins(0, 0, 0, 0)
-        actions_container_layout.setSpacing(SPACING_SM)
-        actions_container_layout.addLayout(actions_row)
-        layout.addWidget(actions_container)
-        layout.addSpacing(SPACING_SM)
-        self._details_label = QLabel(MY_EMPTY, self)
+        self._micro_label = self._band.micro_label
+        self._title_label = self._band.title_label
+        self._subtitle_label = self._band.description_label
+        layout.addWidget(self._band)
+        if self._band.primary_button is not None:
+            self._band.primary_button.clicked.connect(self._create_requested)
+
+        body = QWidget(self)
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(SPACING_XL, SPACING_LG, SPACING_XL, SPACING_LG)
+        body_layout.setSpacing(SPACING_SM)
+        layout.addWidget(body, stretch=1)
+
+        self._banner = Banner(body)
+        body_layout.addWidget(self._banner)
+
+        self._workflow_list = QListWidget(body)
+        self._workflow_list.setObjectName("workflowList")
+        self._workflow_list.setAlternatingRowColors(False)
+        self._workflow_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._workflow_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._workflow_list.itemSelectionChanged.connect(self._on_selection_changed)
+        self._workflow_list.itemDoubleClicked.connect(lambda _item: self._open_selected())
+        body_layout.addWidget(self._workflow_list)
+
+        controls = QHBoxLayout()
+        controls.setSpacing(SPACING_SM)
+        self._preview_button = ActionButton(MY_PREVIEW, variant="secondary", parent=body)
+        self._preview_button.clicked.connect(self._preview_selected)
+        self._clear_drafts_button = ActionButton(MY_CLEAR_DRAFTS, variant="secondary", parent=body)
+        self._clear_drafts_button.clicked.connect(self._clear_unnamed_drafts)
+        controls.addWidget(self._preview_button)
+        controls.addWidget(self._clear_drafts_button)
+        controls.addStretch(1)
+        body_layout.addLayout(controls)
+
+        self._approval_panel = DesktopApprovalPanel(body)
+        self._approval_panel.approved.connect(self._on_run_approved)
+        self._approval_panel.cancelled.connect(self._on_run_cancelled)
+        body_layout.addWidget(self._approval_panel)
+        self._details_label = QLabel(MY_EMPTY, body)
         self._details_label.setObjectName("automationDetailsLabel")
         self._details_label.setWordWrap(True)
-        layout.addWidget(self._details_label)
+        body_layout.addWidget(self._details_label)
+
+        self._empty_state = EmptyState(
+            "Nothing saved yet",
+            MY_EMPTY,
+            icon_name="arrows-down-up",
+            parent=body,
+        )
+        body_layout.addWidget(self._empty_state)
+        body_layout.addStretch(1)
         self._refresh()
 
     # ------------------------------------------------------------- helpers
@@ -190,6 +281,7 @@ class MyAutomationsPage(QWidget):
 
     def _show_page_error(self, message: str) -> None:
         """Surface a failed load/run on the page banner, never as a modal."""
+        self._details_label.setVisible(True)
         self._details_label.setText(f"Error: {message}")
         self._banner.show_message("error", MY_BANNER_ERROR_TITLE, message)
 
@@ -199,25 +291,60 @@ class MyAutomationsPage(QWidget):
     # ------------------------------------------------------------------ state
 
     def _set_running(self, running: bool) -> None:
-        self._open_button.setEnabled(not running)
         self._preview_button.setEnabled(not running)
-        self._run_button.set_running(running, MY_RUN_RUNNING)
+        for row in self._rows:
+            row.set_running(running)
 
     def _thread_finished(self) -> None:
         self._worker = None
         self._thread = None
         self._set_running(False)
+        self.run_state_changed.emit(False)
+
+    @property
+    def worker(self) -> WorkflowWorker | None:
+        """The live run worker, for the shell's Stop control."""
+        return self._worker
+
+    def run_saved(self, saved_path: Path) -> bool:
+        """Run one saved automation by path, as its own row's Run would."""
+        if self._service is None:
+            return False
+        for index in range(self._workflow_list.count()):
+            item = self._workflow_list.item(index)
+            if item is not None and Path(item.data(Qt.UserRole)) == saved_path:
+                self._run_row(index)
+                return True
+        self._refresh()
+        return False
 
     # ------------------------------------------------------------ read paths
 
     def _show_workflow_details(self, workflow: Workflow) -> None:
-        lines = [f"{workflow.name} ({workflow.workflow_id})"]
-        lines.extend(f"{step.kind.value} - {step.name}: {step.message}" for step in workflow.steps)
+        lines = [automation_display_name(workflow.name, workflow.steps)]
+        for index, step in enumerate(workflow.steps, start=1):
+            title, action_label, clean_desc = friendly_step_display(step)
+            line = f"{index}. {action_label}: {title}"
+            if clean_desc and clean_desc != title:
+                line += f" — {clean_desc}"
+            lines.append(line)
         self._details_label.setText("\n".join(lines))
+
+    def _selected_index(self) -> int:
+        if self._workflow_list is None:
+            return -1
+        return self._workflow_list.currentRow()
 
     def _on_selection_changed(self) -> None:
         self.workflow_selected.emit()
-        self._run_button.reset()
+        # A panel is approval for exactly one automation; switching rows
+        # discards it, so no stale approval can start a run for another row.
+        self._approval_panel.reset()
+        self._pending_approval_path = None
+        for row in self._rows:
+            row.run_button.reset()
+        if self._thread is not None:
+            self._set_running(True)
         item = self._workflow_list.currentItem()
         if item is None or self._service is None:
             self._details_label.setText(MY_DETAILS_EMPTY)
@@ -232,6 +359,11 @@ class MyAutomationsPage(QWidget):
             self._details_label.setText(f"Could not show '{item.text()}': {error}")
             return
         self._show_workflow_details(workflow)
+
+    def _open_row(self, index: int) -> None:
+        """Open one row in the details page."""
+        self._workflow_list.setCurrentRow(index)
+        self._open_selected()
 
     def _open_selected(self) -> None:
         item = self._workflow_list.currentItem()
@@ -261,7 +393,7 @@ class MyAutomationsPage(QWidget):
         except WorkflowValidationError as error:
             self._show_page_error(str(error))
             return
-        lines = [f"Preview (read-only): {workflow.name} ({preview.workflow_id})"]
+        lines = [f"Preview (read-only): {automation_display_name(workflow.name, workflow.steps)}"]
         lines.extend(f" - {step}" for step in preview.steps)
         if preview.executable:
             lines.append("Status: this replay can be executed.")
@@ -270,38 +402,170 @@ class MyAutomationsPage(QWidget):
         self._details_label.setText("\n".join(lines))
         self.preview_requested.emit()
 
+    def _delete_row(self, index: int) -> None:
+        """Delete the automation named by one row, naming its runs in the dialog."""
+        if self._workflow_list is None:
+            return
+        item = self._workflow_list.item(index)
+        if item is None or self._service is None:
+            self._banner.show_message("info", MY_DELETE_HINT_TITLE, MY_DELETE_HINT_BODY)
+            return
+        row_path = item.data(Qt.UserRole)
+        if row_path is None:
+            return
+        saved_path = Path(row_path)
+        workflow_id = saved_path.stem
+        name = self._display_name_for(saved_path)
+        run_count = sum(
+            1 for run in self._service.history() if getattr(run, "workflow_id", None) == workflow_id
+        )
+        choice = DeleteConfirmDialog(
+            automation_delete_message(name, run_count),
+            runs_count=run_count,
+            parent=self,
+        ).ask()
+        if not choice.confirmed:
+            return
+        try:
+            self._service.delete_automation(workflow_id, delete_runs=choice.delete_runs)
+        except OnceError as error:
+            self._details_label.setText(f"Error: {error}")
+            self._banner.show_message("error", MY_DELETE_ERROR_TITLE, str(error))
+            return
+        self._approval_panel.reset()
+        self._pending_approval_path = None
+        self._refresh()
+
+    def _clear_unnamed_drafts(self) -> None:
+        """Delete saved automations whose name says nothing, after confirming."""
+        if self._service is None:
+            return
+        drafts = [path for path in self._service.list_saved() if self._is_unnamed(path)]
+        if not drafts:
+            self._banner.show_message(
+                "info",
+                "Nothing to clear",
+                "Every saved automation already has a name that describes it.",
+            )
+            return
+        choice = DeleteConfirmDialog(clear_drafts_message(len(drafts)), parent=self).ask()
+        if not choice.confirmed:
+            return
+        removed = 0
+        failures: list[str] = []
+        for path in drafts:
+            try:
+                self._service.delete_automation(path.stem, delete_runs=choice.delete_runs)
+                removed += 1
+            except OnceError as error:
+                failures.append(f"{path.name}: {error}")
+        self._refresh()
+        if failures:
+            self._banner.show_message("error", MY_DELETE_ERROR_TITLE, "; ".join(failures))
+        else:
+            self._banner.show_message(
+                "success",
+                "Unnamed drafts cleared",
+                f"Removed {removed} draft{'s' if removed != 1 else ''} that had no useful name.",
+            )
+
+    def _is_unnamed(self, path: Path) -> bool:
+        """True when the saved workflow's name is a placeholder."""
+        if self._service is None:
+            return False
+        return is_generic_automation_name(self._service.workflow_name(path.stem))
+
+    def _display_name_for(self, path: Path) -> str:
+        """Saved name, else a title generated from the steps, else the file name."""
+        if self._service is None:
+            return path.name
+        saved_name = self._service.workflow_name(path.stem)
+        steps: tuple[object, ...] = ()
+        try:
+            workflow = self._service.load(path)
+        except WorkflowValidationError:
+            steps = ()
+        else:
+            steps = tuple(workflow.steps)
+        return automation_display_name(saved_name, steps, fallback=path.name)
+
     # ----------------------------------------------------------- run (mutating)
 
-    def _on_run_confirmed(self) -> None:
-        """The inline confirm completed its second click; start the run."""
-        item = self._workflow_list.currentItem()
+    def _run_row(self, index: int) -> None:
+        """Start one row's run; the row's own button armed the confirmation."""
+        if self._workflow_list is None:
+            return
+        self._workflow_list.setCurrentRow(index)
+        item = self._workflow_list.item(index)
         if item is None or self._service is None:
-            self._run_button.reset()
             self._show_run_hint()
             return
         saved_path = Path(item.data(Qt.UserRole))
         try:
             workflow = self._service.load(saved_path)
         except WorkflowValidationError as error:
-            self._run_button.reset()
             self._show_page_error(str(error))
+            return
+        filled = self._ask_for_parameters(workflow)
+        if filled is None:
+            return
+        workflow = filled
+        if self._approval_panel.show_for(workflow):
+            # Mutating desktop automations wait here: the approval panel is
+            # the run gate, so the run starts only from the panel's Approve.
+            self._pending_approval_path = saved_path
+            self._set_running(True)
             return
         self.run_requested.emit(saved_path)
         self._start_run(workflow)
 
-    def _start_run(self, workflow: Workflow) -> None:
+    def _ask_for_parameters(self, workflow: Workflow) -> Workflow | None:
+        """Ask for any value the automation left open, or None when cancelled."""
+        names = parameter_names(workflow)
+        if not names:
+            return workflow
+        values = ParameterDialog(names, parent=self).ask()
+        if values is None:
+            self._details_label.setVisible(True)
+            self._details_label.setText("Nothing ran: this automation needs a value first.")
+            return None
+        missing = missing_values(workflow, values)
+        if missing:
+            self._show_page_error(
+                f"Every value is needed before '{missing[0].replace('_', ' ')}' can be used."
+            )
+            return None
+        return apply_parameter_values(workflow, values)
+
+    # ----------------------------------------------------- desktop approval
+
+    def _on_run_approved(self, approval: object) -> None:
+        """The panel's Approve click passed the gate; run the automation."""
+        saved_path = self._pending_approval_path
+        self._pending_approval_path = None
+        if saved_path is None or self._service is None:
+            return
+        self.run_requested.emit(saved_path)
+        self._start_run(approval.workflow, approval=approval)  # type: ignore[attr-defined]
+
+    def _on_run_cancelled(self) -> None:
+        """The panel was declined: nothing runs and the page stays usable."""
+        self._pending_approval_path = None
+        self._set_running(False)
+
+    def _start_run(self, workflow: Workflow, approval: object | None = None) -> None:
         if self._thread is not None:
             return
-        self._details_label.setText(f"Running '{workflow.name}'...")
+        name = automation_display_name(workflow.name, workflow.steps)
+        self._details_label.setVisible(True)
+        self._details_label.setText(f"Running '{name}'...")
         self._set_running(True)
+        self.run_state_changed.emit(True)
         self._thread = QThread(self)
-        self._worker = WorkflowWorker(self._service, workflow)
+        self._worker = WorkflowWorker(self._service, workflow, desktop_approval=approval)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         # The handlers below touch widgets, so they must run in the GUI thread.
-        # WorkflowWorker emits from its own thread and these slots are plain
-        # Python callables, which Qt would otherwise invoke in the worker
-        # thread (cross-thread widget access aborts the process).
         queued = Qt.ConnectionType.QueuedConnection
         self._worker.progress.connect(self._on_run_progress, queued)
         self._worker.finished.connect(self._on_run_finished, queued)
@@ -310,11 +574,6 @@ class MyAutomationsPage(QWidget):
         self._worker.failed.connect(self._quit_run_thread)
         self._thread.finished.connect(self._thread_finished, queued)
         self._thread.finished.connect(self._thread.deleteLater)
-        # Note: worker.deleteLater is deliberately NOT connected to
-        # thread.finished. QThread flushes that DeferredDelete itself while
-        # finishing, and the Python wrapper still owns the worker until
-        # _thread_finished drops it; the two deletions race and corrupt the
-        # heap (intermittent process abort, reproduced in tests).
         self._thread.start()
 
     def _quit_run_thread(self) -> None:
@@ -324,6 +583,8 @@ class MyAutomationsPage(QWidget):
     def shutdown_worker(self) -> None:
         """Cancel and join the running automation thread for window close."""
         if self._thread is None:
+            self._approval_panel.reset()
+            self._pending_approval_path = None
             return
         cancel_and_join(self._thread, self._worker)
         self._worker = None
@@ -333,15 +594,18 @@ class MyAutomationsPage(QWidget):
         evidence = (
             f" [{'; '.join(step_result.evidence)}]" if step_result.evidence else ""  # type: ignore[attr-defined]
         )
-        line = (
-            f"{step_result.step_id}: {step_result.status.value}"  # type: ignore[attr-defined]
-            f" - {step_result.message}{evidence}"  # type: ignore[attr-defined]
-        )
+        label = friendly_step_status(getattr(step_result.status, "value", ""))
+        line = f"{label} — {step_result.message}{evidence}"  # type: ignore[attr-defined]
         self._details_label.setText(f"{self._details_label.text()}\n{line}")
 
     def _on_run_finished(self, run: object) -> None:
+        status_value = getattr(getattr(run, "status", None), "value", "Unknown")
+        label, _chip = status_display(status_value, getattr(run, "results", None))
+        # Refresh first (it updates the row's last-run pill and resets the
+        # details placeholder), then show the outcome so it is not wiped.
+        self._refresh()
         self._details_label.setText(
-            f"Run {run.status.value}: {len(run.results)} steps recorded."  # type: ignore[attr-defined]
+            f"Run {label}: {len(run.results)} steps recorded."  # type: ignore[attr-defined]
         )
 
     def _on_run_failed(self, message: str) -> None:
@@ -364,43 +628,84 @@ class MyAutomationsPage(QWidget):
         self._refresh()
 
     def _refresh(self) -> None:
+        # Clearing the list emits itemSelectionChanged; without blocking it the
+        # page reloads a workflow that was just deleted and reports a stale
+        # "not found" error.
+        blocked = QSignalBlocker(self._workflow_list)
         self._workflow_list.clear()
+        self._rows.clear()
         if self._service is None:
+            self._micro_label.setText("0 saved automations")
             self._details_label.setText(MY_EMPTY)
+            self._workflow_list.setVisible(False)
             return
         saved_paths = tuple(self._service.list_saved())
+        count = len(saved_paths)
+        self._micro_label.setText(f"{count} saved automation{'s' if count != 1 else ''}")
         unreadable = 0
-        for path in saved_paths:
+        for index, path in enumerate(saved_paths):
             saved_name = self._service.workflow_name(path.stem)
             if saved_name is None:
                 unreadable += 1
-            item = QListWidgetItem(path.name)
+            item = QListWidgetItem("")
             item.setData(Qt.UserRole, path)
             run = self._last_run_for(path.stem)
             status_text = None
             chip_kind = "neutral"
             if run is not None:
                 status_value = getattr(getattr(run, "status", None), "value", "Unknown")
-                status_text, chip_kind = status_display(status_value)
+                status_text, chip_kind = status_display(status_value, getattr(run, "results", None))
             row = AutomationRow(
-                saved_name or path.name,
+                self._display_name_for(path),
                 status_text,
                 chip_kind,
                 when_text=human_timestamp(getattr(run, "finished_at", None)) if run else "",
                 saved_on=_saved_on_text(path),
+                on_run=lambda idx=index: self._run_row(idx),
+                on_open=lambda idx=index: self._open_row(idx),
+                on_delete=lambda idx=index: self._delete_row(idx),
                 parent=self._workflow_list,
             )
-            hint = row.sizeHint()
-            hint.setHeight(_ROW_HEIGHT)
-            item.setSizeHint(hint)
+            item.setSizeHint(row.sizeHint())
             self._workflow_list.addItem(item)
             self._workflow_list.setItemWidget(item, row)
+            self._rows.append(row)
+        self._workflow_list.setVisible(bool(saved_paths))
+        self._empty_state.setVisible(not saved_paths)
+        self._fit_rows()
         if unreadable:
+            # An icon carries the severity; the banner never prints the word
+            # "Warning" as plain text.
             self._banner.show_message("warning", MY_UNREADABLE_TITLE, MY_UNREADABLE_BODY)
         if not saved_paths:
-            self._details_label.setText(MY_EMPTY)
+            self._details_label.setVisible(False)
             return
+        self._details_label.setVisible(True)
         self._details_label.setText(MY_DETAILS_EMPTY)
+        del blocked
+
+    def _fit_rows(self) -> None:
+        """Size the list to the rows it holds.
+
+        A row's height only settles once its stylesheet padding and fonts are
+        applied, so measure the rendered rows instead of guessing: a fixed
+        guess used to clip the last automation off the bottom of the list.
+        """
+        if self._workflow_list is None or not self._rows:
+            return
+        spacing = self._workflow_list.spacing()
+        total = 2 * self._workflow_list.frameWidth()
+        for index, row in enumerate(self._rows):
+            row.ensurePolished()
+            measured = row.sizeHint().height()
+            self._workflow_list.item(index).setSizeHint(row.sizeHint())
+            total += measured
+        total += spacing * max(0, self._workflow_list.count() - 1)
+        self._workflow_list.setFixedHeight(min(MAX_LIST_HEIGHT, total))
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().showEvent(event)
+        self._fit_rows()
 
     def set_service(self, service: WorkflowService | None) -> None:
         self._service = service

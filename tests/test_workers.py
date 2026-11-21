@@ -22,7 +22,8 @@ def test_worker_emits_completed_workflow(qtbot: QtBot) -> None:
     thread.started.connect(worker.run)
     with qtbot.waitSignal(worker.finished, timeout=2000) as signal:
         thread.start()
-    assert signal.args[0].status.value == "SUCCEEDED"
+    # The only step is a report, so the run observed and performed nothing.
+    assert signal.args[0].status.value == "OBSERVATION_ONLY"
     thread.quit()
     thread.wait()
 

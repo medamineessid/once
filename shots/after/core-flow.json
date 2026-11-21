@@ -1,0 +1,88 @@
+{
+  "data_folder": "C:\\Users\\DELL\\AppData\\Local\\Temp\\once-core-flow-jnsee5m8\\Once",
+  "app": "C:\\Windows\\System32\\charmap.exe",
+  "recording_id": "charmap-c92e67cb",
+  "own_window_handle": 5113986,
+  "runs": [
+    {
+      "attempt": 1,
+      "status": "SUCCEEDED",
+      "steps": [
+        {
+          "step_id": "observation-1",
+          "status": "SUCCEEDED",
+          "message": "The application was launched.",
+          "evidence": [
+            "executable=C:\\Windows\\System32\\charmap.exe",
+            "process_id=75564",
+            "argument_count=0",
+            "display_name=charmap",
+            "sha256=f15c08704bd2e97bb0b52f2fff59d10b5e943aa6ac94966bbafa55c300919fb4",
+            "close_supported=true"
+          ]
+        },
+        {
+          "step_id": "observation-2",
+          "status": "SUCCEEDED",
+          "message": "The text was entered and confirmed by reading the control.",
+          "evidence": [
+            "chars=9",
+            "readback_confirmed=true",
+            "input_method=value_pattern"
+          ]
+        },
+        {
+          "step_id": "observation-3",
+          "status": "SUCCEEDED",
+          "message": "The application windows were closed.",
+          "evidence": [
+            "process_id=75564",
+            "windows_closed=1",
+            "exited=true"
+          ]
+        }
+      ],
+      "our_window_remains": false
+    },
+    {
+      "attempt": 2,
+      "status": "SUCCEEDED",
+      "steps": [
+        {
+          "step_id": "observation-1",
+          "status": "SUCCEEDED",
+          "message": "The application was launched.",
+          "evidence": [
+            "executable=C:\\Windows\\System32\\charmap.exe",
+            "process_id=36412",
+            "argument_count=0",
+            "display_name=charmap",
+            "sha256=f15c08704bd2e97bb0b52f2fff59d10b5e943aa6ac94966bbafa55c300919fb4",
+            "close_supported=true"
+          ]
+        },
+        {
+          "step_id": "observation-2",
+          "status": "SUCCEEDED",
+          "message": "The text was entered and confirmed by reading the control.",
+          "evidence": [
+            "chars=9",
+            "readback_confirmed=true",
+            "input_method=value_pattern"
+          ]
+        },
+        {
+          "step_id": "observation-3",
+          "status": "SUCCEEDED",
+          "message": "The application windows were closed.",
+          "evidence": [
+            "process_id=36412",
+            "windows_closed=1",
+            "exited=true"
+          ]
+        }
+      ],
+      "our_window_remains": false
+    }
+  ]
+}

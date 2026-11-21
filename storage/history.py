@@ -107,6 +107,41 @@ class ExecutionHistory:
         except sqlite3.IntegrityError:
             raise
 
+    def delete_run(self, run_id: str) -> bool:
+        """Delete one run and its step results; True when a run was removed."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                "DELETE FROM workflow_step_results WHERE run_id = ?", (run_id,)
+            )
+            cursor = self._connection.execute(
+                "DELETE FROM workflow_runs WHERE run_id = ?", (run_id,)
+            )
+        return cursor.rowcount > 0
+
+    def clear_runs(self) -> int:
+        """Delete every run and its step results; return the number removed."""
+        with self._lock, self._connection:
+            self._connection.execute("DELETE FROM workflow_step_results")
+            cursor = self._connection.execute("DELETE FROM workflow_runs")
+        return cursor.rowcount
+
+    def delete_runs_for_workflow(self, workflow_id: str) -> int:
+        """Delete every run of one automation; return the number removed."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                DELETE FROM workflow_step_results
+                WHERE run_id IN (
+                    SELECT run_id FROM workflow_runs WHERE workflow_id = ?
+                )
+                """,
+                (workflow_id,),
+            )
+            cursor = self._connection.execute(
+                "DELETE FROM workflow_runs WHERE workflow_id = ?", (workflow_id,)
+            )
+        return cursor.rowcount
+
     def record_verification(self, bundle: EvidenceBundle) -> None:
         """Atomically insert one verification run and its case results."""
         with self._lock, self._connection:
@@ -394,18 +429,21 @@ class ExecutionHistory:
             status, decided_at = "PENDING", None
         else:
             status, decided_at = decision_row["decision"], decision_row["decided_at"]
+        # Map the row explicitly: sqlite3.Row is indexed by column name, and an
+        # explicit mapping keeps that clear at every field read.
+        fields = dict(row)
         return AgentProposalRecord(
             review=ChangeReview(
-                proposal_id=row["proposal_id"],
-                repo_path=row["repo_path"],
-                base_branch=row["base_branch"],
-                agent_branch=row["agent_branch"],
-                base_commit=row["base_commit"],
-                agent_tip=row["agent_tip"],
-                diff=row["diff"],
-                changed_files=tuple(json.loads(row["changed_files"])),
-                untracked_files=tuple(json.loads(row["untracked_files"])),
-                truncated=bool(row["truncated"]),
+                proposal_id=fields["proposal_id"],
+                repo_path=fields["repo_path"],
+                base_branch=fields["base_branch"],
+                agent_branch=fields["agent_branch"],
+                base_commit=fields["base_commit"],
+                agent_tip=fields["agent_tip"],
+                diff=fields["diff"],
+                changed_files=tuple(json.loads(fields["changed_files"])),
+                untracked_files=tuple(json.loads(fields["untracked_files"])),
+                truncated=bool(fields["truncated"]),
             ),
             status=status,
             decided_at=decided_at,

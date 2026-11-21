@@ -50,7 +50,7 @@ class RunEventKind(StrEnum):
 #: The engine writes exactly these two skip phrases (engine/workflow.py).
 _CANCELLED_SKIP_PHRASE = "cancelled"
 
-_SUCCESS_STATUSES = frozenset({StepStatus.SUCCEEDED, StepStatus.VERIFIED})
+_SUCCESS_STATUSES = frozenset({StepStatus.SUCCEEDED, StepStatus.VERIFIED, StepStatus.OBSERVED})
 _FAILURE_STATUSES = frozenset({StepStatus.FAILED, StepStatus.INCONCLUSIVE})
 
 

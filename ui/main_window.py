@@ -464,6 +464,15 @@ class MainWindow(QMainWindow):
             self._show_error("Select a saved recording before deleting it.")
             return
         recording_id = self._recording_list.currentItem().text()
+        answer = QMessageBox.question(
+            self,
+            "Delete recording",
+            f"Delete recording '{recording_id}'? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
         try:
             self._recording_service.delete(recording_id)
         except WorkflowValidationError as error:
