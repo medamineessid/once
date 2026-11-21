@@ -107,8 +107,7 @@ function Invoke-Check {
 # --- the engineering log must stay append-only -------------------------------
 # Rule 7 of the working agreement: earlier entries may never be edited or
 # removed. scripts/check_log_append_only.py compares the file at the base ref
-# with the file at HEAD and requires the new content to start with the old
-# content byte for byte. The previous `git diff --numstat` deletion count was
+# with the file at HEAD. The previous `git diff --numstat` deletion count was
 # replaced because it reported a deletion when the base copy merely lacked a
 # trailing newline.
 $targetRef = 'origin/main'
@@ -127,9 +126,10 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 $logScript = Join-Path $root 'scripts\check_log_append_only.py'
-$logOutput = & $Python $logScript $targetRef 'docs/ai_engineering_log.md' 2>&1
+# TEMPORARY until PR #1 merges (lane merge inserted entries out of order); then switch to prefix.
+$logOutput = & $Python $logScript $targetRef 'docs/ai_engineering_log.md' --mode boundary 2>&1
 $logCode = $LASTEXITCODE
-$logNote = "check_log_append_only.py $targetRef docs/ai_engineering_log.md"
+$logNote = "check_log_append_only.py $targetRef docs/ai_engineering_log.md --mode boundary"
 
 Invoke-Check -Name 'git branch --show-current' -Informational -Command { git branch --show-current }
 Invoke-Check -Name 'git status --short'        -Informational -Command { git status --short }

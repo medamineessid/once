@@ -20,6 +20,7 @@ def _load_checker() -> object:
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -84,9 +85,14 @@ def _commit(repo: Path, text: str, message: str) -> str:
     return _git(repo, "rev-parse", "HEAD").stdout.strip()
 
 
-def _run_checker(repo: Path, base: str) -> subprocess.CompletedProcess[str]:
+def _run_checker(
+    repo: Path, base: str, mode: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    argv = [sys.executable, str(CHECKER_PATH), base, "log.md"]
+    if mode is not None:
+        argv.extend(("--mode", mode))
     return subprocess.run(
-        (sys.executable, str(CHECKER_PATH), base, "log.md"),
+        argv,
         cwd=repo,
         capture_output=True,
         text=True,
@@ -128,3 +134,127 @@ def test_cli_passes_when_the_base_has_no_such_file(tmp_path: Path) -> None:
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert "does not exist" in completed.stdout
+
+
+# --- boundary mode (temporary exception, see the module docstring) -----------
+
+OLD_LOG = "# Once log\n\n## A\nbody A\n## B\nbody B\n"
+
+
+def test_boundary_new_entry_between_old_entries_passes() -> None:
+    new_log = "# Once log\n\n## A\nbody A\n## NEW\nbody NEW\n## B\nbody B\n"
+
+    assert checker.is_append_only(OLD_LOG.encode(), new_log.encode(), "boundary") is True
+
+
+def test_boundary_entry_appended_at_the_end_passes() -> None:
+    new_log = OLD_LOG + "## C\nbody C\n"
+
+    assert checker.is_append_only(OLD_LOG.encode(), new_log.encode(), "boundary") is True
+
+
+def test_boundary_line_inserted_inside_an_entry_fails() -> None:
+    new_log = "# Once log\n\n## A\ninjected inside A\nbody A\n## B\nbody B\n"
+
+    assert checker.is_append_only(OLD_LOG.encode(), new_log.encode(), "boundary") is False
+
+
+def test_boundary_edited_old_line_fails() -> None:
+    new_log = OLD_LOG.replace("body A", "body A edited")
+
+    assert checker.is_append_only(OLD_LOG.encode(), new_log.encode(), "boundary") is False
+
+
+def test_boundary_deleted_old_line_fails() -> None:
+    new_log = OLD_LOG.replace("body B\n", "")
+
+    assert checker.is_append_only(OLD_LOG.encode(), new_log.encode(), "boundary") is False
+
+
+def test_boundary_swapped_old_entries_fail() -> None:
+    new_log = "# Once log\n\n## B\nbody B\n## A\nbody A\n"
+
+    assert checker.is_append_only(OLD_LOG.encode(), new_log.encode(), "boundary") is False
+
+
+def test_boundary_is_crlf_tolerant() -> None:
+    crlf_base = OLD_LOG.replace("\n", "\r\n").encode()
+    new_log = OLD_LOG + "## C\nbody C\n"
+
+    assert checker.is_append_only(crlf_base, new_log.encode(), "boundary") is True
+
+
+def test_boundary_reports_the_position_of_each_insertion() -> None:
+    new_log = "# Once log\n\n## A\nbody A\n## NEW\nbody NEW\n## B\nbody B\n"
+
+    insertions, survived = checker.find_insertions(OLD_LOG.encode(), new_log.encode())
+
+    assert survived is True
+    assert len(insertions) == 1
+    assert insertions[0].at_boundary is True
+    assert insertions[0].before_text == "## B"
+    assert "before ## B" in insertions[0].describe()
+
+
+def test_prefix_mode_still_rejects_a_middle_insertion() -> None:
+    new_log = "# Once log\n\n## A\nbody A\n## NEW\nbody NEW\n## B\nbody B\n"
+
+    assert checker.is_append_only(OLD_LOG.encode(), new_log.encode(), "prefix") is False
+
+
+# --- boundary mode: blank separator lines are not entry content --------------
+# These mirror the real lane merge: an entry inserted after the header, with the
+# base's spare blank line aligning to a blank inside the inserted entry's
+# separator, and two blank lines inserted into a separator run.
+
+
+SEPARATED_LOG = "# Once log\n\n## A\nbody A\n\n\n## B\nbody B\n"
+
+
+def test_boundary_entry_inserted_before_a_blank_run_passes() -> None:
+    new_log = "# Once log\n\n## NEW\nbody NEW\n\n## A\nbody A\n\n\n## B\nbody B\n"
+
+    assert checker.is_append_only(SEPARATED_LOG.encode(), new_log.encode(), "boundary") is True
+
+
+def test_boundary_blank_lines_inserted_into_a_separator_pass() -> None:
+    new_log = "# Once log\n\n## A\nbody A\n\n\n\n\n## B\nbody B\n"
+
+    insertions, survived = checker.find_insertions(SEPARATED_LOG.encode(), new_log.encode())
+
+    assert survived is True
+    assert [item.is_blank_padding for item in insertions] == [True]
+    assert checker.is_append_only(SEPARATED_LOG.encode(), new_log.encode(), "boundary") is True
+
+
+def test_boundary_line_inserted_before_a_body_line_fails() -> None:
+    new_log = "# Once log\n\n## A\ninjected\nbody A\n\n\n## B\nbody B\n"
+
+    insertions, survived = checker.find_insertions(SEPARATED_LOG.encode(), new_log.encode())
+
+    assert survived is True
+    assert len(insertions) == 1
+    assert insertions[0].before_text == "body A"
+    assert insertions[0].at_boundary is False
+    assert checker.is_append_only(SEPARATED_LOG.encode(), new_log.encode(), "boundary") is False
+
+
+def test_boundary_reports_the_heading_after_the_blank_run() -> None:
+    new_log = "# Once log\n\n## NEW\nbody NEW\n\n## A\nbody A\n\n\n## B\nbody B\n"
+
+    insertions, _ = checker.find_insertions(SEPARATED_LOG.encode(), new_log.encode())
+
+    assert len(insertions) == 1
+    assert insertions[0].before_text == "## A"
+
+
+def test_cli_boundary_mode_reports_a_pass(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    base = _commit(tmp_path, OLD_LOG, "first")
+    _commit(tmp_path, OLD_LOG + "## C\nbody C\n", "second")
+
+    completed = _run_checker(tmp_path, base, "boundary")
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "PASS" in completed.stdout
+    assert "insertion" in completed.stdout

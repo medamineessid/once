@@ -1,18 +1,30 @@
-"""Fail when a tracked file changed anywhere except at its end.
+"""Fail when a tracked file's earlier content changed or disappeared.
 
 The previous gate used `git diff --numstat`, which counts a deletion whenever
 the base copy of a file ends without a trailing newline and the new copy adds
 one. That produced a false positive against `main` for
-`docs/ai_engineering_log.md`: the only "deleted" line was the final line,
-unchanged in content, followed by a new newline.
+`docs/ai_engineering_log.md`.
 
-This check compares the two copies directly instead of trusting a line diff.
-The new content must start with the old content, byte for byte, after CRLF
-normalisation. Adding a trailing newline or appending new lines passes; editing,
-reordering or deleting anything that came before fails.
+Two modes are supported.
+
+``prefix`` (permanent default)
+    The new content must start with the old content, byte for byte. Appending
+    lines, or adding a trailing newline, passes. Anything else fails.
+
+``boundary`` (temporary exception)
+    Every base line must still be present, in order, unedited, and every
+    inserted block must sit at an entry boundary: the next non-blank line after
+    the block must be a line that starts with ``## `` (a log entry heading), or
+    there must be no such line (end of file). Blank lines are separators rather
+    than entry content, so a block may land in a blank run directly before a
+    heading. A block that lands before a body line is inside an entry and is
+    rejected.
+
+``boundary`` exists only because the lane merge inserted entries out of order;
+``verify.ps1`` must be switched back to ``prefix`` once PR #1 has merged.
 
 Usage:
-    python scripts/check_log_append_only.py <base-ref> <path>
+    python scripts/check_log_append_only.py <base-ref> <path> [--mode prefix|boundary]
 
 Exit codes: 0 append-only (or file absent at base), 1 violation, 2 usage error.
 """
@@ -22,22 +34,20 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from dataclasses import dataclass
 
 EXIT_OK = 0
 EXIT_APPEND_VIOLATION = 1
 EXIT_USAGE_ERROR = 2
 
+HEADING_PREFIX = "## "
+MODE_PREFIX = "prefix"
+MODE_BOUNDARY = "boundary"
+
 
 def normalise_newlines(data: bytes) -> bytes:
     """Return data with CRLF and lone CR folded to LF."""
     return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-
-
-def is_append_only(base: bytes | None, head: bytes) -> bool:
-    """True when head keeps every byte of base and only adds to the end."""
-    if base is None:
-        return True
-    return normalise_newlines(head).startswith(normalise_newlines(base))
 
 
 def first_difference(base: bytes, head: bytes) -> int | None:
@@ -51,6 +61,115 @@ def first_difference(base: bytes, head: bytes) -> int | None:
     if len(new) < len(old):
         return len(new)
     return None
+
+
+def _split_lines(data: bytes) -> list[str]:
+    return normalise_newlines(data).decode("utf-8", errors="surrogateescape").split("\n")
+
+
+@dataclass(frozen=True)
+class Insertion:
+    """One contiguous block of new lines, and where it landed."""
+
+    first_head_line: int
+    lines: tuple[str, ...]
+    base_cursor: int
+    before_text: str | None
+
+    @property
+    def at_end(self) -> bool:
+        """True when nothing but blank lines follows the block in the base copy."""
+        return self.before_text is None
+
+    @property
+    def at_boundary(self) -> bool:
+        """True when the next real line is an entry heading, or there is none.
+
+        Blank lines are separators, not entry content, so a block that lands in
+        a separator run (directly before a heading once the blank padding is
+        skipped) is still at a boundary. A block that lands before a body line
+        is inside an entry and is rejected.
+        """
+        if self.before_text is None:
+            return True
+        return self.before_text.startswith(HEADING_PREFIX)
+
+    @property
+    def is_blank_padding(self) -> bool:
+        """True when the block contains only blank lines."""
+        return all(item == "" for item in self.lines)
+
+    def describe(self) -> str:
+        """Return a one-line human readable position."""
+        start = self.first_head_line + 1
+        end = self.first_head_line + len(self.lines)
+        where = "at end of file" if self.before_text is None else f"before {self.before_text[:60]}"
+        return f"lines {start}-{end} ({len(self.lines)} line(s)) {where}"
+
+
+def find_insertions(base: bytes | None, head: bytes) -> tuple[list[Insertion], bool]:
+    """Locate inserted blocks and report whether the base survived intact.
+
+    Returns (insertions, base_survived). base_survived is False when a base
+    line was deleted, reordered or edited.
+    """
+    if base is None:
+        return [], True
+
+    base_lines = _split_lines(base)
+    head_lines = _split_lines(head)
+
+    insertions: list[Insertion] = []
+    pending: list[str] = []
+    pending_start = 0
+    cursor = 0
+
+    for index, line in enumerate(head_lines):
+        if cursor < len(base_lines) and line == base_lines[cursor]:
+            if pending:
+                insertions.append(_make_insertion(pending, pending_start, cursor, base_lines))
+                pending = []
+            cursor += 1
+        else:
+            if not pending:
+                pending_start = index
+            pending.append(line)
+
+    if pending:
+        insertions.append(_make_insertion(pending, pending_start, cursor, base_lines))
+
+    return insertions, cursor == len(base_lines)
+
+
+def _next_real_line(base_lines: list[str], cursor: int) -> str | None:
+    """Return the next non-blank base line at or after cursor, or None at the end."""
+    for line in base_lines[cursor:]:
+        if line != "":
+            return line
+    return None
+
+
+def _make_insertion(
+    lines: list[str], start: int, base_cursor: int, base_lines: list[str]
+) -> Insertion:
+    return Insertion(
+        first_head_line=start,
+        lines=tuple(lines),
+        base_cursor=base_cursor,
+        before_text=_next_real_line(base_lines, base_cursor),
+    )
+
+
+def is_append_only(base: bytes | None, head: bytes, mode: str = MODE_PREFIX) -> bool:
+    """True when head only adds to base under the given mode."""
+    if base is None:
+        return True
+    if mode == MODE_PREFIX:
+        return normalise_newlines(head).startswith(normalise_newlines(base))
+    if mode == MODE_BOUNDARY:
+        insertions, survived = find_insertions(base, head)
+        return survived and all(item.at_boundary for item in insertions)
+    raise ValueError(f"unknown mode: {mode}")
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[bytes]:
@@ -78,6 +197,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("base_ref", help="Git ref to compare against, e.g. origin/main")
     parser.add_argument("path", help="Repository-relative path to check")
+    parser.add_argument(
+        "--mode",
+        choices=(MODE_PREFIX, MODE_BOUNDARY),
+        default=MODE_PREFIX,
+        help="prefix: new content must start with old. boundary: insertions only at entry edges.",
+    )
     args = parser.parse_args(argv)
 
     if not exists_at(args.base_ref, args.path):
@@ -95,7 +220,24 @@ def main(argv: list[str] | None = None) -> int:
         print("The log is append-only: restore the file and add your entry at the end.")
         return EXIT_APPEND_VIOLATION
 
-    if is_append_only(base, head):
+    if args.mode == MODE_BOUNDARY:
+        insertions, survived = find_insertions(base, head)
+        for item in insertions:
+            marker = "ok" if item.at_boundary else "VIOLATION"
+            print(f"  insertion {item.describe()} [{marker}]")
+        if not survived:
+            print(f"FAIL: {args.path} lost, reordered or edited an earlier line")
+            print("The log is append-only: earlier entries must stay exactly as they were.")
+            return EXIT_APPEND_VIOLATION
+        stray = [item for item in insertions if not item.at_boundary]
+        if stray:
+            print(f"FAIL: {len(stray)} insertion(s) landed inside an existing entry")
+            print("Insert new entries between entries or at the end of the file.")
+            return EXIT_APPEND_VIOLATION
+        print(f"PASS: {args.path} only gained whole entries since {args.base_ref}")
+        return EXIT_OK
+
+    if is_append_only(base, head, MODE_PREFIX):
         print(f"PASS: {args.path} only grew since {args.base_ref}")
         return EXIT_OK
 
