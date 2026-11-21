@@ -168,10 +168,13 @@ class SqliteApplicationRegistry:
 
 
 def _record(row: sqlite3.Row) -> ApprovedApplication:
+    # Map the row explicitly: sqlite3.Row is indexed by column name, and an
+    # explicit mapping keeps that clear at every field read.
+    fields = dict(row)
     return ApprovedApplication(
-        executable=Path(row["executable"]),
-        sha256=row["sha256"],
-        display_name=row["display_name"],
-        approved=bool(row["approved"]),
-        close_supported=bool(row["close_supported"]),
+        executable=Path(fields["executable"]),
+        sha256=fields["sha256"],
+        display_name=fields["display_name"],
+        approved=bool(fields["approved"]),
+        close_supported=bool(fields["close_supported"]),
     )
