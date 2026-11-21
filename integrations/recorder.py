@@ -585,10 +585,6 @@ class WindowEventMonitor:
             if kind is RecordedEventKind.WINDOW_OPEN:
                 self._seen_executables.add(os.path.normcase(executable_path))
             executable_sha256 = _file_sha256(executable_path)
-            if executable_sha256 and executable_sha256 != _UNKNOWN_SHA256:
-                signer = _file_signer(executable_path)
-                if signer:
-                    executable_signer = signer
         self._sink.append(
             RecordedEvent(
                 sequence=self._sequence_source(),
@@ -662,18 +658,3 @@ def _win32_process_image_path(kernel32: object, process_id: int) -> str:
         return buffer.value
     finally:
         kernel32.CloseHandle(handle)
-
-
-def _file_signer(path: str) -> str | None:
-    """Best-effort code-signing identity for one executable.
-
-    When signer extraction is unavailable or fails, the recorded identity
-    remains trustable because it still contains the recorded exe path and
-    SHA-256. This is a probe, not a required path.
-    """
-    return _file_signer_windows(path)
-
-
-def _file_signer_windows(path: str) -> str | None:
-    _ = path
-    return None
