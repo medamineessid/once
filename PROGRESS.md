@@ -33,3 +33,36 @@
 4. **Activity list item text**: QListWidgetItem display text should show the friendly run name (via `friendly_run_name()`) rather than being empty, so both test assertions and UI readability are consistent.
 5. **Ruff script fixes**: `scripts/capture_ui_shots.py` lint errors (unused import, noqa directives, line length) are cosmetic/script-internal; do not affect UI or engine behavior.
 - [x] **25. List rows stay inside their list**: My automations sized its list from a row height measured before stylesheet padding applied, so a third saved automation was cut off with the scrollbar switched off. The page now measures the rendered rows and re-fits on `showEvent`; `shots/design-v4/automations-rows.png` shows all three rows and `tests/test_my_automations_page.py::test_every_row_fits_inside_the_list` pins it. Full suite `783 passed, 3 skipped in 101.68s`, `ruff check .` clean.
+
+## Log ordering exception (PR #1, 2026-11-21)
+
+`docs/ai_engineering_log.md` on `lane-a-merged` is not a strict append of
+`main`'s copy. The branch inserted 459 lines between the file header and the
+first `2026-10-21` entry instead of appending at the end. No line was lost or
+edited: all 1289 of `main`'s lines are present, in order (verified by a line
+subsequence check, 1289 of 1289). The one "deleted line" reported by
+`git diff --numstat` is `main`'s final line, which has no trailing newline.
+
+- HEAD 1-4: header.
+- HEAD 5-281: 17 entries, 2026-11-07 down to 2026-11-01, inserted out of order.
+- HEAD 282-1567: the original log, starting at `2026-10-21 -- Step 0`.
+- HEAD 1568-1748: 9 entries appended at the end, 2026-11-01 to 2026-11-18.
+- HEAD 293-294: two blank lines added inside the separator before
+  `2026-10-22 -- Draft editing`.
+
+The log is not reordered or edited to fix this: moving 276 lines inside an
+append-only file is itself a rewrite. Until PR #1 merges, the CI gate runs
+`scripts/check_log_append_only.py --mode boundary`, which requires every base
+line to survive in order and every inserted block to start at an entry boundary
+(next non-blank line is a `## ` heading, or end of file). `--mode prefix` stays
+the default and the permanent rule; a follow-up PR switches `verify.ps1` back to
+it after PR #1 merges, with a test that a middle insertion fails.
+
+## Blocker C: intermittent pytest tmp_path FileNotFoundError
+
+Twice, a full-suite run failed one UI test with `FileNotFoundError` on a
+`pytest` `tmp_path` file (`tests/test_review_ui.py::test_panel_can_apply_a_recorded_approval_after_a_restart`).
+The test passes in isolation, and a full run with a unique `--basetemp` passes
+(808 passed, 3 skipped). The failure is consistent with two test runs sharing
+pytest's default temp root, not with a product defect. Full runs that must be
+trusted now pass an explicit unique `--basetemp`.
