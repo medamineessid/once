@@ -188,6 +188,18 @@ def _upgrade(connection: sqlite3.Connection, path: Path, current: int) -> None:
         ) from error
 
 
+def _sqlite_uri(path: Path) -> str:
+    """Return a percent-encoded ``file:`` URI for one database path.
+
+    ``sqlite3`` reads a leading ``file:`` as a URI when ``uri=True``, so a path
+    is never passed through as a connection string. Encoding the path first
+    keeps characters that are URI syntax - a space, ``?``, ``#`` or ``%`` in a
+    folder or file name - inside the file name instead of being read as a query
+    or fragment.
+    """
+    return Path(path).expanduser().resolve().as_uri()
+
+
 def connect(path: Path) -> sqlite3.Connection:
     """Open a local SQLite database, upgrading it through ordered migrations.
 
@@ -195,7 +207,7 @@ def connect(path: Path) -> sqlite3.Connection:
     a database from a newer app version is refused without modification.
     """
     path = Path(path)
-    connection = sqlite3.connect(path, check_same_thread=False)
+    connection = sqlite3.connect(_sqlite_uri(path), check_same_thread=False, uri=True)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
     current = int(connection.execute("PRAGMA user_version").fetchone()[0])
