@@ -9,15 +9,36 @@ The real user profile is never read; the caller must prepare the staging copy.
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PySide6.QtTest import QTest
 
 from app import build_window
 from ui.components.delete_confirm import DeleteConfirmDialog
 from ui.shell import ShellPages
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SHOTS_ROOT = REPO_ROOT / "shots"
+
+
+def resolve_output_dir(raw: str) -> Path:
+    """Return the requested capture folder, or refuse it.
+
+    Captures are written next to the repository's other screenshots. Accepting
+    only a folder inside ``shots/`` or the system temp folder keeps a mistyped
+    or hostile argument from creating or filling a folder elsewhere.
+    """
+    candidate = Path(raw).expanduser()
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    resolved = candidate.resolve()
+    for root in (SHOTS_ROOT.resolve(), Path(tempfile.gettempdir()).resolve()):
+        if resolved == root or root in resolved.parents:
+            return resolved
+    raise ValueError(f"Refusing to write captures outside shots/ or the temp folder: {resolved}")
 
 
 def save_window(window, path: Path) -> None:
@@ -34,7 +55,11 @@ def main() -> int:
     if len(sys.argv) != 2:
         print("usage: capture_ui_shots.py <output-dir>")
         return 2
-    out = Path(sys.argv[1])
+    try:
+        out = resolve_output_dir(sys.argv[1])
+    except ValueError as error:
+        print(error)
+        return 2
     out.mkdir(parents=True, exist_ok=True)
     app, window, service, _recording = build_window(["--shell"])
     window.resize(1280, 820)
