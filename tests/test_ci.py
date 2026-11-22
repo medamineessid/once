@@ -99,3 +99,21 @@ def test_verify_script_supports_venv_and_fallback_python() -> None:
     assert "$defaultVenvPython" in text
     assert "python.exe" in text
     assert "origin/main" in text
+
+
+def test_verify_script_runs_the_log_gate_in_prefix_mode() -> None:
+    text = VERIFY_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    # PR #1's out-of-order entries are in main's history now, so the temporary
+    # boundary exception (docs/WORKFLOW.md) is over and the permanent strict
+    # rule is back: the file at HEAD must start with the file at the base ref.
+    # Only the lines that actually invoke the gate matter; a comment may explain
+    # the closed exception by name.
+    invocations = [
+        line
+        for line in text.splitlines()
+        if line.lstrip().startswith("$logOutput") and "$logScript" in line
+    ]
+    assert invocations, "verify.ps1 no longer invokes the log gate"
+    assert any("--mode prefix" in line for line in invocations)
+    assert not any("--mode boundary" in line for line in invocations)
