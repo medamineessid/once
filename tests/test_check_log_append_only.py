@@ -124,6 +124,18 @@ def test_cli_fails_when_an_earlier_line_changes(tmp_path: Path) -> None:
     assert "FAIL" in completed.stdout
 
 
+def test_cli_fails_when_a_line_is_inserted_in_the_middle(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "-q")
+    base = _commit(tmp_path, "first entry\nsecond entry\n", "first")
+    _commit(tmp_path, "first entry\nINSERTED\nsecond entry\n", "insert in the middle")
+
+    completed = _run_checker(tmp_path, base)
+
+    assert completed.returncode == 1, completed.stdout + completed.stderr
+    assert "FAIL" in completed.stdout
+    assert "add new entries at the end" in completed.stdout
+
+
 def test_cli_passes_when_the_base_has_no_such_file(tmp_path: Path) -> None:
     _git(tmp_path, "init", "-q")
     (tmp_path / "other.md").write_text("other\n", encoding="utf-8", newline="")

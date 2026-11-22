@@ -31,18 +31,20 @@ blank separator run before the `2026-10-22 — Draft editing` entry (HEAD lines
 293–294), and one blank line of the header block absorbed by the alignment.
 
 Decision: do **not** reorder or edit the log to make it a strict prefix. A
-276-line movement inside an append-only artefact is itself a rewrite. Instead,
-until PR #1 merges, `scripts/verify.ps1` runs
+276-line movement inside an append-only artefact is itself a rewrite.
+
+Temporary exception, now closed: while PR #1 was open, `scripts/verify.ps1` ran
 `scripts/check_log_append_only.py` with `--mode boundary`, which requires every
 base line to survive in order and every inserted block to land at an entry
 boundary (next non-blank line is a `## ` heading, or the end of the file). That
-is stricter than the `git diff --numstat` deletion count it replaced and still
-rejects editing, deleting, reordering, and inserting into the body of an entry.
+was stricter than the `git diff --numstat` deletion count it replaced and still
+rejected editing, deleting, reordering, and inserting into the body of an entry.
 
-`--mode prefix` (the new content must start with the old content) remains the
-default and is the permanent rule. Follow-up: switch `verify.ps1` back to
-`--mode prefix` in a small PR into `main` immediately after PR #1 merges, with a
-test asserting that a middle insertion fails.
+`--mode prefix` (the new content must start with the old content) is the
+permanent rule. PR #1 is merged, so the follow-up has landed: `verify.ps1` is
+back on `--mode prefix`, and `tests/test_ci.py` asserts the script never passes
+`--mode boundary` again. `tests/test_check_log_append_only.py` also has a CLI
+test proving a line inserted in the middle of the log fails under `prefix`.
 
 ## Intermittent `FileNotFoundError` in the review-panel test
 
