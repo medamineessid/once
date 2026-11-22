@@ -44,16 +44,26 @@ default and is the permanent rule. Follow-up: switch `verify.ps1` back to
 `--mode prefix` in a small PR into `main` immediately after PR #1 merges, with a
 test asserting that a middle insertion fails.
 
-## Test temp directories
+## Intermittent `FileNotFoundError` in the review-panel test
 
-`pytest`'s default `tmp_path` root is shared. An intermittent
-`FileNotFoundError` on a `tmp_path` file was observed twice in full-suite runs
-and never reproduced in isolation, which is consistent with two runs sharing a
-temp root. When a full run must be trusted, pass a unique root:
+`tests/test_review_ui.py` failed about one run in three with
+`FileNotFoundError` on `repo/extractor.py`. The cause was in the test, not in
+the product: `qtbot.waitSignal()` returns a `SignalBlocker` and does **not**
+block unless it is used as a context manager (or `.wait()` is called). Three
+calls were bare statements, so the test polled the repository while the apply
+worker's `git merge --ff-only` was still running. `git` unlinks each file
+before writing the merged version, so a poll can land in that window.
+
+Fixed by wrapping the action inside the wait:
 
 ```
-.\.venv\Scripts\python.exe -m pytest -q --basetemp=C:\Users\<you>\AppData\Local\Temp\once-pytest-<n>
+with qtbot.waitSignal(panel._apply_worker_done, timeout=60_000):
+    panel._apply_recorded_approval()
 ```
 
-The full suite was green both with and without it; the unique root is what
-removed the failure.
+The repository was never left in a bad state: the file was present after each
+run, and the test now passes repeatedly (5 consecutive runs and a full suite
+with a unique `--basetemp`).
+
+The earlier note that a shared pytest temp root caused this was wrong, and has
+been corrected here.

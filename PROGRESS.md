@@ -58,11 +58,18 @@ line to survive in order and every inserted block to start at an entry boundary
 the default and the permanent rule; a follow-up PR switches `verify.ps1` back to
 it after PR #1 merges, with a test that a middle insertion fails.
 
-## Blocker C: intermittent pytest tmp_path FileNotFoundError
+## Blocker C: intermittent FileNotFoundError in the review-panel test (resolved)
 
-Twice, a full-suite run failed one UI test with `FileNotFoundError` on a
-`pytest` `tmp_path` file (`tests/test_review_ui.py::test_panel_can_apply_a_recorded_approval_after_a_restart`).
-The test passes in isolation, and a full run with a unique `--basetemp` passes
-(808 passed, 3 skipped). The failure is consistent with two test runs sharing
-pytest's default temp root, not with a product defect. Full runs that must be
-trusted now pass an explicit unique `--basetemp`.
+`tests/test_review_ui.py` failed about one run in three with
+`FileNotFoundError` on `repo/extractor.py`. The cause was in the test:
+`qtbot.waitSignal()` returns a `SignalBlocker` and does not block unless it is
+used as a context manager, so three bare calls waited for nothing and the test
+polled the repository while `git merge --ff-only` was still running. `git`
+unlinks each file before writing the merged version, and a poll can land in
+that window.
+
+Fixed by wrapping the action inside the wait
+(`with qtbot.waitSignal(...): panel._apply_recorded_approval()`). The earlier
+explanation - a shared pytest temp root - was wrong and is retracted; a unique
+`--basetemp` did not prevent the failure. The test then passed 5 consecutive
+runs and the full suite passed.
