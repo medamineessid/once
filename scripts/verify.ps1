@@ -126,10 +126,12 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 $logScript = Join-Path $root 'scripts\check_log_append_only.py'
-# TEMPORARY until PR #1 merges (lane merge inserted entries out of order); then switch to prefix.
-$logOutput = & $Python $logScript $targetRef 'docs/ai_engineering_log.md' --mode boundary 2>&1
+# Permanent rule: the file at HEAD must start with the file at the base ref,
+# byte for byte. The temporary `--mode boundary` exception (see docs/WORKFLOW.md
+# and PR #1) is over now that the out-of-order entries are in main's history.
+$logOutput = & $Python $logScript $targetRef 'docs/ai_engineering_log.md' --mode prefix 2>&1
 $logCode = $LASTEXITCODE
-$logNote = "check_log_append_only.py $targetRef docs/ai_engineering_log.md --mode boundary"
+$logNote = "check_log_append_only.py $targetRef docs/ai_engineering_log.md --mode prefix"
 
 Invoke-Check -Name 'git branch --show-current' -Informational -Command { git branch --show-current }
 Invoke-Check -Name 'git status --short'        -Informational -Command { git status --short }
