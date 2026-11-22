@@ -132,10 +132,17 @@ class ResolutionContext:
 
 @dataclass(frozen=True)
 class EvaluatedCandidate:
-    """One candidate with its score and the evidence that produced it."""
+    """One candidate with its score and the evidence that produced it.
+
+    ``score`` orders candidates and includes positional evidence.
+    ``identity_score`` counts only identity evidence (id, name, label, container,
+    role); the clear-gap decision uses it so that a mere position cannot make a
+    candidate look decisively better than its twin.
+    """
 
     candidate: Candidate
     score: int
+    identity_score: int
     matched_groups: int
     matched_kinds: tuple[ClueKind, ...] = ()
 

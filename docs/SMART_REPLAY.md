@@ -75,9 +75,9 @@ StepIntent(
 - **Intent first.** Report text comes from `intent`, never from the resolved
   selector: "Open invoice 1042", not "clicked div:nth-child(3)".
 - **Coordinates are never the primary clue.** A recorded point is
-  `position_hint` only: it may break a tie between candidates that already
-  matched on a semantic clue, it may never create a candidate and never decides
-  the clear gap on its own.
+  `position_hint` only: it may never create a candidate, it adds a point only
+  after an identity clue already matched, and it never contributes to the clear
+  gap that permits acting.
 - **No executable content.** Everything stays declarative and JSON-safe, so the
   existing strict validator keeps applying; unknown keys are rejected, never
   silently repaired.
@@ -135,10 +135,16 @@ per additional independent group. Integer weights keep the gap explainable:
 | agreement bonus, per extra independent group | 10 |
 | position hint within 50 px (tie-break only) | 5 |
 | wrong domain / wrong executable | candidate discarded |
+| different container text (another row/dialog) | candidate discarded |
 
 **Clear-gap rule.** Act only when `top.score >= MIN_CONFIDENCE (30)` and
 `top.score - second.score >= CLEAR_GAP (20)`. A lone exact name (35) clears the
-confidence floor; a lone role (15) or contains-match (20) does not. Otherwise `ASK_USER`
+confidence floor; a lone role (15) or contains-match (20) does not.
+
+The gap is measured on **identity evidence only** (`identity_score`, i.e. id,
+name, label, container, role). Ordinal and position still shape the displayed
+score and are shown as evidence, but they never create the gap: two identical
+rows that differ only by position always ask. Otherwise `ASK_USER`
 (interactive) or `STOP` (unattended). The resolver never returns "best guess":
 it returns `RESOLVED`, `ASK_USER` or `STOP` with the full scored table and a
 one-sentence explanation.

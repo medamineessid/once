@@ -44,6 +44,9 @@ CONTAINS_WEIGHTS: dict[ClueKind, int] = {
 #: Bonus for each additional independent group that also agrees.
 AGREEMENT_BONUS = 10
 
+#: Clues that can order candidates but must never decide a target on their own.
+POSITIONAL_KINDS: frozenset[ClueKind] = frozenset({ClueKind.ORDINAL, ClueKind.POSITION})
+
 
 def normalise_text(value: str) -> str:
     """Normalise text for matching only; the original is kept for reports.
@@ -86,6 +89,31 @@ def _app_scope_disagrees(descriptor: TargetDescriptor, candidate: Candidate) -> 
     return False
 
 
+def _container_conflicts(descriptor: TargetDescriptor, candidate: Candidate) -> bool:
+    """True when the candidate sits in a demonstrably different row or item.
+
+    A recorded container text ("Invoice 1042") is context the user's intent
+    depends on. Finding the same button inside "Invoice 1099" is not a partial
+    match, it is the wrong row, so the candidate is discarded rather than
+    scored lower: no amount of name or role agreement may resurrect it.
+    """
+    expected = [
+        normalise_text(clue.value)
+        for clue in descriptor.clues
+        if clue.kind is ClueKind.CONTAINER_TEXT
+    ]
+    actual = [
+        normalise_text(clue.value)
+        for clue in candidate.clues
+        if clue.kind is ClueKind.CONTAINER_TEXT
+    ]
+    if not expected or not actual:
+        return False
+    return not any(
+        wanted == found or wanted in found for wanted in expected for found in actual if wanted
+    )
+
+
 def _position_bonus(descriptor: TargetDescriptor, candidate: Candidate, score: int) -> int:
     """A recorded point may break a tie, never make a match on its own."""
     if score <= 0 or descriptor.position_hint is None or candidate.position is None:
@@ -114,13 +142,18 @@ def _score_one(descriptor: TargetDescriptor, candidate: Candidate) -> EvaluatedC
         if points > best_per_group.get(group, 0):
             best_per_group[group] = points
             kinds_per_group[group] = descriptor_clue.kind
+    identity_groups = [
+        group for group, kind in kinds_per_group.items() if kind not in POSITIONAL_KINDS
+    ]
+    identity = sum(best_per_group[group] for group in identity_groups)
+    identity_score = identity + max(0, len(identity_groups) - 1) * AGREEMENT_BONUS
     matched_groups = len(best_per_group)
-    semantic = sum(best_per_group.values())
-    score = semantic + max(0, matched_groups - 1) * AGREEMENT_BONUS
-    score += _position_bonus(descriptor, candidate, semantic)
+    score = sum(best_per_group.values()) + max(0, matched_groups - 1) * AGREEMENT_BONUS
+    score += _position_bonus(descriptor, candidate, identity)
     return EvaluatedCandidate(
         candidate=candidate,
         score=score,
+        identity_score=identity_score,
         matched_groups=matched_groups,
         matched_kinds=tuple(kinds_per_group[group] for group in sorted(best_per_group)),
     )
@@ -134,6 +167,7 @@ def score_candidates(
         _score_one(descriptor, candidate)
         for candidate in candidates
         if not _app_scope_disagrees(descriptor, candidate)
+        and not _container_conflicts(descriptor, candidate)
     ]
     scored.sort(key=lambda entry: (-entry.score, entry.candidate.candidate_id))
     return tuple(scored)

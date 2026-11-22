@@ -94,12 +94,15 @@ def test_a_resolution_always_has_a_clear_gap_and_enough_confidence() -> None:
                 continue
             assert result.chosen is not None
             assert result.chosen.enabled
-            scores = sorted((entry.score for entry in result.evaluated), reverse=True)
+            # The decision uses identity evidence only: two twins that differ by
+            # position must never look decisively different.
+            scores = sorted(
+                (entry.identity_score for entry in result.evaluated if entry.candidate.enabled),
+                reverse=True,
+            )
             assert scores[0] >= MIN_CONFIDENCE
             if len(scores) > 1:
                 assert scores[0] - scores[1] >= CLEAR_GAP
-            else:
-                assert scores[0] >= MIN_CONFIDENCE
 
 
 def test_a_choice_only_ever_comes_from_the_supplied_candidates() -> None:

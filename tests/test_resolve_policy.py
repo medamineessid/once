@@ -132,6 +132,37 @@ def test_a_narrow_gap_is_treated_as_ambiguous() -> None:
     assert result.best is not None
 
 
+def test_duplicates_that_differ_only_by_position_ask_instead_of_picking() -> None:
+    """A list where the item moved is not permission to pick the other twin."""
+    descriptor = TargetDescriptor(
+        surface=Surface.DESKTOP,
+        clues=(
+            Clue(ClueKind.NAME, "Beta", "name"),
+            Clue(ClueKind.ROLE, "list item", "role"),
+            Clue(ClueKind.ORDINAL, "1", "ordinal"),
+        ),
+        safety=SafetyClass.READ_ONLY,
+    )
+    twins = (
+        Candidate(
+            "first", (Clue(ClueKind.NAME, "Beta", "name"), Clue(ClueKind.ROLE, "list item", "r"))
+        ),
+        Candidate(
+            "second",
+            (
+                Clue(ClueKind.NAME, "Beta", "name"),
+                Clue(ClueKind.ROLE, "list item", "role"),
+                Clue(ClueKind.ORDINAL, "1", "ordinal"),
+            ),
+        ),
+    )
+
+    result = resolve(descriptor, twins, INTERACTIVE)
+
+    assert result.decision is ResolutionDecision.ASK_USER
+    assert result.reason is ResolutionReason.AMBIGUOUS
+
+
 def test_disabled_candidates_are_not_chosen() -> None:
     candidates = (_button("disabled", "Save", enabled=False),)
 

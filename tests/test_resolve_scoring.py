@@ -146,6 +146,52 @@ def test_position_never_creates_a_candidate_that_matched_nothing() -> None:
     assert scored[0].score == 0
 
 
+def test_a_candidate_in_a_different_row_is_discarded() -> None:
+    """A shared button name inside another invoice is the wrong row, not a tie."""
+    descriptor = _descriptor(
+        Clue(ClueKind.NAME, "Edit", "name"),
+        Clue(ClueKind.CONTAINER_TEXT, "Invoice 1042", "container"),
+    )
+    candidates = (
+        Candidate(
+            "wanted",
+            (
+                Clue(ClueKind.NAME, "Edit", "name"),
+                Clue(ClueKind.CONTAINER_TEXT, "Invoice 1042", "container"),
+            ),
+        ),
+        Candidate(
+            "other-row",
+            (
+                Clue(ClueKind.NAME, "Edit", "name"),
+                Clue(ClueKind.CONTAINER_TEXT, "Invoice 1099", "container"),
+            ),
+        ),
+    )
+
+    scored = score_candidates(descriptor, candidates)
+
+    assert [entry.candidate.candidate_id for entry in scored] == ["wanted"]
+
+
+def test_a_role_and_ordinal_alone_are_not_identity_evidence() -> None:
+    """Position may order candidates but must never make one look identified."""
+    descriptor = _descriptor(
+        Clue(ClueKind.ROLE, "button", "role"), Clue(ClueKind.ORDINAL, "1", "ordinal")
+    )
+    candidates = (
+        Candidate(
+            "second",
+            (Clue(ClueKind.ROLE, "button", "role"), Clue(ClueKind.ORDINAL, "1", "ordinal")),
+        ),
+    )
+
+    scored = score_candidates(descriptor, candidates)
+
+    assert scored[0].score > 0
+    assert scored[0].identity_score == 15
+
+
 def test_a_name_clue_never_matches_a_different_translation() -> None:
     descriptor = _descriptor(Clue(ClueKind.NAME, "Edit", "name"))
     candidates = (Candidate("german", (Clue(ClueKind.NAME, "Bearbeiten", "name"),)),)

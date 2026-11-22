@@ -23,9 +23,14 @@ from .models import (
 
 
 def _step_name(intent: str) -> str:
-    """Quote the user's intent for an explanation, or say "the target"."""
+    """Quote the user's intent for an explanation, or say "the target".
+
+    Plain ASCII quotes: the same sentence is logged to a UTF-8 file, printed on
+    a console and persisted, and typographic quotes have already turned into
+    replacement characters on a cp1252 console.
+    """
     cleaned = intent.strip()
-    return f"\u201c{cleaned}\u201d" if cleaned else "the target"
+    return f'"{cleaned}"' if cleaned else "the target"
 
 
 def _explain(
@@ -47,17 +52,17 @@ def _explain(
     if reason is ResolutionReason.LOW_CONFIDENCE and best is not None:
         return (
             f"Once did not act: {name} was only a partial match "
-            f"(score {best.score}, needed {MIN_CONFIDENCE})."
+            f"(score {best.identity_score}, needed {MIN_CONFIDENCE})."
         )
     if reason is ResolutionReason.AMBIGUOUS and best is not None:
         return (
             f"Once needs a person to choose: {name} matched more than one element "
-            f"(best score {best.score}, next candidate {second_score})."
+            f"(best score {best.identity_score}, next candidate {second_score})."
         )
     if best is not None:
         return (
             f"Found {best.candidate.label} for {name} "
-            f"(score {best.score}, next candidate {second_score or 0})."
+            f"(score {best.identity_score}, next candidate {second_score or 0})."
         )
     # Unreachable in practice; kept so a bug cannot silently produce a success.
     return f"Once did not act on {name}."
@@ -88,9 +93,11 @@ def decide(
 
     best = usable[0]
     second = usable[1] if len(usable) > 1 else None
-    second_score = second.score if second is not None else None
-    confident = best.score >= MIN_CONFIDENCE
-    gap_clear = second is None or (best.score - second.score) >= CLEAR_GAP
+    # Ordering may use position; the decision may not. Two identical rows differ
+    # only by ordinal, and that must ask rather than pick.
+    second_score = second.identity_score if second is not None else None
+    confident = best.identity_score >= MIN_CONFIDENCE
+    gap_clear = second is None or (best.identity_score - second.identity_score) >= CLEAR_GAP
     clear_winner = confident and gap_clear
 
     if descriptor.safety is SafetyClass.DESTRUCTIVE:
