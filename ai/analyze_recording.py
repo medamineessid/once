@@ -261,7 +261,13 @@ def _is_redundant_close_click(kind: object, target: object) -> bool:
 
 
 def _normalize_workflow(recording_id: str, workflow_data: dict) -> dict:
-    """Reshape the untrusted draft onto v3 with defaults; validator stays strict."""
+    """Reshape the untrusted draft onto the current schema; validator stays strict.
+
+    The intent fields are left empty: a provider may not claim a safety class or
+    a recorded descriptor, so an AI step falls back to the derived class (which
+    is DESTRUCTIVE for anything that can change state) and to the existing
+    target-identity replay path.
+    """
     steps = workflow_data.get("steps")
     if not isinstance(steps, list):
         raise AIProviderError("The provider's workflow has no step list.")
@@ -286,8 +292,11 @@ def _normalize_workflow(recording_id: str, workflow_data: dict) -> dict:
                 "message": raw.get("message") or "",
                 "target": target_str,
                 "max_attempts": raw.get("max_attempts", 1),
-                "postcondition": None,
                 "timeout_seconds": raw.get("timeout_seconds", 10.0),
+                "descriptor": None,
+                "expected": None,
+                "safety": None,
+                "wait": None,
             }
         )
     workflow_id = workflow_data.get("workflow_id")
