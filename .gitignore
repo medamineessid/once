@@ -57,6 +57,3 @@ shots/ui-before/
 shots/ui-after/
 shots/ui-polish-before/
 shots/ui-polish-after/
-
-# Local scratch folders (pytest basetemp, ad-hoc scripts)
-.tmp/
