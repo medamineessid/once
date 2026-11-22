@@ -164,15 +164,15 @@ def test_panel_shows_diff_and_enables_approval_after_passing_verification(
     assert "+" in panel._diff_view.toPlainText()
     assert "extractor.py" in panel._changed_files_label.text()
 
-    qtbot.waitSignal(panel._verify_worker_done, timeout=30_000)
-    panel._verify_selected()
+    with qtbot.waitSignal(panel._verify_worker_done, timeout=30_000):
+        panel._verify_selected()
     qtbot.waitUntil(lambda: "verification" in panel.status_text().lower(), timeout=30_000)
 
     qtbot.waitUntil(lambda: panel._approve_button.isEnabled(), timeout=10_000)
-    panel._approve_and_apply()
+    with qtbot.waitSignal(panel._apply_worker_done, timeout=30_000):
+        panel._approve_and_apply()
     qtbot.waitUntil(lambda: panel.status_text().startswith("Applied"), timeout=10_000)
     qtbot.waitUntil(lambda: "105.0" in (repo / "extractor.py").read_text(encoding="utf-8"))
-    qtbot.waitSignal(panel._apply_worker_done, timeout=30_000)
     assert "105.0" in (repo / "extractor.py").read_text(encoding="utf-8")
     records = service.agent_proposals()
     phases = {
@@ -349,8 +349,8 @@ def test_panel_can_apply_a_recorded_approval_after_a_restart(qtbot: QtBot, tmp_p
     assert panel._apply_button.isEnabled()
     assert "Approved; you can apply it now." in panel._blockers_label.text()
 
-    panel._apply_recorded_approval()
-    qtbot.waitSignal(panel._apply_worker_done, timeout=60_000)
+    with qtbot.waitSignal(panel._apply_worker_done, timeout=60_000):
+        panel._apply_recorded_approval()
     qtbot.waitUntil(lambda: "105.0" in (repo / "extractor.py").read_text(encoding="utf-8"))
     qtbot.waitUntil(lambda: not panel._apply_button.isEnabled(), timeout=60_000)
     qtbot.waitUntil(
