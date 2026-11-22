@@ -11,7 +11,11 @@ import pytest
 
 from engine.resolve import Candidate, Clue, ClueKind, SafetyClass, Surface, TargetDescriptor
 from tests.scenarios.catalog import qt_cases, web_cases
-from tests.scenarios.lab import run_matrix, run_scenario
+from tests.scenarios.lab import (
+    run_matrix,
+    run_matrix_through_smart_replay,
+    run_scenario,
+)
 from tests.scenarios.model import Expectation, Intent, LabReport, LabSurface, Scenario, Variant
 
 
@@ -57,6 +61,34 @@ def test_the_matrix_covers_every_expected_outcome() -> None:
     assert report.wrong_actions == 0
     assert report.prompts > 0
     assert len(report.results) >= 15
+
+
+def test_the_web_matrix_is_unchanged_through_the_flag_gated_integration(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with web_cases() as cases:
+        report = run_matrix_through_smart_replay(cases)
+
+    with capsys.disabled():
+        print("\n[web via smart replay]")
+        print(report.summary())
+
+    assert report.wrong_actions == 0, [result.line for result in report.failures]
+    assert not report.failures, [result.line for result in report.failures]
+
+
+def test_the_qt_matrix_is_unchanged_through_the_flag_gated_integration(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with qt_cases() as cases:
+        report = run_matrix_through_smart_replay(cases)
+
+    with capsys.disabled():
+        print("\n[qt via smart replay]")
+        print(report.summary())
+
+    assert report.wrong_actions == 0, [result.line for result in report.failures]
+    assert not report.failures, [result.line for result in report.failures]
 
 
 class _WrongElementAdapter:

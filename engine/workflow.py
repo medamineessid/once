@@ -235,6 +235,23 @@ class Workflow:
 
 
 @dataclass(frozen=True)
+class StepResolution:
+    """Why a target was chosen, kept for the run report and the Activity page.
+
+    ``strategy`` names the clue kinds that identified the candidate, ``differed``
+    says what no longer matches the recording, so a report can explain a
+    resolution months later without replaying it.
+    """
+
+    decision: str
+    strategy: tuple[str, ...]
+    confidence: int
+    alternatives: tuple[str, ...]
+    differed: tuple[str, ...]
+    explanation: str
+
+
+@dataclass(frozen=True)
 class StepResult:
     """The observable result of one step."""
 
@@ -242,6 +259,7 @@ class StepResult:
     status: StepStatus
     message: str
     evidence: tuple[str, ...] = ()
+    resolution: StepResolution | None = None
 
 
 @dataclass(frozen=True)
@@ -274,6 +292,16 @@ def _final_status(results: Sequence[StepResult], *, performed_any: bool) -> Work
 
 CancelCheck = Callable[[], bool]
 ProgressCallback = Callable[[StepResult], None]
+
+
+class SmartReplayProvider(Protocol):
+    """Optional smart-replay layer consulted only for descriptor steps."""
+
+    def handles(self, step: WorkflowStep) -> bool: ...
+
+    def run_step(self, step: WorkflowStep, cancel_check: CancelCheck) -> StepResult: ...
+
+
 WindowInspector = Callable[[str], tuple[str, ...]]
 UIElementInspector = Callable[[str], tuple[str, ...]]
 
@@ -1046,6 +1074,7 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        smart_replay: SmartReplayProvider | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
         self.validate(workflow)
@@ -1084,6 +1113,7 @@ class WorkflowRunner:
                 ui_element_inspector,
                 desktop_actions,
                 browser_actions,
+                smart_replay,
             )
             results.append(result)
             if progress_callback is not None:
@@ -1126,6 +1156,7 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        smart_replay: SmartReplayProvider | None = None,
     ) -> StepResult:
         attempts: list[str] = []
         for attempt in range(1, step.max_attempts + 1):
@@ -1141,6 +1172,7 @@ class WorkflowRunner:
                 and ui_element_inspector is None
                 and desktop_actions is None
                 and browser_actions is None
+                and smart_replay is None
             ):
                 result = self._run_once(step, allowed_root)
             else:
@@ -1151,6 +1183,8 @@ class WorkflowRunner:
                     ui_element_inspector,
                     desktop_actions,
                     browser_actions,
+                    smart_replay,
+                    cancel_check,
                 )
             if result.status in CONTINUING_STEP_STATUSES:
                 if step.postcondition is None:
@@ -1161,6 +1195,7 @@ class WorkflowRunner:
                         result.status,
                         f"{result.message} (attempt {attempt})",
                         tuple(attempts),
+                        resolution=result.resolution,
                     )
                 postcondition = self._check_postcondition(step, allowed_root)
                 if postcondition.status is StepStatus.VERIFIED:
@@ -1182,6 +1217,7 @@ class WorkflowRunner:
                 result.status,
                 f"{result.message} after {attempt} attempt(s).",
                 tuple(attempts) + result.evidence,
+                resolution=result.resolution,
             )
         raise AssertionError("Retry loop must return a result.")
 
@@ -1193,7 +1229,11 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        smart_replay: SmartReplayProvider | None = None,
+        cancel_check: CancelCheck | None = None,
     ) -> StepResult:
+        if smart_replay is not None and smart_replay.handles(step):
+            return smart_replay.run_step(step, cancel_check or (lambda: False))
         if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
             return self._run_path_step(step, allowed_root)
         if step.kind is StepKind.VERIFY_FILE_TEXT:

@@ -11,6 +11,7 @@ from .workflow import (
     CancelCheck,
     DesktopActions,
     ProgressCallback,
+    SmartReplayProvider,
     StepKind,
     StepResult,
     StepStatus,
@@ -140,6 +141,7 @@ class ReplayExecutor:
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        smart_replay: SmartReplayProvider | None = None,
     ) -> WorkflowRun:
         """Preview or execute the allowlisted read-only actions."""
         self.validate(workflow)
@@ -173,4 +175,5 @@ class ReplayExecutor:
             ui_element_inspector=ui_element_inspector,
             desktop_actions=desktop_actions,
             browser_actions=browser_actions,
+            smart_replay=smart_replay,
         )
