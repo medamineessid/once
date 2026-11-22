@@ -26,6 +26,45 @@
 - [x] **24. Make the product work on a real desktop**: `Ctrl+Alt+Q` now actually fires (pynput's hotkey parser never matched the key on this layout; the switch tracks ctrl/alt/virtual-key itself), and `scripts/prove_kill_switch.py` went from FAILED (`triggered: false`) to `status: CANCELLED`, `kill switch triggered: True`, 0 leftover windows. A **Stop** button appears in the footer only while a run is live and cancels the active run. **Close works on Windows 11 Notepad**: ownership is "window new since launch + same image file name", the app's own save prompt is answered with "don't save" (no file is written), and a window that vanishes mid-close counts as closed. Recorded drafts no longer contain window-title-change steps, and launch/close steps are named "Open Notepad" / "Close Notepad". Activity rows carry duration and the first plain failure reason, with per-run **Run again** (through the same approval gate) and a red **Delete**. A missing control reports "Could not find the 'Save' button in Notepad." and a retried step waits 0.4s instead of repeating the same miss. `{name}` in a step is asked for at Run and substituted before approval. `ruff` targets py312 again, so `except (A, B):` stays parseable on the supported minimum. Proven by `scripts/prove_notepad_flow.py` (real desktop: 7 recorded events -> 4 clean steps -> two runs, both SUCCEEDED, 0 windows left behind), `shots/after/notepad-flow.json`, `shots/after/kill-switch.json`, `shots/design-v4/activity-runs.png`, `tests/test_run_controls.py`, `tests/test_parameters.py`, `tests/test_app_starts.py`, and a full suite of `782 passed, 3 skipped in 118.36s`.
 
 
+## Smart replay: three slices (2026-11-22)
+
+Branch `feat/smart-replay-core` (draft PR #4), synced with `main` after PR #1
+merged. Each slice has its own branch and PR into the umbrella branch.
+
+| Slice | Branch | PR | State |
+| --- | --- | --- | --- |
+| S1 step schema 4 | `slice/s1-step-schema` | #6 | implemented, tested |
+| S2 flag-gated integration | `slice/s2-replay-flag` | #7 | implemented, tested, stacked on S1 |
+| S3 UI Automation adapter | `slice/s3-uia-adapter` | #8 | implemented, tested, stacked on S2 |
+
+S1: `WorkflowStep` gained `descriptor`, `expected`, `safety` and `wait`; the
+workflow file format is schema 4 and reads v1-v3 files unchanged, migrating them
+only when saved. `postcondition` and `expected` compare equal, so old files keep
+their meaning. A descriptor with no clue but a point is refused. Found and fixed
+a real compatibility break: `ai/analyze_recording._normalize_workflow` still
+emitted schema-3 keys while stamping the current version, so AI drafts were
+silently replaced by the local mapping.
+
+S2: `engine/smart_replay.py` resolves a recorded step through the scoring layer,
+records strategy/confidence/alternatives/what-differed per step, bounds its
+waits on an injected clock and cancellation check, and refuses to ask in an
+unattended run or to act on a destructive step. Off by default
+(`ONCE_SMART_REPLAY=1`). The lab matrix now runs twice, once through the bare
+resolver and once through this layer: web 6/6 and Qt 13/13, WRONG actions 0.
+
+S3: `integrations/uia_adapter.py` captures independent clues from recorded
+metadata (password fields and position-only elements produce no descriptor) and
+replays them by re-resolving the element before every attempt: UI Automation
+pattern, then keyboard after confirming the window is in front, then the
+DPI-converted centre. Ambiguity, a vanished element and a disabled control are
+refused rather than guessed.
+
+Verification (this session, pasted): full suite `953 passed, 4 skipped`;
+`ruff check .` clean; lab 6/6 + 13/13 with 0 wrong actions on both paths.
+Real desktop, a real browser and the opt-in `ONCE_REAL_DESKTOP=1` test were
+**not** run: those remain NOT VERIFIED.
+
+
 ## Decisions
 1. **Kill switch testing in headless shell**: Since `run_command` executes in a background shell without physical keyboard input and Windows `WH_KEYBOARD_LL` ignores synthetic input when no interactive console/foreground window is attached, we verified hook installation (`SystemHook` handle non-zero) and unit-tested trigger semantics via `FakeListener`, documenting the physical-input limitation.
 2. **OS shell process list**: Filtered `startmenuexperiencehost.exe`, `applicationframehost.exe`, `shellexperiencehost.exe`, `searchhost.exe`, `textinputhost.exe`, `systemsettings.exe`, and `explorer.exe` from `LAUNCH_APPLICATION` / `CLOSE_APPLICATION` lifecycle steps because they are Windows shell/UWP container hosts, not standalone user-launched applications.

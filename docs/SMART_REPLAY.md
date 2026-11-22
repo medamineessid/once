@@ -1,10 +1,15 @@
 # Smart replay — design (2026-11-22)
 
-Status: **proposal + first implementation slice.** `engine/resolve/` is
-implemented on branch `feat/smart-replay-core` and exercised by the headless
-scenario lab in `tests/scenarios/`. Nothing here authorises unrestricted
+Status: **slices 1–3 implemented on `feat/smart-replay-core`.** The resolver
+(`engine/resolve/`), the flag-gated integration (`engine/smart_replay.py`), the
+schema-4 step fields (`engine/workflow.py`, `storage/workflows.py`) and the UI
+Automation capture/replay adapter (`integrations/uia_adapter.py`) are written
+and tested, and the headless scenario lab in `tests/scenarios/` runs both through
+the resolver and through the integration. The Chrome adapter, self-heal and the
+ask-the-user panel are **not** built (§14). Nothing here authorises unrestricted
 replay: every mutating step still passes the existing approval gate, allowlist,
-boundedness and cancellation checks.
+boundedness and cancellation checks, and the layer is off unless
+`ONCE_SMART_REPLAY=1`.
 
 ## 1. The problem
 
@@ -42,6 +47,12 @@ Real, implemented and tested:
 | Recording with UIA metadata and password redaction | `integrations/recorder.py:190`, `recorder/models.py:38` |
 | Fault-stop hotkey (Ctrl+Alt+Q), absent from the shortcut allowlist | `integrations/kill_switch.py:112`, `engine/workflow.py:166` |
 | Run-report events with plain-language step messages | `controller/run_events.py:89` |
+| Schema 4: descriptor (independent clues), expected outcome, safety class, bounded wait | `engine/workflow.py:149`, `storage/workflows.py` |
+| Scored resolver with a clear-gap rule and three-way decision (act / ask / stop) | `engine/resolve/resolver.py`, `engine/resolve/policy.py` |
+| Flag-gated integration: per-step resolution evidence, bounded waits, no unattended ask | `engine/smart_replay.py` |
+| Desktop capture: clues from recorded metadata; password and position-only refused | `integrations/uia_adapter.py:descriptor_from_element` |
+| Desktop replay: re-resolve per attempt, pattern → keyboard → mouse centre | `integrations/uia_adapter.py:UiaTargetAdapter` |
+| Foreground check before keys, DPI-converted click point | `integrations/uia_adapter.py:_focus_and_verify`, `PywinautoSurface.physical_point` |
 
 Fake-only or absent (later slices, §14):
 
@@ -50,9 +61,13 @@ Fake-only or absent (later slices, §14):
   candidate workflow; they do **not** resolve targets at replay time.
 - A recorded point is only observation text in a draft
   (`recorder/drafts.py:_describe`); a coordinate is never a step target today.
-- No scored resolver, no confidence gap, no ambiguity policy, no safety class,
-  no locale/DPI tolerance, no foreground-window check before a click, no "row
-  by text rule + next page", no self-heal.
+- No Chrome adapter: a `descriptor` on a browser step is still resolved by the
+  engine's scoring layer, but no CDP-backed adapter supplies candidates or
+  performs the action, so the lab's web variants use a fake adapter.
+- No self-heal, no "row by text rule + next page", no ask-the-user panel: an
+  `ASK_USER` decision is reported as a stop until the panel exists.
+- Desktop postconditions are observed at window-title level (or the last value
+  read back), not by reading arbitrary element text.
 - `controller/run_events.py:240 FakeRunEventSource` is test-only.
 - Real-desktop replay is **NOT VERIFIED** in this session (tests here are
   fake-adapter based).
@@ -203,10 +218,12 @@ an advert is inserted.
   boundary.
 - Only allowlisted step kinds replay (`engine/replay.py:48`); the hotkey
   combination is absent from `ALLOWED_SHORTCUTS` (`engine/workflow.py:166`).
-- **Foreground check — not implemented.** Before a desktop click the engine must
-  confirm the target window is the foreground window of the expected process,
-  and abort otherwise. Today only the recorder reads the foreground window
-  (`integrations/recorder.py:131`). Slice 3 in §14.
+- **Foreground check — implemented in the adapter.** Before any key is sent,
+  `UiaTargetAdapter._focus_and_verify` focuses the target and compares
+  `GetForegroundWindow()` with the window's own handle; if they differ the
+  attempt is refused and no key is sent. The mouse-centre fallback may still
+  run, because it names an exact point instead of relying on focus. Verified
+  against a fake surface only; the real Win32 path is **NOT VERIFIED**.
 
 ## 12. Locale and DPI tolerance
 
@@ -215,10 +232,13 @@ an advert is inserted.
 - Localisation is not guessed: recorded "Edit" and live "Bearbeiten" are not a
   name match, while a shared automation id still is; if the translated text is
   the only remaining evidence, ask.
-- Coordinates are logical, converted through the window's DPI awareness
-  (`integrations/windows_desktop.py:226`), and a position hint is trusted only
-  after a semantic match, so 150 % scaling cannot turn a tie-break into a
-  target choice.
+- UI Automation rectangles are already physical pixels; a point that came from
+  a screenshot or a scaled window is not. `PywinautoSurface.physical_point`
+  scales by `GetDpiForWindow`, and the adapter asks for the converted point
+  right before it clicks, so 150 % scaling cannot move a click off the element.
+- A position hint is trusted only after a semantic match, so scaling can never
+  turn a tie-break into a target choice — the resolver gives position weight
+  only to a candidate that already matched an identity clue.
 
 ## 13. Run-report explanations
 
@@ -233,14 +253,18 @@ Self-heal (rewriting stored clues after a successful resolution) is opt-in per
 step and per run, shows an old → new diff, and is refused for `DESTRUCTIVE`
 steps. No silent learning.
 
-Not built here, in dependency order:
+Slices, in dependency order — the first three are merged-ready on this branch:
 
-1. **Step schema**: `descriptor`, `expected`, `safety`, `wait` on `WorkflowStep`
-   plus the JSON validator and a version bump (`storage/workflows.py`).
-2. **Recorder context**: label/container text and the surrounding tree
-   (`integrations/recorder.py`, `recorder/models.py`).
-3. **Foreground guard** before desktop clicks, DPI-aware point conversion
-   (`integrations/windows_desktop.py`).
+1. **Step schema** — done: `descriptor`, `expected`, `safety`, `wait` on
+   `WorkflowStep`, strict v4 read/write, v1–v3 files still load
+   (`engine/workflow.py`, `storage/workflows.py`).
+2. **Recorder context** — partly done: `descriptor_from_element` and
+   `descriptor_from_event` capture clues from what the recorder already stores;
+   label/container text and the surrounding tree are still missing, and events
+   do not persist a descriptor yet (`integrations/uia_adapter.py`).
+3. **Foreground guard and DPI points** — done in the new adapter
+   (`integrations/uia_adapter.py`); the older `PywinautoDesktopActions` path is
+   unchanged.
 4. **List paging/scroll** in the browser provider
    (`integrations/chrome_devtools.py`), using the tab APIs instead of refusing
    when more than one tab is open (`:344`).
@@ -263,3 +287,18 @@ Not built here, in dependency order:
   `perform`, `observe`, `truth_id`), counts outcomes and **WRONG actions** (an
   action on the wrong element, or any action when the expectation was
   ask/stop). Wrong actions must be zero.
+
+Since slice 2 the same matrix also runs through the real integration
+(`lab.run_scenario_through_smart_replay`), so a passing lab result means the
+flag-gated layer makes the same decision the design specifies, not just that the
+resolver does. Last measured run (2026-11-22, both paths):
+
+```
+web  pass rate: 100% (6/6 variants), prompts: 1, WRONG actions: 0
+Qt   pass rate: 100% (13/13 variants), prompts: 5, WRONG actions: 0
+```
+
+The lab is headless and fake-adapter based. It is not a claim about a real
+Windows desktop, a real browser, or a real application: those remain **NOT
+VERIFIED** until the Chrome adapter and the opt-in real-desktop test
+(`ONCE_REAL_DESKTOP=1`) are actually run on a machine with a desktop.
