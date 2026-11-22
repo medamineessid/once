@@ -73,3 +73,39 @@ Fixed by wrapping the action inside the wait
 explanation - a shared pytest temp root - was wrong and is retracted; a unique
 `--basetemp` did not prevent the failure. The test then passed 5 consecutive
 runs and the full suite passed.
+
+## CI gate and SonarCloud triage (PR #1, 2026-11-21/22)
+
+`main` carried a rule that counted deleted lines in
+`docs/ai_engineering_log.md` with `git diff --numstat`. It reported a deletion
+whenever the base copy ended without a trailing newline, which `main`'s copy
+did, so the gate failed on a file that had only gained lines. The rule is now
+`scripts/check_log_append_only.py`: the content at HEAD must start with the
+content at the base ref, byte for byte, after CRLF normalisation. It is
+strictly stricter than the deletion count (it also catches a rewrite that keeps
+the line count), and it is covered by 33 tests.
+
+PR #1's branch inserted entries between the log header and the first
+`2026-10-21` entry, so prefix mode cannot pass until the log is reordered, and
+reordering is itself a rewrite of an append-only file. `--mode boundary` is a
+documented, temporary exception (see above); `prefix` remains the default and
+the follow-up PR switches `verify.ps1` back.
+
+SonarCloud findings on the PR: 19 open bugs/vulnerabilities. All were triaged
+before any code was changed.
+
+| Rule | Count | Where | Verdict | Action |
+| --- | --- | --- | --- | --- |
+| `pythonsecurity:S8706` | 1 | `storage/database.py:198` | REAL: a path is not a connection string; a leading `file:` or a `?`/`#` changes how URI mode opens it | resolve and encode with `Path.as_uri()`, open with `uri=True`; tests for space, `#`, `%` and the escaping of `?` |
+| `python:S6663` | 15 | `storage/history.py:434-443`, `storage/app_registry.py:172-176` | FALSE POSITIVE: the rows are `sqlite3.Row`, indexable by column name | mapped with `dict(row)` so the read is explicit; same behaviour |
+| `pythonbugs:S2583` | 1 | `integrations/recorder.py:590` | REAL dead code: `_file_signer_windows()` is a stub returning `None`, so `if signer:` never ran | removed the branch and the two unused stubs; `executable_signer` stays `None` |
+| `pythonsecurity:S8707` | 1 | `scripts/capture_ui_shots.py:38` | REAL: the screenshot folder came straight from `sys.argv` | `resolve_output_dir()` accepts only `shots/` or the temp folder; 6 tests |
+| `pythonsecurity:S8705` | 1 | `scripts/check_log_append_only.py:179` | REAL: the base ref and path reached a git argument vector | object spec now goes to `git cat-file --batch` on stdin; ref/path validation kept as defence in depth |
+
+After the fixes SonarCloud reported no open bug or vulnerability on the PR, and
+both ratings on new code returned to A.
+
+A separate intermittent failure in `tests/test_review_ui.py` was fixed in the
+same PR: `qtbot.waitSignal()` does not block unless it is used as a context
+manager, so the test polled the repository while `git merge --ff-only` was still
+replacing `extractor.py`.
