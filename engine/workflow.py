@@ -13,10 +13,16 @@ from typing import Protocol
 from uuid import uuid4
 
 from .errors import ExecutionError, WorkflowValidationError
+from .resolve.models import Clue, ClueKind, SafetyClass, Surface, TargetDescriptor
 
 RETRY_DELAY_SECONDS = 0.4
 MAX_WORKFLOW_STEPS = 100
 MAX_TEXT_LENGTH = 500
+MAX_DESCRIPTOR_CLUES = 32
+MAX_CLUE_VALUE_LENGTH = 500
+MAX_EXPECTED_VALUE_LENGTH = 500
+MIN_POLL_INTERVAL_SECONDS = 0.05
+MAX_POLL_INTERVAL_SECONDS = 2.0
 
 
 class StepKind(StrEnum):
@@ -88,6 +94,93 @@ class WorkflowStatus(StrEnum):
     PARTIALLY_PERFORMED = "PARTIALLY_PERFORMED"
 
 
+class ExpectedKind(StrEnum):
+    """What an action promises to change, checked after it runs."""
+
+    PATH_EXISTS = "PATH_EXISTS"
+    TEXT_APPEARS = "TEXT_APPEARS"
+    TEXT_DISAPPEARS = "TEXT_DISAPPEARS"
+    VALUE_EQUALS = "VALUE_EQUALS"
+    URL_MATCHES = "URL_MATCHES"
+    ELEMENT_ENABLED = "ELEMENT_ENABLED"
+    WINDOW_TITLE = "WINDOW_TITLE"
+    FOCUSED_ELEMENT = "FOCUSED_ELEMENT"
+
+
+#: Expected outcomes that cannot be verified without saying what to look for.
+VALUE_REQUIRED_EXPECTATIONS: frozenset[ExpectedKind] = frozenset(
+    {
+        ExpectedKind.TEXT_APPEARS,
+        ExpectedKind.TEXT_DISAPPEARS,
+        ExpectedKind.VALUE_EQUALS,
+        ExpectedKind.URL_MATCHES,
+        ExpectedKind.WINDOW_TITLE,
+        ExpectedKind.FOCUSED_ELEMENT,
+    }
+)
+
+
+@dataclass(frozen=True)
+class ExpectedOutcome:
+    """The observable result a step must produce to count as successful."""
+
+    kind: ExpectedKind
+    value: str = ""
+
+
+class WaitCondition(StrEnum):
+    """The observable condition a bounded wait polls for."""
+
+    ELEMENT_PRESENT = "ELEMENT_PRESENT"
+    ELEMENT_ENABLED = "ELEMENT_ENABLED"
+    TEXT_APPEARS = "TEXT_APPEARS"
+
+
+@dataclass(frozen=True)
+class WaitBudget:
+    """A bounded poll instead of a fixed sleep (docs/SMART_REPLAY.md §8)."""
+
+    condition: WaitCondition
+    timeout_seconds: float = 15.0
+    poll_interval_seconds: float = 0.2
+
+
+@dataclass(frozen=True)
+class StepDescriptor:
+    """What a recorded step meant, as independent clues (never just a point)."""
+
+    surface: Surface
+    clues: tuple[Clue, ...]
+    position_hint: tuple[int, int] | None = None
+
+    def to_target(self, safety: SafetyClass) -> TargetDescriptor:
+        """Return the resolver's view of this descriptor with the step's safety."""
+        return TargetDescriptor(
+            surface=self.surface,
+            clues=self.clues,
+            safety=safety,
+            position_hint=self.position_hint,
+        )
+
+
+#: Step kinds that provably cannot change anything on the machine.
+READ_ONLY_STEP_KINDS: frozenset[StepKind] = frozenset(
+    {
+        StepKind.REPORT,
+        StepKind.FAIL,
+        StepKind.INSPECT_PATH,
+        StepKind.VERIFY_PATH_EXISTS,
+        StepKind.INSPECT_WINDOW,
+        StepKind.INSPECT_UI_ELEMENT,
+        StepKind.VERIFY_FILE_TEXT,
+        StepKind.INSPECT_PAGE,
+        StepKind.FIND_PAGE_ELEMENT,
+        StepKind.WAIT_PAGE,
+        StepKind.WAIT_WINDOW,
+    }
+)
+
+
 @dataclass(frozen=True)
 class WorkflowStep:
     """A bounded, declarative step with no executable user-supplied code."""
@@ -100,6 +193,36 @@ class WorkflowStep:
     max_attempts: int = 1
     postcondition: PostconditionKind | None = None
     timeout_seconds: float = 30.0
+    descriptor: StepDescriptor | None = None
+    expected: ExpectedOutcome | None = None
+    safety: SafetyClass | None = None
+    wait: WaitBudget | None = None
+
+    def __post_init__(self) -> None:
+        """Normalise the intent fields so the two encodings cannot disagree.
+
+        ``postcondition`` is the schema 1-3 spelling of ``expected``. Whichever
+        one a caller supplies, the other is derived here, so a workflow loaded
+        from an old file and a workflow built from a new one compare equal.
+
+        An undeclared safety class is derived from the kind: read-only kinds are
+        provably harmless, everything else must be confirmed by a person.
+        """
+        if self.safety is None:
+            derived = (
+                SafetyClass.READ_ONLY
+                if self.kind in READ_ONLY_STEP_KINDS
+                else SafetyClass.DESTRUCTIVE
+            )
+            object.__setattr__(self, "safety", derived)
+        if self.postcondition is not None and self.expected is None:
+            object.__setattr__(self, "expected", ExpectedOutcome(ExpectedKind.PATH_EXISTS, ""))
+        if (
+            self.expected is not None
+            and self.expected.kind is ExpectedKind.PATH_EXISTS
+            and self.postcondition is None
+        ):
+            object.__setattr__(self, "postcondition", PostconditionKind.PATH_EXISTS)
 
 
 @dataclass(frozen=True)
@@ -112,6 +235,23 @@ class Workflow:
 
 
 @dataclass(frozen=True)
+class StepResolution:
+    """Why a target was chosen, kept for the run report and the Activity page.
+
+    ``strategy`` names the clue kinds that identified the candidate, ``differed``
+    says what no longer matches the recording, so a report can explain a
+    resolution months later without replaying it.
+    """
+
+    decision: str
+    strategy: tuple[str, ...]
+    confidence: int
+    alternatives: tuple[str, ...]
+    differed: tuple[str, ...]
+    explanation: str
+
+
+@dataclass(frozen=True)
 class StepResult:
     """The observable result of one step."""
 
@@ -119,6 +259,7 @@ class StepResult:
     status: StepStatus
     message: str
     evidence: tuple[str, ...] = ()
+    resolution: StepResolution | None = None
 
 
 @dataclass(frozen=True)
@@ -151,6 +292,16 @@ def _final_status(results: Sequence[StepResult], *, performed_any: bool) -> Work
 
 CancelCheck = Callable[[], bool]
 ProgressCallback = Callable[[StepResult], None]
+
+
+class SmartReplayProvider(Protocol):
+    """Optional smart-replay layer consulted only for descriptor steps."""
+
+    def handles(self, step: WorkflowStep) -> bool: ...
+
+    def run_step(self, step: WorkflowStep, cancel_check: CancelCheck) -> StepResult: ...
+
+
 WindowInspector = Callable[[str], tuple[str, ...]]
 UIElementInspector = Callable[[str], tuple[str, ...]]
 
@@ -704,6 +855,96 @@ def _validate_verify_file_text_target(step: WorkflowStep) -> None:
     _require_bounded_string(step, target, "contains")
 
 
+def _validate_step_intent(step: WorkflowStep) -> None:
+    """Validate the smart-replay fields: descriptor, expected outcome, wait.
+
+    Every check fails closed: an unreadable descriptor is refused rather than
+    degraded into a coordinate click (docs/SMART_REPLAY.md §3, §4, §8).
+    """
+    if step.safety is not None and not isinstance(step.safety, SafetyClass):
+        raise WorkflowValidationError(f"Step {step.step_id} has an unknown safety class.")
+    if step.expected is not None:
+        if not isinstance(step.expected.kind, ExpectedKind):
+            raise WorkflowValidationError(f"Step {step.step_id} has an unknown expected outcome.")
+        if len(step.expected.value) > MAX_EXPECTED_VALUE_LENGTH:
+            raise WorkflowValidationError(f"Step {step.step_id} expected outcome is too long.")
+        needs_value = step.expected.kind in VALUE_REQUIRED_EXPECTATIONS
+        if needs_value and not step.expected.value.strip():
+            raise WorkflowValidationError(
+                f"Step {step.step_id} must say what it expects to see for "
+                f"{step.expected.kind.value}."
+            )
+        if not needs_value and step.expected.value:
+            raise WorkflowValidationError(
+                f"Step {step.step_id} expected {step.expected.kind.value} takes no value."
+            )
+        if step.postcondition is not None and step.expected.kind is not ExpectedKind.PATH_EXISTS:
+            raise WorkflowValidationError(
+                f"Step {step.step_id} sets both a postcondition and a different "
+                "expected outcome. Keep one."
+            )
+    if step.descriptor is not None:
+        _validate_descriptor(step, step.descriptor)
+    if step.wait is not None:
+        _validate_wait(step, step.wait)
+
+
+def _validate_descriptor(step: WorkflowStep, descriptor: StepDescriptor) -> None:
+    if not isinstance(descriptor.surface, Surface):
+        raise WorkflowValidationError(f"Step {step.step_id} has an unknown target surface.")
+    if not descriptor.clues:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs at least one recorded clue to find its target."
+        )
+    if len(descriptor.clues) > MAX_DESCRIPTOR_CLUES:
+        raise WorkflowValidationError(f"Step {step.step_id} records too many clues.")
+    for clue in descriptor.clues:
+        if not isinstance(clue.kind, ClueKind):
+            raise WorkflowValidationError(f"Step {step.step_id} has an unknown clue kind.")
+        if not isinstance(clue.value, str):
+            raise WorkflowValidationError(f"Step {step.step_id} clue values must be text.")
+        if len(clue.value) > MAX_CLUE_VALUE_LENGTH:
+            raise WorkflowValidationError(f"Step {step.step_id} has a clue that is too long.")
+    if all(clue.kind is ClueKind.POSITION for clue in descriptor.clues):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} records only a position. A recorded point may "
+            "help but never identify a target on its own."
+        )
+    hint = descriptor.position_hint
+    if hint is not None and (
+        len(hint) != 2
+        or any(isinstance(value, bool) or not isinstance(value, int) for value in hint)
+    ):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} position hint must be two whole numbers."
+        )
+
+
+def _validate_wait(step: WorkflowStep, wait: WaitBudget) -> None:
+    if not isinstance(wait.condition, WaitCondition):
+        raise WorkflowValidationError(f"Step {step.step_id} has an unknown wait condition.")
+    for value, label, low, high in (
+        (
+            wait.timeout_seconds,
+            "timeout_seconds",
+            MIN_STEP_TIMEOUT_SECONDS,
+            MAX_STEP_TIMEOUT_SECONDS,
+        ),
+        (
+            wait.poll_interval_seconds,
+            "poll_interval_seconds",
+            MIN_POLL_INTERVAL_SECONDS,
+            MAX_POLL_INTERVAL_SECONDS,
+        ),
+    ):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise WorkflowValidationError(f"Step {step.step_id} wait {label} must be a number.")
+        if not low <= value <= high:
+            raise WorkflowValidationError(
+                f"Step {step.step_id} wait {label} must be between {low} and {high}."
+            )
+
+
 class WorkflowRunner:
     """Execute known step kinds in order and retain an inspectable run result."""
 
@@ -779,6 +1020,7 @@ class WorkflowRunner:
                     "is not a plain path. Use a separate VERIFY_PATH_EXISTS or "
                     "VERIFY_FILE_TEXT step instead."
                 )
+            _validate_step_intent(step)
             if step.postcondition is not None and not step.target:
                 raise WorkflowValidationError(
                     f"Step {step.step_id} needs a target for its postcondition."
@@ -832,6 +1074,7 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        smart_replay: SmartReplayProvider | None = None,
     ) -> WorkflowRun:
         """Run a workflow until completion, failure, or cancellation."""
         self.validate(workflow)
@@ -870,6 +1113,7 @@ class WorkflowRunner:
                 ui_element_inspector,
                 desktop_actions,
                 browser_actions,
+                smart_replay,
             )
             results.append(result)
             if progress_callback is not None:
@@ -912,6 +1156,7 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        smart_replay: SmartReplayProvider | None = None,
     ) -> StepResult:
         attempts: list[str] = []
         for attempt in range(1, step.max_attempts + 1):
@@ -927,6 +1172,7 @@ class WorkflowRunner:
                 and ui_element_inspector is None
                 and desktop_actions is None
                 and browser_actions is None
+                and smart_replay is None
             ):
                 result = self._run_once(step, allowed_root)
             else:
@@ -937,6 +1183,8 @@ class WorkflowRunner:
                     ui_element_inspector,
                     desktop_actions,
                     browser_actions,
+                    smart_replay,
+                    cancel_check,
                 )
             if result.status in CONTINUING_STEP_STATUSES:
                 if step.postcondition is None:
@@ -947,6 +1195,7 @@ class WorkflowRunner:
                         result.status,
                         f"{result.message} (attempt {attempt})",
                         tuple(attempts),
+                        resolution=result.resolution,
                     )
                 postcondition = self._check_postcondition(step, allowed_root)
                 if postcondition.status is StepStatus.VERIFIED:
@@ -968,6 +1217,7 @@ class WorkflowRunner:
                 result.status,
                 f"{result.message} after {attempt} attempt(s).",
                 tuple(attempts) + result.evidence,
+                resolution=result.resolution,
             )
         raise AssertionError("Retry loop must return a result.")
 
@@ -979,7 +1229,11 @@ class WorkflowRunner:
         ui_element_inspector: UIElementInspector | None = None,
         desktop_actions: DesktopActions | None = None,
         browser_actions: BrowserActions | None = None,
+        smart_replay: SmartReplayProvider | None = None,
+        cancel_check: CancelCheck | None = None,
     ) -> StepResult:
+        if smart_replay is not None and smart_replay.handles(step):
+            return smart_replay.run_step(step, cancel_check or (lambda: False))
         if step.kind in (StepKind.INSPECT_PATH, StepKind.VERIFY_PATH_EXISTS):
             return self._run_path_step(step, allowed_root)
         if step.kind is StepKind.VERIFY_FILE_TEXT:

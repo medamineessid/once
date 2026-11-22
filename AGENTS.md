@@ -288,6 +288,36 @@ Determinism: all orderings (files, operations, sequence numbers) are determinist
 - Do NOT weaken, delete, or skip a failing test to get green. If a test is wrong, explain why in the report and fix the test in a separate, clearly described commit.
 - Coverage: `pytest --cov=engine --cov=storage --cov=controller --cov-report=term-missing`; target >= 90% line coverage on engine/ and storage/ by Step 14. Report the real number; never estimate.
 
+# STANDING RULE — VISUAL VERIFICATION (every change, from 2026-11-22)
+
+Before committing or opening a PR for any change a user can see (ui/, strings,
+styles, icons, fonts, layouts, run reports, dialogs), or any change that alters
+what a run report or the Activity page shows:
+
+1. Run `python app.py --screenshot shots/<topic>/<page>.png --page <name>` for
+every affected page, at 100% and `QT_SCALE_FACTOR=1.5`, and
+`python app.py --diagnose` for fonts and icon sizes. Capture only the app
+window (`window.grab`), never the full desktop.
+2. Look at each image with whatever image-viewing tool is available. If images
+cannot be viewed, say so explicitly and rely on the automated checks below;
+never write "looks good" without viewing.
+3. Check and report: clipped or overlapping text, wrong font family
+(`QFontInfo`), blurry icons, contrast below 4.5:1, misalignment, large empty
+gaps, wrong sidebar highlight, leaked internal ids or enum names, mixed
+languages, horizontal scrollbars at 960px and 1600px.
+4. Automated checks (always): geometry tests for clipping and overlap, pixel
+diff against the previous screenshot (report the percentage changed), the
+contrast test, the token scan.
+5. For logic changes with no UI, run the Qt test window scenarios offscreen and
+save one screenshot per step to `shots/scenarios/<scenario>/NN-step.png` so a
+human can see what happened.
+6. Public repo: never commit full-desktop or real-desktop screenshots (they can
+contain personal data). Commit only app-window captures that were checked,
+each under 300 KB; keep the rest under an ignored folder (`shots/tmp/`).
+Real-desktop evidence stays local and is described in words in the PR.
+7. In the PR description write: which pages were captured, whether they were
+viewed, what was seen, and what could not be checked.
+
 # WORKING PROTOCOL FOR EVERY STEP
 
 1. Restate the step's goal and acceptance criteria in <= 8 lines.
