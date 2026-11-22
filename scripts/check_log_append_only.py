@@ -173,10 +173,33 @@ def is_append_only(base: bytes | None, head: bytes, mode: str = MODE_PREFIX) -> 
     raise ValueError(f"unknown mode: {mode}")
 
 
-def _git(*args: str) -> subprocess.CompletedProcess[bytes]:
-    # Justification: no shell, argv is a fixed tuple, and every variable value
-    # is checked by _validated_ref/_validated_path before it reaches this call.
-    return subprocess.run(("git", *args), capture_output=True, check=False)  # noqa: S603, S607
+def _cat_file(spec: str) -> tuple[bool, bytes | None]:
+    """Return (found, content) for one git object spec.
+
+    The spec - built from the base ref and path - travels on standard input to
+    ``git cat-file --batch`` instead of becoming a command-line argument, so no
+    value supplied by a caller can be read as a git option. The argument vector
+    is a fixed tuple and no shell is involved.
+    """
+    completed = subprocess.run(
+        ("git", "cat-file", "--batch"),  # noqa: S607 - managed git on PATH
+        input=spec.encode("utf-8") + b"\n",
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0 or not completed.stdout:
+        return False, None
+    header, separator, body = completed.stdout.partition(b"\n")
+    if not separator or header.endswith(b" missing"):
+        return False, None
+    fields = header.split(b" ")
+    if len(fields) != 3:
+        return False, None
+    try:
+        size = int(fields[2])
+    except ValueError:
+        return False, None
+    return True, body[:size]
 
 
 _REF_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@{}^~+-]*$")
@@ -213,15 +236,14 @@ def _validated_path(path: str) -> str:
 
 def exists_at(ref: str, path: str) -> bool:
     """True when path exists in the tree of ref."""
-    return read_at(ref, path) is not None
+    found, _ = _cat_file(f"{ref}:{path}")
+    return found
 
 
 def read_at(ref: str, path: str) -> bytes | None:
     """Return the raw bytes of path at ref, or None when it cannot be read."""
-    completed = _git("show", f"{ref}:{path}")
-    if completed.returncode != 0:
-        return None
-    return completed.stdout
+    found, content = _cat_file(f"{ref}:{path}")
+    return content if found else None
 
 
 def main(argv: list[str] | None = None) -> int:
