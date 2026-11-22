@@ -136,8 +136,9 @@ per additional independent group. Integer weights keep the gap explainable:
 | position hint within 50 px (tie-break only) | 5 |
 | wrong domain / wrong executable | candidate discarded |
 
-**Clear-gap rule.** Act only when `top.score >= MIN_CONFIDENCE (60)` and
-`top.score - second.score >= CLEAR_GAP (20)`. Otherwise `ASK_USER`
+**Clear-gap rule.** Act only when `top.score >= MIN_CONFIDENCE (30)` and
+`top.score - second.score >= CLEAR_GAP (20)`. A lone exact name (35) clears the
+confidence floor; a lone role (15) or contains-match (20) does not. Otherwise `ASK_USER`
 (interactive) or `STOP` (unattended). The resolver never returns "best guess":
 it returns `RESOLVED`, `ASK_USER` or `STOP` with the full scored table and a
 one-sentence explanation.
