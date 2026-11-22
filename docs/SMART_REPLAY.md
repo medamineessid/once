@@ -94,13 +94,12 @@ Clue kinds, strongest first, each from an independent source:
 
 1. `AUTOMATION_ID` / `DOM_ID` — implementation identity.
 2. `ROLE` — control type / DOM role + tag.
-3. `NAME` — accessible name or visible label, normalised (NFKC, casefold,
-   collapsed whitespace).
-4. `LABEL_TEXT` — a *different* element that labels this one (`<label for>`,
-   `aria-labelledby`, the static text beside it).
+3. `NAME` — accessible name or visible label, normalised (NFKC, casefold, spaces).
+4. `LABEL_TEXT` — a *different* element labelling this one (`<label for>`, the
+   static text beside it).
 5. `CONTAINER_TEXT` — nearest meaningful ancestor's text (row, item, group).
-6. `DOMAIN` / `PROCESS` — registrable domain, or the executable the run
-   launched. A clue from another domain or process is not a candidate at all.
+6. `DOMAIN` / `PROCESS` — the site or the executable the run launched; another
+   domain or process is not a candidate at all.
 7. `ORDINAL` — position among same-role siblings (tab index, row index).
 8. `POSITION` — recorded point, tie-break only.
 
@@ -155,11 +154,11 @@ one-sentence explanation.
 - `REVERSIBLE` — effect the user can undo or redo, or proven by postcondition.
 - `DESTRUCTIVE` — delete, clear, send, pay, overwrite, close-without-save.
 
-Policy: a `DESTRUCTIVE` step is **never auto-picked**, even with a perfect
-score and a clear gap; the user always confirms the resolved target. A tie, a
-weak winner or a missing candidate on a destructive step is `STOP` when
-unattended and `ASK_USER` when a person is present. The safety class comes from
-the approved workflow; no provider may reclassify a step at replay time.
+Policy: a `DESTRUCTIVE` step is **never auto-picked**, even with a perfect score
+and a clear gap; a person always confirms the target. A tie, a weak winner or a
+missing candidate on a destructive step is `STOP` when unattended, `ASK_USER`
+when someone is present. The class comes from the approved workflow; no
+provider may reclassify a step at replay time.
 
 ## 7. Expected outcome and postconditions
 
@@ -175,29 +174,26 @@ never a silent success. No postcondition, no retry.
 
 Every wait is a bounded poll on an observable condition with an injected clock:
 `WaitBudget(condition, timeout_seconds <= MAX_STEP_TIMEOUT_SECONDS,
-poll_interval_seconds)`. Fixed `sleep` is allowed only as retry back-off
-(`engine/workflow.py:964`), never as "the element will appear". Existing
-bounded polls: `integrations/windows_desktop.py:659`,
-`integrations/chrome_devtools.py:454`, `:657`.
+poll_interval_seconds)`. A fixed `sleep` is only ever retry back-off
+(`engine/workflow.py:964`), never "the element will appear". Existing bounded
+polls: `integrations/windows_desktop.py:659`, `chrome_devtools.py:454`, `:657`.
 
 ## 9. List rows, scrolling, next page
 
 Rows are never addressed by index. A `SELECT` step carries a row rule
-`RowRule(text, mode=EXACT|CONTAINS|WORD_BOUNDARY, domain)`. Resolution order:
+`RowRule(text, mode=EXACT|CONTAINS|WORD_BOUNDARY, domain)`; resolution order is
 current page → next page (bounded `max_pages`) → scroll (bounded `max_scrolls`)
-→ ask. "The third result" is expressly unsupported: the k-th result changes
-meaning when an advert is inserted.
+→ ask. "The third result" is unsupported: the k-th result changes meaning when
+an advert is inserted.
 
 ## 10. Ambiguity policy
 
-1. Refine with context first: container text, label text, domain, neighbouring
-   roles.
+1. Refine with context first: container text, label text, domain, neighbouring roles.
 2. Auto-pick only when the action is `READ_ONLY` or `REVERSIBLE` **and** one
    candidate clearly wins (clear-gap rule).
 3. Otherwise ask, showing every candidate and its evidence.
 4. Never auto-pick a `DESTRUCTIVE` step.
-5. Unattended runs never ask: stop safely, mark the step `SAFE_FAILURE`, say
-   why.
+5. Unattended runs never ask: stop safely, mark the step `SAFE_FAILURE`, say why.
 6. Asking is bounded: one question per step, no re-asking loop.
 
 ## 11. Interruption, allowlist, foreground check
@@ -216,63 +212,54 @@ meaning when an advert is inserted.
 
 - Text comparison normalises NFKC, casefolds and strips accents for *matching
   only*, and keeps the original for reporting.
-- Localisation is not guessed: if the only remaining clue is translated text,
-  ask. Recorded "Edit" and live "Bearbeiten" do not count as a name match; a
-  shared automation id does.
-- Coordinates are logical, converted through the target window's DPI awareness
-  before use (`integrations/windows_desktop.py:226`), and a position hint is
-  trusted only after a semantic match, so 150 % scaling cannot turn a tie-break
-  into a target choice.
+- Localisation is not guessed: recorded "Edit" and live "Bearbeiten" are not a
+  name match, while a shared automation id still is; if the translated text is
+  the only remaining evidence, ask.
+- Coordinates are logical, converted through the window's DPI awareness
+  (`integrations/windows_desktop.py:226`), and a position hint is trusted only
+  after a semantic match, so 150 % scaling cannot turn a tie-break into a
+  target choice.
 
 ## 13. Run-report explanations
 
-One line per resolution, for the report and the Activity page:
-
-- RESOLVED: "Found *Edit* in the results list (automation id + label, score 95,
-  next candidate 45)."
-- ASK_USER: "Two elements could be *Delete*. Which one should Once use?"
-- STOP: "*Delete* was not found on this page or the next two pages. Nothing was
-  clicked."
-
-Internal ids and enum names stay in the data ("details"), never in the
-user-facing sentence.
+One line per resolution, for the report and the Activity page, e.g. "Found
+Edit for \"Open invoice 1042\" (score 145, next candidate 0)." RESOLVED, ASK_USER
+and STOP each get their own sentence; internal ids and enum names stay in the
+data ("details"), never in the user-facing sentence.
 
 ## 14. Self-heal, and slices that need other agents' files
 
-Self-heal (rewriting stored clues from a successful resolution) is opt-in per
+Self-heal (rewriting stored clues after a successful resolution) is opt-in per
 step and per run, shows an old → new diff, and is refused for `DESTRUCTIVE`
 steps. No silent learning.
 
 Not built here, in dependency order:
 
-1. **Step schema** — `descriptor`, `expected`, `safety`, `wait` on
-   `WorkflowStep` (`engine/workflow.py`) plus the JSON validator and a schema
-   version bump (`storage/workflows.py`); needs a storage migration review.
-2. **Recorder enrichment** — capture label/container text and surrounding
-   context (`integrations/recorder.py`, `recorder/models.py`); today a
-   recording stores one element, not its context.
-3. **Foreground-window guard** before desktop clicks and DPI-aware point
-   conversion (`integrations/windows_desktop.py`).
-4. **List paging/scroll** for the browser provider
-   (`integrations/chrome_devtools.py`), using the existing tab APIs instead of
-   refusing when more than one tab is open (`:344`).
-5. **Persist resolutions** to run history (`storage/history.py`) so the Activity
-   page can explain a resolution after restart.
-6. **UI** — ask-user panel, candidate list with evidence, self-heal dialog.
+1. **Step schema**: `descriptor`, `expected`, `safety`, `wait` on `WorkflowStep`
+   plus the JSON validator and a version bump (`storage/workflows.py`).
+2. **Recorder context**: label/container text and the surrounding tree
+   (`integrations/recorder.py`, `recorder/models.py`).
+3. **Foreground guard** before desktop clicks, DPI-aware point conversion
+   (`integrations/windows_desktop.py`).
+4. **List paging/scroll** in the browser provider
+   (`integrations/chrome_devtools.py`), using the tab APIs instead of refusing
+   when more than one tab is open (`:344`).
+5. **Persist resolutions** (`storage/history.py`) for the Activity page.
+6. **UI**: ask-user panel, candidate list with evidence, self-heal dialog.
 
 ## 15. Scenario lab (Phase 1, headless)
 
 `tests/scenarios/` proves the logic before any OS adapter exists:
 
-- `web_app.py` — real local HTTP server (127.0.0.1, ephemeral port) serving
-  variants: adverts above the results, cookie banner, target with no `id`,
-  changed label, re-rendered list, target on page 2.
-- `qt_window.py` — real offscreen Qt window: tab strip whose "+" moves with the
-  tab count, list that reorders, sometimes-missing dialog, delayed control,
-  translated label, destructive Delete next to a harmless one.
-- `catalog.py` — scenarios recorded on variant A, replayed on B/C/D with an
-  expected outcome of `SUCCESS`, `ASKS_USER` or `SAFE_FAILURE`.
-- `lab.py` — drives the resolver through a fake adapter
-  (`TargetAdapter: candidates(), perform(), observe()`), counts outcomes and
-  **WRONG actions** (action on the wrong element, or any action when the
-  expectation was ask/stop). Wrong actions must be zero.
+- `web_app.py` — real local HTTP server (127.0.0.1, ephemeral port) with
+  variants: adverts above the results, cookie banner, no `id`, changed label,
+  re-rendered list, target on page 2.
+- `qt_window.py` — real offscreen Qt window: a "+" that moves with the tab
+  count, a list that reorders, a sometimes-missing dialog, a delayed control, a
+  translated label, a destructive Delete beside a harmless one.
+- `catalog.py` — steps recorded on variant A, replayed on B/C/D with an
+  expected `SUCCESS`, `ASKS_USER` or `SAFE_FAILURE`.
+- `lab.py` — drives the resolver through a small adapter (`snapshot`,
+  `perform`, `observe`, `truth_id`), counts outcomes and **WRONG actions** (an
+  action on the wrong element, or any action when the expectation was
+  ask/stop). Wrong actions must be zero.
