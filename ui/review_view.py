@@ -11,6 +11,8 @@ thread and is persisted as a POST_MERGE record.
 
 from __future__ import annotations
 
+import logging
+import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,7 +31,7 @@ from PySide6.QtWidgets import (
 from controller.service import WorkflowService
 from controller.verifier_config import VerifierConfig, load_verifier_config
 from engine.agent_change import ChangeReview
-from engine.errors import WorkflowValidationError
+from engine.errors import OnceError, WorkflowValidationError
 from engine.verifier import EvidenceBundle
 from storage.history import AgentProposalRecord
 from ui.verifier_dialog import VerifierConfigDialog
@@ -42,6 +44,8 @@ from ui.workers import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+logger = logging.getLogger(__name__)
 
 
 class ProposalReviewPanel(QWidget):
@@ -305,7 +309,7 @@ class ProposalReviewPanel(QWidget):
             return
         try:
             blockers = self._service.approval_blockers(record.review)
-        except Exception as error:
+        except (OnceError, OSError, sqlite3.Error) as error:
             self._blockers_label.setText(f"Approval check failed: {error}")
             return
         if not blockers:
@@ -384,7 +388,7 @@ class ProposalReviewPanel(QWidget):
             return
         try:
             approved = self._service.approve_agent_change(review)
-        except Exception as error:
+        except (OnceError, OSError, sqlite3.Error) as error:
             self._check_blockers(review)
             self._warn(str(error))
             return
@@ -401,7 +405,8 @@ class ProposalReviewPanel(QWidget):
             return
         try:
             blockers = self._service.apply_blockers(review)
-        except Exception as error:  # show the real failure, keep the repo state
+        except (OnceError, OSError, sqlite3.Error) as error:
+            # Show the real failure and keep the repository state unchanged.
             self._warn(str(error))
             return
         if blockers:
@@ -446,7 +451,7 @@ class ProposalReviewPanel(QWidget):
             return
         try:
             self._service.reject_agent_proposal(review)
-        except Exception as error:
+        except (OnceError, OSError, sqlite3.Error) as error:
             self._warn(str(error))
             return
         self.refresh_proposals()
@@ -456,8 +461,9 @@ class ProposalReviewPanel(QWidget):
     def _check_blockers(self, review: ChangeReview) -> None:
         try:
             blockers = self._service.approval_blockers(review)
-        except Exception:
-            blockers = ("The blocker check failed; see the log for details.",)
+        except (OnceError, OSError, sqlite3.Error) as error:
+            logger.exception("Approval blocker check failed")
+            blockers = (f"The blocker check failed: {error}",)
         self._message_label.setText(" ".join(blockers))
 
     # ----------------------------------------------------------- threading

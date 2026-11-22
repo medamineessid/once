@@ -13,6 +13,9 @@ class RecordedEventKind(StrEnum):
     KEY_PRESS = "KEY_PRESS"
     TEXT_INPUT = "TEXT_INPUT"
     WINDOW_FOCUS = "WINDOW_FOCUS"
+    WINDOW_OPEN = "WINDOW_OPEN"
+    WINDOW_CLOSE = "WINDOW_CLOSE"
+    WINDOW_TITLE_CHANGED = "WINDOW_TITLE_CHANGED"
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,10 @@ class RecordedEvent:
     timestamp_ns: int
     kind: RecordedEventKind
     window_title: str | None = None
+    process_name: str | None = None
+    executable_path: str | None = None
+    executable_sha256: str | None = None
+    executable_signer: str | None = None
     element: UIElementInfo | None = None
     x: int | None = None
     y: int | None = None

@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from typing import Protocol
 from uuid import uuid4
 
 from .errors import ExecutionError, WorkflowValidationError
 
+RETRY_DELAY_SECONDS = 0.4
 MAX_WORKFLOW_STEPS = 100
 MAX_TEXT_LENGTH = 500
 
@@ -31,6 +34,7 @@ class StepKind(StrEnum):
     TYPE_TEXT = "TYPE_TEXT"
     PRESS_SHORTCUT = "PRESS_SHORTCUT"
     VERIFY_FILE_TEXT = "VERIFY_FILE_TEXT"
+    CLOSE_APPLICATION = "CLOSE_APPLICATION"
     LAUNCH_BROWSER = "LAUNCH_BROWSER"
     NAVIGATE_BROWSER = "NAVIGATE_BROWSER"
     INSPECT_PAGE = "INSPECT_PAGE"
@@ -55,6 +59,19 @@ class StepStatus(StrEnum):
     SKIPPED = "SKIPPED"
     VERIFIED = "VERIFIED"
     INCONCLUSIVE = "INCONCLUSIVE"
+    #: The step recorded an observation only; nothing was performed.
+    OBSERVED = "OBSERVED"
+
+
+#: Step statuses that let a run continue to its next step.
+CONTINUING_STEP_STATUSES: frozenset[StepStatus] = frozenset(
+    {StepStatus.SUCCEEDED, StepStatus.VERIFIED, StepStatus.OBSERVED}
+)
+
+#: Step statuses that prove a step really performed or verified something.
+PERFORMED_STEP_STATUSES: frozenset[StepStatus] = frozenset(
+    {StepStatus.SUCCEEDED, StepStatus.VERIFIED}
+)
 
 
 class WorkflowStatus(StrEnum):
@@ -65,6 +82,10 @@ class WorkflowStatus(StrEnum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
+    #: The run finished, nothing failed, and nothing was performed.
+    OBSERVATION_ONLY = "OBSERVATION_ONLY"
+    #: At least one step was performed and at least one step was observation-only.
+    PARTIALLY_PERFORMED = "PARTIALLY_PERFORMED"
 
 
 @dataclass(frozen=True)
@@ -110,6 +131,22 @@ class WorkflowRun:
     results: tuple[StepResult, ...]
     started_at: datetime
     finished_at: datetime
+
+
+def _final_status(results: Sequence[StepResult], *, performed_any: bool) -> WorkflowStatus:
+    """Decide a finished run's status from its real results (see run-outcomes.md).
+
+    Failures keep priority; otherwise a run that performed nothing is honest
+    about it instead of claiming success, and a mixed run reports
+    PARTIALLY_PERFORMED.
+    """
+    if any(result.status is StepStatus.FAILED for result in results):
+        return WorkflowStatus.FAILED
+    if not performed_any:
+        return WorkflowStatus.OBSERVATION_ONLY
+    if any(result.status is StepStatus.OBSERVED for result in results):
+        return WorkflowStatus.PARTIALLY_PERFORMED
+    return WorkflowStatus.SUCCEEDED
 
 
 CancelCheck = Callable[[], bool]
@@ -173,6 +210,7 @@ BROWSER_PROVIDER_KINDS = frozenset(
 DESKTOP_PROVIDER_KINDS = frozenset(
     {
         StepKind.LAUNCH_APPLICATION,
+        StepKind.CLOSE_APPLICATION,
         StepKind.WAIT_WINDOW,
         StepKind.CLICK_UI_ELEMENT,
         StepKind.TYPE_TEXT,
@@ -180,12 +218,26 @@ DESKTOP_PROVIDER_KINDS = frozenset(
     }
 )
 
-#:
-#: The browser launch registry is KNOWN_BROWSERS below.
-KNOWN_APPLICATIONS: frozenset[str] = frozenset({"notepad"})
 
-#: Browser names the isolated-browser launch action may use via the registry.
-KNOWN_BROWSERS: frozenset[str] = frozenset({"chrome"})
+@dataclass(frozen=True)
+class ApprovedApplication:
+    """One application the user approved, identified by its executable path.
+
+    The record comes from the approved-application registry in storage, so this
+    module knows no application name, install location, or executable.
+    """
+
+    executable: Path
+    sha256: str
+    display_name: str
+    approved: bool
+    close_supported: bool = True
+
+
+class ApplicationApprovals(Protocol):
+    """Read-only view of the approved-application registry (storage-backed)."""
+
+    def find(self, executable: Path) -> ApprovedApplication | None: ...
 
 
 class DesktopActions:
@@ -197,6 +249,10 @@ class DesktopActions:
     """
 
     def launch_application(self, target_json: str) -> StepResult:
+        raise NotImplementedError
+
+    def close_application(self, target_json: str) -> StepResult:
+        """Close only windows of the process this run launched for that name."""
         raise NotImplementedError
 
     def wait_window(self, target_json: str, timeout_seconds: float) -> StepResult:
@@ -307,16 +363,19 @@ def _load_target(step: WorkflowStep, target: str | None) -> dict:
 
 def _validate_element_identity(step: WorkflowStep, element: object) -> None:
     if not isinstance(element, dict) or not set(element).issubset(
-        {"automation_id", "control_type", "class_name"}
+        {"automation_id", "control_type", "class_name", "name"}
     ):
         raise WorkflowValidationError(f"Step {step.step_id} has unknown element target fields.")
     automation_id = element.get("automation_id")
     class_name = element.get("class_name")
-    for field in ("automation_id", "control_type", "class_name"):
+    name = element.get("name")
+    for field in ("automation_id", "control_type", "class_name", "name"):
         if field in element and not isinstance(element[field], str):
             raise WorkflowValidationError(f"Step {step.step_id} has an invalid element {field}.")
-    if not (isinstance(automation_id, str) and automation_id.strip()) and not (
-        isinstance(class_name, str) and class_name.strip()
+    if (
+        not (isinstance(automation_id, str) and automation_id.strip())
+        and not (isinstance(class_name, str) and class_name.strip())
+        and not (isinstance(name, str) and name.strip())
     ):
         raise WorkflowValidationError(
             f"Step {step.step_id} needs an element automation_id or class_name; "
@@ -343,51 +402,45 @@ def _require_bounded_string(step: WorkflowStep, container: object, field: str) -
     return value
 
 
+def _validate_executable_path(step: WorkflowStep, value: object, what: str) -> Path:
+    """Validate one absolute .exe path, which a recording supplies instead of a name."""
+    if not isinstance(value, str) or not value.strip():
+        raise WorkflowValidationError(
+            f"Step {step.step_id} needs the executable path of the application to {what}."
+        )
+    if len(value) > 260:
+        raise WorkflowValidationError(f"Step {step.step_id} executable path is too long.")
+    path = Path(value)
+    if not path.is_absolute():
+        raise WorkflowValidationError(f"Step {step.step_id} executable must be an absolute path.")
+    if path.suffix.lower() != ".exe":
+        raise WorkflowValidationError(f"Step {step.step_id} executable must be a .exe application.")
+    if any(part == ".." for part in path.parts):
+        raise WorkflowValidationError(
+            f"Step {step.step_id} executable path must not traverse parent folders."
+        )
+    return path
+
+
+def _validate_close_target(step: WorkflowStep) -> None:
+    """Closing is process-directed only: the pid of the executable this run launched."""
+    target = _load_target(step, step.target)
+    unknown = set(target) - {"executable"}
+    if unknown:
+        raise WorkflowValidationError(
+            f"Step {step.step_id} has unknown close fields: {', '.join(sorted(unknown))}."
+        )
+    _validate_executable_path(step, target.get("executable"), "close")
+
+
 def _validate_launch_target(step: WorkflowStep) -> None:
     target = _load_target(step, step.target)
-    unknown = set(target) - {"application", "executable", "arguments"}
+    unknown = set(target) - {"executable", "arguments"}
     if unknown:
         raise WorkflowValidationError(
             f"Step {step.step_id} has unknown launch fields: {', '.join(sorted(unknown))}."
         )
-    application = target.get("application")
-    executable = target.get("executable")
-    if (application is None) == (executable is None):
-        raise WorkflowValidationError(
-            f"Step {step.step_id} needs exactly one of application or executable."
-        )
-    if application is not None:
-        if not isinstance(application, str) or not application.strip():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} application name must be a non-empty string."
-            )
-        if len(application) > 64 or application.lower() not in {
-            name.lower() for name in KNOWN_APPLICATIONS
-        }:
-            raise WorkflowValidationError(
-                f"Step {step.step_id} names an application the registry does not allow: "
-                f"{application}."
-            )
-    else:
-        if not isinstance(executable, str) or not executable.strip():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} executable must be a non-empty string."
-            )
-        if len(executable) > 260:
-            raise WorkflowValidationError(f"Step {step.step_id} executable path is too long.")
-        executable_path = Path(executable)
-        if not executable_path.is_absolute():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} executable must be an absolute path."
-            )
-        if executable_path.suffix.lower() != ".exe":
-            raise WorkflowValidationError(
-                f"Step {step.step_id} executable must be a .exe application."
-            )
-        if any(part == ".." for part in executable_path.parts):
-            raise WorkflowValidationError(
-                f"Step {step.step_id} executable path must not traverse parent folders."
-            )
+    _validate_executable_path(step, target.get("executable"), "launch")
     arguments = target.get("arguments", [])
     if not isinstance(arguments, list) or len(arguments) > MAX_ARGUMENT_COUNT:
         raise WorkflowValidationError(
@@ -428,54 +481,16 @@ def _validate_browser_target(target: object, step: WorkflowStep) -> dict:
 
 def _validate_launch_browser_target(step: WorkflowStep) -> None:
     target = _load_target(step, step.target)
-    unknown = set(target) - {"application", "executable", "headed"}
+    unknown = set(target) - {"executable", "headed"}
     if unknown:
         raise WorkflowValidationError(
             f"Step {step.step_id} has unknown browser launch fields: {', '.join(sorted(unknown))}."
         )
     if "headed" in target and not isinstance(target["headed"], bool):
         raise WorkflowValidationError(f"Step {step.step_id} headed must be true or false.")
-    application, executable = target.get("application"), target.get("executable")
-    if (application is None) == (executable is None):
-        raise WorkflowValidationError(
-            f"Step {step.step_id} needs exactly one of application or executable."
-        )
-    if application is not None:
-        if not isinstance(application, str) or not application.strip():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser application name must be a non-empty string."
-            )
-        if application.lower() not in {name.lower() for name in KNOWN_BROWSERS}:
-            raise WorkflowValidationError(
-                f"Step {step.step_id} names a browser the registry does not allow: {application}."
-            )
-    else:
-        if not isinstance(executable, str) or not executable.strip():
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser executable must be a non-empty string."
-            )
-        if len(executable) > 260:
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser executable path is too long."
-            )
-        executable_path = Path(executable)
-        if not executable_path.is_absolute() or executable_path.suffix.lower() != ".exe":
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser executable must be an absolute .exe path."
-            )
-        if any(part == ".." for part in executable_path.parts):
-            raise WorkflowValidationError(
-                f"Step {step.step_id} browser executable must not traverse parent folders."
-            )
-        if not _executable_name_is_chrome(executable):
-            raise WorkflowValidationError(
-                f"Step {step.step_id} launches a browser other than the registered "
-                "Chrome; only Chrome is supported."
-            )
-
-
-def _executable_name_is_chrome(executable: str) -> bool:
-    return Path(executable).name.lower() == "chrome.exe"
+    # Which browser this is (and whether it may be driven) belongs to the
+    # browser provider that owns it, never to a name check in the engine.
+    _validate_executable_path(step, target.get("executable"), "launch")
 
 
 def _validate_page_url(value: object, step: WorkflowStep) -> str:
@@ -692,6 +707,9 @@ def _validate_verify_file_text_target(step: WorkflowStep) -> None:
 class WorkflowRunner:
     """Execute known step kinds in order and retain an inspectable run result."""
 
+    def __init__(self, sleep: Callable[[float], None] | None = None) -> None:
+        self._sleep = sleep or time.sleep
+
     @staticmethod
     def validate(workflow: Workflow) -> None:
         """Reject malformed definitions before any step can start."""
@@ -775,6 +793,8 @@ class WorkflowRunner:
                 _validate_ui_element_target(step)
             if step.kind is StepKind.LAUNCH_APPLICATION:
                 _validate_launch_target(step)
+            if step.kind is StepKind.CLOSE_APPLICATION:
+                _validate_close_target(step)
             if step.kind is StepKind.LAUNCH_BROWSER:
                 _validate_launch_browser_target(step)
             if step.kind is StepKind.NAVIGATE_BROWSER:
@@ -817,6 +837,7 @@ class WorkflowRunner:
         self.validate(workflow)
         started_at = datetime.now(UTC)
         results: list[StepResult] = []
+        performed_any = False
         is_cancelled = cancel_check or (lambda: False)
 
         def completed(status: WorkflowStatus) -> WorkflowRun:
@@ -853,22 +874,34 @@ class WorkflowRunner:
             results.append(result)
             if progress_callback is not None:
                 progress_callback(result)
-            if result.status not in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
+            if result.status in PERFORMED_STEP_STATUSES and step.kind is not StepKind.REPORT:
+                performed_any = True
+            if result.status not in CONTINUING_STEP_STATUSES:
+                # The retry loop is the only producer of a SKIPPED step result,
+                # and it skips only when the user cancelled, so that case needs no
+                # second probe. Every other non-continuing result still asks the
+                # predicate once: the kill switch can fire while a step is running
+                # and surface as a failure, which must be reported as CANCELLED.
+                cancelled = result.status is StepStatus.SKIPPED or is_cancelled()
                 results.extend(
                     StepResult(
                         step_id=remaining.step_id,
                         status=StepStatus.SKIPPED,
-                        message="Skipped because an earlier step failed.",
+                        message=(
+                            "Skipped because the workflow was cancelled."
+                            if cancelled
+                            else "Skipped because an earlier step failed."
+                        ),
                     )
                     for remaining in workflow.steps[index + 1 :]
                 )
                 return completed(
                     WorkflowStatus.CANCELLED
-                    if result.status is StepStatus.SKIPPED
+                    if cancelled or result.status is StepStatus.SKIPPED
                     else WorkflowStatus.FAILED
                 )
 
-        return completed(WorkflowStatus.SUCCEEDED)
+        return completed(_final_status(results, performed_any=performed_any))
 
     def _run_with_retries(
         self,
@@ -905,7 +938,7 @@ class WorkflowRunner:
                     desktop_actions,
                     browser_actions,
                 )
-            if result.status in (StepStatus.SUCCEEDED, StepStatus.VERIFIED):
+            if result.status in CONTINUING_STEP_STATUSES:
                 if step.postcondition is None:
                     if attempt == 1:
                         return result
@@ -926,6 +959,9 @@ class WorkflowRunner:
                 result = postcondition
             attempts.append(f"attempt {attempt}: {result.message}")
             if attempt < step.max_attempts:
+                # A retry without a pause only repeats the same miss. Wait
+                # briefly so a slow window or control can appear.
+                self._sleep(RETRY_DELAY_SECONDS)
                 continue
             return StepResult(
                 step.step_id,
@@ -1006,7 +1042,8 @@ class WorkflowRunner:
                 return StepResult(step.step_id, StepStatus.FAILED, str(error))
         if step.kind is StepKind.FAIL:
             return StepResult(step.step_id, StepStatus.FAILED, step.message)
-        return StepResult(step.step_id, StepStatus.SUCCEEDED, step.message)
+        # A report observes; it does not perform, so it cannot claim SUCCEEDED.
+        return StepResult(step.step_id, StepStatus.OBSERVED, step.message)
 
     @staticmethod
     def _run_desktop_step(step: WorkflowStep, actions: DesktopActions) -> StepResult:
@@ -1015,6 +1052,8 @@ class WorkflowRunner:
             raise AssertionError("desktop_actions must exist here.")
         if step.kind is StepKind.LAUNCH_APPLICATION:
             result = actions.launch_application(step.target or "")
+        elif step.kind is StepKind.CLOSE_APPLICATION:
+            result = actions.close_application(step.target or "")
         elif step.kind is StepKind.WAIT_WINDOW:
             result = actions.wait_window(step.target or "", step.timeout_seconds)
         elif step.kind is StepKind.CLICK_UI_ELEMENT:
@@ -1079,7 +1118,7 @@ class WorkflowRunner:
             return StepResult(
                 step_id=step.step_id,
                 status=StepStatus.FAILED,
-                message="The target is not an accessible regular file.",
+                message=f"Could not find {target.name} in the authorized folder.",
             )
         if target.stat().st_size > MAX_TEXT_FILE_BYTES:
             return StepResult(
@@ -1161,7 +1200,7 @@ class WorkflowRunner:
             return StepResult(
                 step_id=step.step_id,
                 status=StepStatus.FAILED,
-                message="The target is not an accessible regular file.",
+                message=f"Could not find {target.name} in the authorized folder.",
             )
         stat = target.stat()
         evidence = (

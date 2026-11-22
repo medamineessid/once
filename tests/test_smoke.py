@@ -142,12 +142,15 @@ def test_main_window_runs_demo_workflow(qtbot: QtBot) -> None:
     qtbot.mouseClick(demo_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(
         lambda: (
-            "SUCCEEDED: 2 steps recorded" in [label.text() for label in window.findChildren(QLabel)]
+            "OBSERVATION_ONLY: 2 steps recorded"
+            in [label.text() for label in window.findChildren(QLabel)]
         ),
         timeout=2000,
     )
 
-    assert "SUCCEEDED: 2 steps recorded" in [label.text() for label in window.findChildren(QLabel)]
+    assert "OBSERVATION_ONLY: 2 steps recorded" in [
+        label.text() for label in window.findChildren(QLabel)
+    ]
 
 
 def test_main_window_creates_and_saves_workflow_from_form(qtbot: QtBot, tmp_path) -> None:
@@ -185,7 +188,7 @@ def test_main_window_displays_each_step_result(qtbot: QtBot) -> None:
     qtbot.mouseClick(demo_button, Qt.MouseButton.LeftButton)
     qtbot.waitUntil(
         lambda: any(
-            result_list.count() == 2 and "inspect: SUCCEEDED" in result_list.item(0).text()
+            result_list.count() == 2 and "inspect: OBSERVED" in result_list.item(0).text()
             for result_list in window.findChildren(QListWidget)
         ),
         timeout=2000,
@@ -193,7 +196,7 @@ def test_main_window_displays_each_step_result(qtbot: QtBot) -> None:
 
     result_lists = window.findChildren(QListWidget)
     assert any(
-        result_list.count() == 2 and "inspect: SUCCEEDED" in result_list.item(0).text()
+        result_list.count() == 2 and "inspect: OBSERVED" in result_list.item(0).text()
         for result_list in result_lists
     )
 

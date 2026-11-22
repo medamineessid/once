@@ -30,7 +30,13 @@ def sample_draft(workflow_id: str = "review-demo") -> ProviderDraft:
         name="Tidy the notes",
         steps=(
             WorkflowStep(step_id="s1", name="Say hello", kind=StepKind.REPORT, message="Hello."),
-            WorkflowStep(step_id="s2", name="Report done", kind=StepKind.REPORT, message="Done."),
+            WorkflowStep(
+                step_id="s2",
+                name="Check notes",
+                kind=StepKind.VERIFY_PATH_EXISTS,
+                message="Done.",
+                target="C:/work/notes.txt",
+            ),
         ),
     )
     return ProviderDraft(goal="Run a small demo", workflow=workflow)
@@ -52,8 +58,9 @@ def test_load_proposal_lists_preview_steps_and_goal(qtbot, tmp_path) -> None:
     assert goal_text == "Goal: Run a small demo"
     steps = [page._steps_list.item(index).text() for index in range(page._steps_list.count())]
     assert len(steps) == 2
-    assert all("source=AI inference" in line for line in steps)
-    assert any("expected=Hello." in line for line in steps)
+    assert all("source=AI inference" not in line for line in steps)
+    assert "Say hello" in steps[0] and "Hello." in steps[0]
+    assert "Check notes" in steps[1] and "Done." in steps[1]
 
 
 def test_approve_visible_only_with_service_and_previewed_proposal(qtbot, tmp_path) -> None:

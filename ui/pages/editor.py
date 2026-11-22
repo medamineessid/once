@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QApplication,
     QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -22,22 +23,31 @@ from PySide6.QtWidgets import (
 
 from controller.editor import WorkflowEditorSession
 from controller.service import WorkflowService
-from engine.errors import WorkflowValidationError
+from engine.desktop import (
+    approve_desktop_workflow,
+    mutating_kind_names,
+    requires_desktop_approval,
+)
+from engine.errors import OnceError, WorkflowValidationError
 from engine.workflow import Workflow
 from ui.components.banner import Banner
 from ui.editor.canvas import CanvasView
 from ui.editor.inspector import InspectorPanel
 from ui.strings import (
+    EDITOR_CANCEL_RUN,
     EDITOR_DISCARD,
     EDITOR_EDIT_ERROR_TITLE,
     EDITOR_RENAME_EMPTY_MESSAGE,
     EDITOR_RENAME_ERROR_TITLE,
+    EDITOR_RUN,
+    EDITOR_RUN_SAVE_FIRST_BODY,
+    EDITOR_RUN_SAVE_FIRST_TITLE,
     EDITOR_SAVE,
     EDITOR_STAY,
     EDITOR_UNSAVED_BODY,
     EDITOR_UNSAVED_TITLE,
 )
-from ui.styles import SPACING_LG, SPACING_XL
+from ui.styles import SPACING_LG, SPACING_MD, SPACING_SM, SPACING_XL
 
 
 class EditorPage(QWidget):
@@ -45,11 +55,15 @@ class EditorPage(QWidget):
 
     saved = Signal()
     cancelled = Signal()
+    cancel_run_requested = Signal()
+    run_requested = Signal(object)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._service: WorkflowService | None = None
         self._session: WorkflowEditorSession | None = None
+        self._step_results: dict[str, object] = {}
+        self._running = False
         self._init_ui()
 
     def _init_ui(self) -> None:
@@ -81,6 +95,7 @@ class EditorPage(QWidget):
         layout.addWidget(self._dirty_panel)
         self._dirty_panel.hide()
         self._name_input = QLineEdit(self)
+        self._name_input.setObjectName("descriptionInput")
         self._name_input.installEventFilter(self)
         self._name_input.setPlaceholderText("Automation name")
         self._name_input.setText("New automation")
@@ -88,6 +103,29 @@ class EditorPage(QWidget):
         # operation when the user presses Enter or leaves the field (A1).
         self._name_input.editingFinished.connect(self._commit_name)
         layout.addWidget(self._name_input)
+        self._approval_panel = QFrame(self)
+        self._approval_panel.setObjectName("approvalPanel")
+        approval_layout = QVBoxLayout(self._approval_panel)
+        approval_layout.setContentsMargins(SPACING_MD, SPACING_SM, SPACING_MD, SPACING_SM)
+        self._approval_title = QLabel("This automation needs your approval", self._approval_panel)
+        self._approval_title.setObjectName("approvalTitle")
+        self._approval_details = QLabel(self._approval_panel)
+        self._approval_details.setWordWrap(True)
+        self._approval_details.setObjectName("approvalDetails")
+        approval_actions = QHBoxLayout()
+        self._approve_run_button = QPushButton("Approve and run", self._approval_panel)
+        self._approve_run_button.setObjectName("primaryActionButton")
+        self._approve_run_button.clicked.connect(self._approve_and_run)
+        self._cancel_approval_button = QPushButton("Not now", self._approval_panel)
+        self._cancel_approval_button.setObjectName("secondaryActionButton")
+        self._cancel_approval_button.clicked.connect(self._approval_panel.hide)
+        approval_actions.addWidget(self._approve_run_button)
+        approval_actions.addWidget(self._cancel_approval_button)
+        approval_layout.addWidget(self._approval_title)
+        approval_layout.addWidget(self._approval_details)
+        approval_layout.addLayout(approval_actions)
+        layout.addWidget(self._approval_panel)
+        self._approval_panel.hide()
         self._canvas = CanvasView(self)
         self._canvas.setMinimumHeight(220)
         self._canvas.installEventFilter(self)
@@ -104,11 +142,17 @@ class EditorPage(QWidget):
         layout.addLayout(canvas_and_inspector)
         self._steps_list = QListWidget(self)
         self._steps_list.setObjectName("editorStepsList")
+        self._steps_list.setWordWrap(True)
+        self._steps_list.setAlternatingRowColors(True)
+        self._steps_list.itemClicked.connect(self._on_step_item_clicked)
         layout.addWidget(self._steps_list)
         actions = QHBoxLayout()
         self._add_button = QPushButton("Add step", self)
         self._add_button.setObjectName("primaryActionButton")
         self._add_button.clicked.connect(self._add_step)
+        self._delete_button = QPushButton("Delete step", self)
+        self._delete_button.setObjectName("secondaryActionButton")
+        self._delete_button.clicked.connect(self._delete_selected_step)
         self._undo_button = QPushButton("Undo", self)
         self._undo_button.setObjectName("secondaryActionButton")
         self._undo_button.clicked.connect(self._undo)
@@ -120,12 +164,17 @@ class EditorPage(QWidget):
         self._save_button.clicked.connect(self._save)
         self._cancel_button = QPushButton("Cancel", self)
         self._cancel_button.setObjectName("secondaryActionButton")
-        self._cancel_button.clicked.connect(self.cancelled.emit)
+        self._cancel_button.clicked.connect(self._cancel_clicked)
+        self._run_button = QPushButton(EDITOR_RUN, self)
+        self._run_button.setObjectName("primaryActionButton")
+        self._run_button.clicked.connect(self._run)
         for button in (
             self._add_button,
+            self._delete_button,
             self._undo_button,
             self._redo_button,
             self._save_button,
+            self._run_button,
             self._cancel_button,
         ):
             actions.addWidget(button)
@@ -157,6 +206,7 @@ class EditorPage(QWidget):
         self._refresh()
 
     def start_new(self) -> None:
+        self._step_results.clear()
         self._session = WorkflowEditorSession(
             Workflow(f"automation-{uuid4().hex}", "New automation", ())
         )
@@ -167,6 +217,7 @@ class EditorPage(QWidget):
     def open_workflow(self, workflow: Workflow) -> None:
         """Open an existing workflow and restore its presentation metadata."""
         self._session = WorkflowEditorSession(workflow)
+        self._step_results.clear()
         if self._service is not None and self._service.layout_storage_configured:
             loaded = self._service.load_layout(workflow.workflow_id)
             if loaded.record is not None:
@@ -185,6 +236,19 @@ class EditorPage(QWidget):
         self._session.add_step_after(
             self._session.workflow().steps[-1].step_id if self._session.workflow().steps else None
         )
+        self._refresh()
+
+    def _delete_selected_step(self) -> None:
+        if self._session is None:
+            return
+        selected = self._canvas.selected_id
+        if not isinstance(selected, str) or self._canvas.is_terminal(selected):
+            return
+        try:
+            self._session.delete_step(selected)
+        except WorkflowValidationError as error:
+            self._banner.show_message("error", EDITOR_EDIT_ERROR_TITLE, str(error))
+            return
         self._refresh()
 
     def _undo(self) -> None:
@@ -246,6 +310,74 @@ class EditorPage(QWidget):
         self._dirty_panel.hide()
         self.saved.emit()
 
+    def _run(self) -> None:
+        if self._session is None:
+            return
+        if self._session.is_dirty():
+            self._banner.show_message(
+                "info", EDITOR_RUN_SAVE_FIRST_TITLE, EDITOR_RUN_SAVE_FIRST_BODY
+            )
+            return
+        workflow = self._session.workflow()
+        self._step_results.clear()
+        self._canvas.clear_step_statuses()
+        if requires_desktop_approval(workflow):
+            kinds = ", ".join(mutating_kind_names(workflow))
+            self._approval_details.setText(
+                f"This will control your computer: {kinds}. "
+                "Review the steps before allowing them to run."
+            )
+            self._approval_panel.show()
+            return
+        self.run_requested.emit(workflow)
+
+    def _approve_and_run(self) -> None:
+        if self._session is None:
+            return
+        try:
+            approval = approve_desktop_workflow(self._session.workflow(), allow_observations=True)
+        except OnceError as error:
+            self._banner.show_message("error", "Approval could not be completed", str(error))
+            return
+        self._approval_panel.hide()
+        self.run_requested.emit(approval)
+
+    def show_run_message(self, severity: str, title: str, body: str) -> None:
+        self._banner.show_message(severity, title, body)
+
+    def _cancel_clicked(self) -> None:
+        if self._running:
+            self.cancel_run_requested.emit()
+        else:
+            self.cancelled.emit()
+
+    def show_step_result(self, result: object) -> None:
+        """Render one worker progress result on the canvas and inspector."""
+        step_id = getattr(result, "step_id", None)
+        if not isinstance(step_id, str) or self._session is None:
+            return
+        status = getattr(getattr(result, "status", None), "value", "UNKNOWN")
+        self._step_results[step_id] = result
+        self._canvas.set_step_status(step_id, status)
+        if self._canvas.selected_id == step_id:
+            self._show_inspector_for(step_id, self._session.workflow())
+
+    def set_running(self, running: bool) -> None:
+        """Lock definition controls while the saved definition is executing."""
+        self._running = running
+        self._cancel_button.setText(EDITOR_CANCEL_RUN if running else "Cancel")
+        for button in (
+            self._add_button,
+            self._delete_button,
+            self._undo_button,
+            self._redo_button,
+            self._save_button,
+            self._run_button,
+        ):
+            button.setEnabled(not running)
+        self._canvas.setEnabled(not running)
+        self._inspector.setEnabled(not running)
+
     def _discard(self) -> None:
         if self._session is None:
             return
@@ -268,6 +400,12 @@ class EditorPage(QWidget):
         self._show_inspector_for(self._canvas.selected_id, workflow)
         for field_name in self._inspector.field_names:
             self._inspector.field(field_name).installEventFilter(self)
+        has_deletable_step = (
+            isinstance(self._canvas.selected_id, str)
+            and not self._canvas.is_terminal(self._canvas.selected_id)
+            and any(s.step_id == self._canvas.selected_id for s in workflow.steps)
+        )
+        self._delete_button.setEnabled(has_deletable_step and not self._running)
         self._undo_button.setEnabled(self._session.can_undo)
         self._redo_button.setEnabled(self._session.can_redo)
         self._sync_name_input()
@@ -279,10 +417,36 @@ class EditorPage(QWidget):
         """Show the selected step's summary, or the automation summary."""
         if self._session is None:
             return
+        workflow = self._session.workflow()
+        has_deletable_step = (
+            isinstance(node_id, str)
+            and not self._canvas.is_terminal(node_id)
+            and any(s.step_id == node_id for s in workflow.steps)
+        )
+        self._delete_button.setEnabled(has_deletable_step and not self._running)
+        self._steps_list.blockSignals(True)
+        matched_row = -1
+        if isinstance(node_id, str):
+            for idx, step in enumerate(workflow.steps):
+                if step.step_id == node_id:
+                    matched_row = idx
+                    break
+        self._steps_list.setCurrentRow(matched_row)
+        self._steps_list.blockSignals(False)
         if isinstance(node_id, str) and self._canvas.is_terminal(node_id):
             self._inspector.show_terminal("Start" if node_id == "__start__" else "Finish")
             return
-        self._show_inspector_for(node_id, self._session.workflow())
+        self._show_inspector_for(node_id, workflow)
+
+    def _on_step_item_clicked(self, item: object) -> None:
+        if self._session is None or item is None:
+            return
+        row = self._steps_list.row(item)
+        steps = self._session.workflow().steps
+        if 0 <= row < len(steps):
+            target_id = steps[row].step_id
+            if self._canvas.selected_id != target_id:
+                self._canvas.select_node(target_id)
 
     def _apply_inspector_changes(self, changes: dict[str, object]) -> None:
         if self._session is None or self._canvas.selected_id is None:
@@ -319,4 +483,4 @@ class EditorPage(QWidget):
         if step is None:
             self._inspector.show_automation(workflow)
         else:
-            self._inspector.show_step(step)
+            self._inspector.show_step(step, self._step_results.get(step.step_id))

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
+from types import SimpleNamespace
 
 import pytest
 from PySide6.QtCore import Qt
@@ -150,10 +151,16 @@ def make_page(qtbot, service: FakeService) -> MyAutomationsPage:
     return page
 
 
-def click_run(page) -> None:
+def row_run_button(page, index: int = 0):
+    """The visible Run control of one row (each row owns its own actions)."""
+    return page._rows[index].run_button
+
+
+def click_run(page, index: int = 0) -> None:
     """The Run control is an inline confirm: click to arm, click to confirm."""
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    button = row_run_button(page, index)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
 
 
 def test_page_lists_saved_automations(qtbot):
@@ -161,8 +168,8 @@ def test_page_lists_saved_automations(qtbot):
     page = make_page(qtbot, service)
 
     assert page._workflow_list.count() == 2
-    assert page._workflow_list.item(0).text() == "alpha-workflow.json"
-    assert page._workflow_list.item(1).text() == "beta-workflow.json"
+    assert page._workflow_list.item(0).text() == ""
+    assert page._workflow_list.item(1).text() == ""
     assert page._workflow_list.item(0).data(Qt.UserRole) == Path("alpha-workflow.json")
 
 
@@ -215,6 +222,19 @@ def test_rows_show_automation_name_and_actually_ran_status(qtbot):
     assert chips[0].property("chipKind") == "fail"
 
 
+def test_selected_row_shows_one_readable_title_without_filename_overlap(qtbot):
+    service = FakeService(two_saved_workflows())
+    page = make_page(qtbot, service)
+
+    page._workflow_list.setCurrentRow(0)
+
+    row = page._workflow_list.itemWidget(page._workflow_list.item(0))
+    assert row._name_label.text() == "Alpha workflow"
+    assert page._workflow_list.item(0).text() == ""
+    assert "Alpha workflow" in page._details_label.text()
+    assert page._workflow_list.height() <= 320
+
+
 def test_rows_lead_the_caption_with_the_saved_date(qtbot, tmp_path) -> None:
     """The saved-on date separates rows that share the same automation name."""
     alpha_path = tmp_path / "alpha-workflow.json"
@@ -250,6 +270,22 @@ def test_unreadable_file_shows_file_name_and_warning_never_crashes(qtbot) -> Non
     assert "could not be read" in page._banner.body_text
 
 
+def test_every_row_fits_inside_the_list(qtbot):
+    """A fixed list height used to clip the last automation off the bottom."""
+    workflows = {
+        Path(f"wf-{index}.json"): make_workflow(f"wf-{index}", f"Automation {index}")
+        for index in range(4)
+    }
+    service = FakeService(workflows)
+    page = make_page(qtbot, service)
+    QTest.qWait(100)
+
+    view = page._workflow_list
+    last = view.visualItemRect(view.item(view.count() - 1))
+    assert view.count() == 4
+    assert last.bottom() < view.height(), (last, view.height())
+
+
 def test_refresh_picks_up_newly_saved_automation(qtbot):
     service = FakeService({})
     page = make_page(qtbot, service)
@@ -259,7 +295,7 @@ def test_refresh_picks_up_newly_saved_automation(qtbot):
     page.refresh()
 
     assert page._workflow_list.count() == 1
-    assert page._workflow_list.item(0).text() == "beta-workflow.json"
+    assert page._workflow_list.item(0).text() == ""
 
 
 def test_details_match_selected_automation(qtbot):
@@ -268,15 +304,37 @@ def test_details_match_selected_automation(qtbot):
 
     page._workflow_list.setCurrentRow(0)
     first_details = page._details_label.text()
-    assert "alpha-workflow" in first_details
-    assert "REPORT" in first_details
+    assert "Alpha workflow" in first_details
+    assert "Note: Inspect workflow" in first_details
     assert "alpha-workflow definition accepted." in first_details
+    assert "Alpha workflow (alpha-workflow)" not in first_details
+    assert "REPORT" not in first_details
 
     page._workflow_list.setCurrentRow(1)
     second_details = page._details_label.text()
     assert second_details != first_details
-    assert "beta-workflow" in second_details
+    assert "Beta workflow" in second_details
     assert "alpha-workflow definition accepted." not in second_details
+
+
+def test_live_progress_uses_plain_labels_not_ids_or_enum_names(qtbot):
+    service = FakeService(two_saved_workflows())
+    page = make_page(qtbot, service)
+    page._details_label.setText("Running 'Alpha workflow'...")
+
+    page._on_run_progress(
+        SimpleNamespace(
+            step_id="inspect-internal-id",
+            status=SimpleNamespace(value="SUCCEEDED"),
+            message="The step finished.",
+            evidence=(),
+        )
+    )
+
+    text = page._details_label.text()
+    assert "Done — The step finished." in text
+    assert "inspect-internal-id" not in text
+    assert "SUCCEEDED" not in text
 
 
 def test_open_uses_saved_path_and_shows_read_only_steps(qtbot):
@@ -348,12 +406,13 @@ def test_run_arm_only_click_starts_nothing(qtbot):
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
 
-    QTest.mouseClick(page._run_button, Qt.MouseButton.LeftButton)
+    button = row_run_button(page, 0)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
 
-    assert page._run_button.is_armed() is True
-    assert page._run_button.text() == MY_RUN_CONFIRM
+    assert button.is_armed() is True
+    assert button.text() == MY_RUN_CONFIRM
     assert service.run_calls() == []
-    assert page._run_button.isEnabled() is True
+    assert button.isEnabled() is True
 
 
 def test_load_error_is_surfaced_and_runs_nothing(qtbot):
@@ -370,7 +429,7 @@ def test_load_error_is_surfaced_and_runs_nothing(qtbot):
     assert "File is not a valid workflow." in page._banner.body_text
     assert "File is not a valid workflow." in page._details_label.text()
     assert service.run_calls() == []
-    assert page._run_button.isEnabled() is True
+    assert row_run_button(page, 0).isEnabled() is True
 
 
 def test_run_with_confirmation_calls_run_once_with_loaded_workflow(qtbot):
@@ -379,16 +438,17 @@ def test_run_with_confirmation_calls_run_once_with_loaded_workflow(qtbot):
     service = FakeService(two_saved_workflows())
     page = make_page(qtbot, service)
     page._workflow_list.setCurrentRow(0)
-    assert page._run_button.isEnabled() is True
+    button = row_run_button(page, 0)
+    assert button.isEnabled() is True
 
     click_run(page)
-    assert page._run_button.isEnabled() is False
-    assert page._run_button.text() == MY_RUN_RUNNING
+    assert row_run_button(page, 0).isEnabled() is False
+    assert row_run_button(page, 0).text() == MY_RUN_RUNNING
     service.release.set()
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
 
-    assert page._run_button.isEnabled() is True
-    assert page._run_button.text() == "Run"
+    assert row_run_button(page, 0).isEnabled() is True
+    assert row_run_button(page, 0).text() == "Run"
     assert service.run_calls() == [service.workflows[Path("alpha-workflow.json")]]
 
 
@@ -400,11 +460,11 @@ def test_run_button_stays_disabled_until_run_finishes(qtbot):
 
     click_run(page)
     assert page._preview_button.isEnabled() is False
-    assert page._open_button.isEnabled() is False
+    assert page._rows[0].open_button.isEnabled() is False
     service.release.set()
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
     assert page._preview_button.isEnabled() is True
-    assert page._open_button.isEnabled() is True
+    assert page._rows[0].open_button.isEnabled() is True
 
 
 def test_failing_run_shows_banner_error(qtbot):
@@ -421,7 +481,7 @@ def test_failing_run_shows_banner_error(qtbot):
     assert page._banner.isVisible()
     assert "Controlled failure injection from the test." in page._banner.body_text
     assert "Controlled failure injection from the test." in page._details_label.text()
-    assert page._run_button.isEnabled() is True
+    assert row_run_button(page, 0).isEnabled() is True
 
 
 def test_run_shows_finished_run_status(qtbot):
@@ -434,7 +494,7 @@ def test_run_shows_finished_run_status(qtbot):
     click_run(page)
     qtbot.waitUntil(lambda: page._worker is None, timeout=5000)
 
-    assert "SUCCEEDED" in page._details_label.text()
+    assert "Run Succeeded" in page._details_label.text()
 
 
 def test_shell_injects_service_into_page(qtbot):

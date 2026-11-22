@@ -78,14 +78,18 @@ def run_with(actions: FakeBrowserActions, steps: tuple[WorkflowStep, ...]):
 # ------------------------------------------------------------------ validation
 
 
-def test_launch_browser_requires_registered_chrome() -> None:
-    ok = step("launch", StepKind.LAUNCH_BROWSER, {"application": "chrome"})
+def test_launch_browser_requires_valid_executable_path() -> None:
+    ok = step(
+        "launch",
+        StepKind.LAUNCH_BROWSER,
+        {"executable": "C:/Program Files/Google/Chrome/Application/chrome.exe"},
+    )
     WorkflowRunner.validate(Workflow("w", "w", (ok,)))
-    unknown_app = step("bad", StepKind.LAUNCH_BROWSER, {"application": "edge"})
-    with pytest.raises(WorkflowValidationError, match="registry does not allow"):
-        WorkflowRunner.validate(Workflow("w2", "w2", (unknown_app,)))
-    bad_exe = step("bad2", StepKind.LAUNCH_BROWSER, {"executable": "C:/tools/browser.exe"})
-    with pytest.raises(WorkflowValidationError, match="other than the registered"):
+    unknown_field = step("bad", StepKind.LAUNCH_BROWSER, {"application": "edge"})
+    with pytest.raises(WorkflowValidationError, match="unknown browser launch fields"):
+        WorkflowRunner.validate(Workflow("w2", "w2", (unknown_field,)))
+    bad_exe = step("bad2", StepKind.LAUNCH_BROWSER, {"executable": "relative/browser.exe"})
+    with pytest.raises(WorkflowValidationError, match="absolute path"):
         WorkflowRunner.validate(Workflow("w3", "w3", (bad_exe,)))
 
 
@@ -222,7 +226,11 @@ def test_wait_page_selector_condition_is_rejected_at_validation() -> None:
 def test_browser_flow_runs_through_provider_and_records_step_ids() -> None:
     actions = FakeBrowserActions()
     steps = (
-        step("launch", StepKind.LAUNCH_BROWSER, {"application": "chrome"}),
+        step(
+            "launch",
+            StepKind.LAUNCH_BROWSER,
+            {"executable": "C:/Program Files/Google/Chrome/Application/chrome.exe"},
+        ),
         step("navigate", StepKind.NAVIGATE_BROWSER, NAVIGATE_TARGET),
         step("inspect", StepKind.INSPECT_PAGE, INSPECT_TARGET),
         step("wait", StepKind.WAIT_PAGE, WAIT_TARGET),
@@ -240,7 +248,7 @@ def test_missing_browser_provider_is_inconclusive() -> None:
         "Launch",
         StepKind.LAUNCH_BROWSER,
         "Launched",
-        target=json.dumps({"application": "chrome"}),
+        target=json.dumps({"executable": "C:/Program Files/Google/Chrome/Application/chrome.exe"}),
     )
     run = WorkflowRunner().run(Workflow("x", "x", (launch,)))
     assert run.status.value == "FAILED"
@@ -289,7 +297,11 @@ def test_approval_gate_covers_browser_mutations() -> None:
 
 def test_browser_step_cancellation_before_a_pending_step() -> None:
     actions = FakeBrowserActions()
-    launched = step("launch", StepKind.LAUNCH_BROWSER, {"application": "chrome"})
+    launched = step(
+        "launch",
+        StepKind.LAUNCH_BROWSER,
+        {"executable": "C:/Program Files/Google/Chrome/Application/chrome.exe"},
+    )
     next_step = step("nav2", StepKind.NAVIGATE_BROWSER, NAVIGATE_TARGET)
     # False before "launch" runs, True before "nav2" starts.
     checks = iter((False, True))
@@ -308,7 +320,10 @@ def test_browser_mutating_steps_refuse_postconditions() -> None:
     from engine.workflow import PostconditionKind
 
     for kind, target in (
-        (StepKind.LAUNCH_BROWSER, {"application": "chrome"}),
+        (
+            StepKind.LAUNCH_BROWSER,
+            {"executable": "C:/Program Files/Google/Chrome/Application/chrome.exe"},
+        ),
         (StepKind.NAVIGATE_BROWSER, NAVIGATE_TARGET),
         (StepKind.INTERACT_PAGE_ELEMENT, INTERACT_TARGET),
         (StepKind.VERIFY_FILE_TEXT, {"path": "x.txt", "contains": "hi"}),

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from controller.service import WorkflowService
 from controller.verifier_config import load_verifier_config, save_verifier_config
+from engine.errors import OnceError
 from storage.database import connect
 from storage.history import ExecutionHistory
 from ui.main_window import MainWindow
@@ -163,15 +164,15 @@ def test_panel_shows_diff_and_enables_approval_after_passing_verification(
     assert "+" in panel._diff_view.toPlainText()
     assert "extractor.py" in panel._changed_files_label.text()
 
-    qtbot.waitSignal(panel._verify_worker_done, timeout=30_000)
-    panel._verify_selected()
+    with qtbot.waitSignal(panel._verify_worker_done, timeout=30_000):
+        panel._verify_selected()
     qtbot.waitUntil(lambda: "verification" in panel.status_text().lower(), timeout=30_000)
 
     qtbot.waitUntil(lambda: panel._approve_button.isEnabled(), timeout=10_000)
-    panel._approve_and_apply()
+    with qtbot.waitSignal(panel._apply_worker_done, timeout=30_000):
+        panel._approve_and_apply()
     qtbot.waitUntil(lambda: panel.status_text().startswith("Applied"), timeout=10_000)
     qtbot.waitUntil(lambda: "105.0" in (repo / "extractor.py").read_text(encoding="utf-8"))
-    qtbot.waitSignal(panel._apply_worker_done, timeout=30_000)
     assert "105.0" in (repo / "extractor.py").read_text(encoding="utf-8")
     records = service.agent_proposals()
     phases = {
@@ -348,8 +349,8 @@ def test_panel_can_apply_a_recorded_approval_after_a_restart(qtbot: QtBot, tmp_p
     assert panel._apply_button.isEnabled()
     assert "Approved; you can apply it now." in panel._blockers_label.text()
 
-    panel._apply_recorded_approval()
-    qtbot.waitSignal(panel._apply_worker_done, timeout=60_000)
+    with qtbot.waitSignal(panel._apply_worker_done, timeout=60_000):
+        panel._apply_recorded_approval()
     qtbot.waitUntil(lambda: "105.0" in (repo / "extractor.py").read_text(encoding="utf-8"))
     qtbot.waitUntil(lambda: not panel._apply_button.isEnabled(), timeout=60_000)
     qtbot.waitUntil(
@@ -409,6 +410,25 @@ def test_verifier_dialog_refuses_invalid_configuration(qtbot: QtBot, tmp_path: P
         QMessageBox.warning = monkeypatch_warn
     assert warnings, "the refusal must be explained to the user"
     assert not (tmp_path / "appdata" / "verifier.json").exists()
+
+
+def test_blocker_check_failure_is_shown_and_logged(
+    qtbot: QtBot, tmp_path: Path, monkeypatch, caplog
+) -> None:
+    service = WorkflowService(history=ExecutionHistory(connect(tmp_path / "history.db")))
+    panel = ProposalReviewPanel(service)
+    qtbot.addWidget(panel)
+
+    def fail_check(_review: object) -> tuple[str, ...]:
+        raise OnceError("Repository inspection failed.")
+
+    monkeypatch.setattr(service, "approval_blockers", fail_check)
+    with caplog.at_level("ERROR", logger="ui.review_view"):
+        panel._check_blockers(object())
+
+    assert "Repository inspection failed." in panel._message_label.text()
+    assert "blocker check failed" in caplog.text.lower()
+    service.close()
 
 
 def test_panel_configures_and_reloads_the_verifier_config(qtbot: QtBot, tmp_path: Path) -> None:

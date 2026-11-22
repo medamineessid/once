@@ -1,0 +1,175 @@
+"""B4: an observation-only run is labelled in plain language, never as a code.
+
+Both surfaces read the label from `ui.components.formatting.status_display`
+(`ui/pages/activity.py` rows and details, `ui/pages/home.py` recent activity),
+so the wording cannot drift between pages.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from PySide6.QtWidgets import QApplication, QLabel
+
+from controller.service import WorkflowService
+from engine.workflow import StepKind, Workflow, WorkflowStatus, WorkflowStep
+from storage.database import connect
+from storage.history import ExecutionHistory
+from ui.components.formatting import status_display
+from ui.pages.activity import ActivityPage
+from ui.pages.home import HomePage
+
+LABEL = "Observation only — nothing was performed"
+
+
+@pytest.fixture
+def app(qtbot):
+    application = QApplication.instance()
+    if application is None:
+        application = QApplication([])
+    return application
+
+
+def make_service(tmp_path: Path) -> WorkflowService:
+    return WorkflowService(history=ExecutionHistory(connect(tmp_path / "history.db")))
+
+
+def demo_run_service(tmp_path: Path) -> WorkflowService:
+    service = make_service(tmp_path)
+    service.run_demo()
+    return service
+
+
+def report_only_workflow() -> Workflow:
+    """A non-demo workflow whose REPORT step performs nothing observable."""
+    return Workflow(
+        workflow_id="report-only-workflow",
+        name="Report only",
+        steps=(
+            WorkflowStep(
+                step_id="inspect",
+                name="Inspect workflow",
+                kind=StepKind.REPORT,
+                message="Workflow definition accepted.",
+            ),
+        ),
+    )
+
+
+def test_the_new_run_status_has_one_plain_language_label() -> None:
+    assert status_display(WorkflowStatus.OBSERVATION_ONLY.value) == (LABEL, "neutral")
+
+
+def test_failure_keeps_its_own_label() -> None:
+    """Guard: the new label must not blur a real failure."""
+    assert status_display(WorkflowStatus.FAILED.value) == ("Failed", "fail")
+    assert status_display(WorkflowStatus.SUCCEEDED.value) == ("Succeeded", "ok")
+
+
+def test_activity_row_shows_the_observation_label(qtbot, tmp_path) -> None:
+    page = ActivityPage()
+    qtbot.addWidget(page)
+    page.set_service(demo_run_service(tmp_path))
+
+    item = page._history_list.item(0)
+    row = page._history_list.itemWidget(item)
+    texts = " | ".join(label.text() for label in row.findChildren(QLabel))
+
+    assert LABEL in texts
+    assert "OBSERVATION_ONLY" not in texts
+
+
+def test_activity_details_explain_the_observation_in_plain_language(qtbot, tmp_path) -> None:
+    page = ActivityPage()
+    qtbot.addWidget(page)
+    page.set_service(demo_run_service(tmp_path))
+
+    page._history_list.setCurrentRow(0)
+    details = page._details_label.text()
+
+    assert LABEL in details
+    assert "OBSERVATION_ONLY" not in details
+
+
+def test_home_recent_activity_shows_the_observation_label(qtbot, tmp_path) -> None:
+    # Home hides the demo workflow, so use an ordinary report-only workflow:
+    # it performs nothing, which is exactly what the label must describe.
+    service = make_service(tmp_path)
+    service.run_workflow(report_only_workflow())
+    page = HomePage()
+    qtbot.addWidget(page)
+    page.set_service(service)
+    page.refresh()
+
+    texts = " | ".join(label.text() for label in page._activity_rows[0].findChildren(QLabel))
+
+    assert LABEL in texts
+    assert "OBSERVATION_ONLY" not in texts
+
+
+def test_partially_performed_run_shows_done_and_observed_counts(qtbot, tmp_path) -> None:
+    target = tmp_path / "invoice.txt"
+    target.write_bytes(b"invoice")
+    mixed = Workflow(
+        workflow_id="mixed-outcome",
+        name="Mixed outcome",
+        steps=(
+            WorkflowStep("c1", "Check", StepKind.INSPECT_PATH, "Found", str(target)),
+            WorkflowStep("r1", "Note", StepKind.REPORT, "Observed only."),
+        ),
+    )
+    service = make_service(tmp_path)
+    run = service.run_workflow(mixed, allowed_root=tmp_path)
+    assert run.status is WorkflowStatus.PARTIALLY_PERFORMED
+    assert status_display(run.status.value, run.results) == (
+        "1 of 2 steps ran",
+        "warn",
+    )
+
+    activity = ActivityPage()
+    qtbot.addWidget(activity)
+    activity.set_service(service)
+    item = activity._history_list.item(0)
+    row = activity._history_list.itemWidget(item)
+    row_texts = " | ".join(label.text() for label in row.findChildren(QLabel))
+    assert "1 of 2 steps ran" in row_texts
+
+    home = HomePage()
+    qtbot.addWidget(home)
+    home.set_service(service)
+    home.refresh()
+    home_texts = " | ".join(label.text() for label in home._activity_rows[0].findChildren(QLabel))
+    assert "1 of 2 steps ran" in home_texts
+
+
+def test_home_failed_run_shows_reason_and_view_details(qtbot, tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QPushButton
+
+    failing = Workflow(
+        workflow_id="fail-test",
+        name="Failing workflow",
+        steps=(WorkflowStep("f1", "Fail", StepKind.FAIL, "Element missing in window"),),
+    )
+    service = WorkflowService(
+        history=ExecutionHistory(connect(tmp_path / "history.db")),
+        workflow_directory=tmp_path / "workflows",
+    )
+    service.save(failing)
+    run = service.run_workflow(failing, allowed_root=tmp_path)
+
+    home = HomePage()
+    qtbot.addWidget(home)
+    home.set_service(service)
+    home.refresh()
+    row = home._activity_rows[0]
+    row_texts = " | ".join(label.text() for label in row.findChildren(QLabel))
+    assert "Failing workflow" in row_texts
+    assert "Failed" in row_texts
+    assert "Element missing in window" in row_texts
+    buttons = row.findChildren(QPushButton)
+    assert any(b.text() == "View details" for b in buttons)
+    emitted: list[str] = []
+    home.view_run_requested.connect(emitted.append)
+    next(b for b in buttons if b.text() == "View details").click()
+    assert emitted == [run.run_id]

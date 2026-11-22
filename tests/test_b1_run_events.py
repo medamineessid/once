@@ -86,7 +86,8 @@ def test_event_order_for_success_and_run_finished_stops_the_stream() -> None:
     assert sequences == sorted(sequences)
     assert len(set(sequences)) == len(sequences)
     finished = events[-1]
-    assert finished.status == "SUCCEEDED"
+    # Both steps are reports, so the run observed and performed nothing.
+    assert finished.status == "OBSERVATION_ONLY"
     assert finished.engine_run_id == run.run_id
 
 

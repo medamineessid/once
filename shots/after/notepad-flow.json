@@ -1,0 +1,130 @@
+{
+  "recorded_events": [
+    {
+      "kind": "WINDOW_OPEN",
+      "window_title": "Sans titre – Bloc-notes",
+      "text": null
+    },
+    {
+      "kind": "WINDOW_TITLE_CHANGED",
+      "window_title": "*once – Bloc-notes",
+      "text": null
+    },
+    {
+      "kind": "WINDOW_TITLE_CHANGED",
+      "window_title": "*once test – Bloc-notes",
+      "text": null
+    },
+    {
+      "kind": "TEXT_INPUT",
+      "window_title": "Sans titre – Bloc-notes",
+      "text": "once test"
+    },
+    {
+      "kind": "KEY_PRESS",
+      "window_title": "*once test – Bloc-notes",
+      "text": null
+    },
+    {
+      "kind": "WINDOW_TITLE_CHANGED",
+      "window_title": "Sans titre – Bloc-notes",
+      "text": null
+    },
+    {
+      "kind": "WINDOW_CLOSE",
+      "window_title": "Sans titre – Bloc-notes",
+      "text": null
+    }
+  ],
+  "pre_existing_notepad_windows": [
+    "*While some question the value of zo – Bloc-notes"
+  ],
+  "draft_steps": [
+    {
+      "kind": "LAUNCH_APPLICATION",
+      "name": "Open Notepad",
+      "target": "{\"executable\": \"C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.WindowsNotepad_11.2609.11.0_x64__8wekyb3d8bbwe\\\\Notepad\\\\Notepad.exe\"}"
+    },
+    {
+      "kind": "TYPE_TEXT",
+      "name": "Type in Éditeur de texte",
+      "target": "{\"window\": {\"title\": \"Sans titre \\u2013 Bloc-notes\"}, \"element\": {\"control_type\": \"Document\", \"class_name\": \"RichEditD2DPT\", \"name\": \"\\u00c9diteur de texte\"}, \"text\": \"once test\"}"
+    },
+    {
+      "kind": "PRESS_SHORTCUT",
+      "name": "Press CTRL+Z",
+      "target": "{\"window\": {\"title\": \"*once test \\u2013 Bloc-notes\"}, \"keys\": \"ctrl+z\"}"
+    },
+    {
+      "kind": "CLOSE_APPLICATION",
+      "name": "Close Notepad",
+      "target": "{\"executable\": \"C:\\\\Program Files\\\\WindowsApps\\\\Microsoft.WindowsNotepad_11.2609.11.0_x64__8wekyb3d8bbwe\\\\Notepad\\\\Notepad.exe\"}"
+    }
+  ],
+  "runs": [
+    {
+      "attempt": 1,
+      "status": "SUCCEEDED",
+      "seconds": 1.71,
+      "steps": [
+        {
+          "kind": "LAUNCH_APPLICATION",
+          "status": "SUCCEEDED",
+          "message": "The application was launched."
+        },
+        {
+          "kind": "TYPE_TEXT",
+          "status": "SUCCEEDED",
+          "message": "The text was entered and confirmed by reading the control."
+        },
+        {
+          "kind": "PRESS_SHORTCUT",
+          "status": "SUCCEEDED",
+          "message": "The shortcut was sent to the identified window only."
+        },
+        {
+          "kind": "CLOSE_APPLICATION",
+          "status": "SUCCEEDED",
+          "message": "The application windows were closed."
+        }
+      ],
+      "leftover_windows": 0
+    },
+    {
+      "attempt": 2,
+      "status": "SUCCEEDED",
+      "seconds": 1.65,
+      "steps": [
+        {
+          "kind": "LAUNCH_APPLICATION",
+          "status": "SUCCEEDED",
+          "message": "The application was launched."
+        },
+        {
+          "kind": "TYPE_TEXT",
+          "status": "SUCCEEDED",
+          "message": "The text was entered and confirmed by reading the control."
+        },
+        {
+          "kind": "PRESS_SHORTCUT",
+          "status": "SUCCEEDED",
+          "message": "The shortcut was sent to the identified window only."
+        },
+        {
+          "kind": "CLOSE_APPLICATION",
+          "status": "SUCCEEDED",
+          "message": "The application windows were closed."
+        }
+      ],
+      "leftover_windows": 0
+    }
+  ],
+  "notepad_processes_before": [
+    "\"Notepad.exe\",\"4688\",\"Console\",\"1\",\"174ÿ384 Ko\"",
+    "\"Notepad.exe\",\"12692\",\"Console\",\"1\",\"100ÿ244 Ko\""
+  ],
+  "notepad_processes_after": [
+    "\"Notepad.exe\",\"4688\",\"Console\",\"1\",\"177ÿ232 Ko\"",
+    "\"Notepad.exe\",\"12692\",\"Console\",\"1\",\"100ÿ240 Ko\""
+  ]
+}

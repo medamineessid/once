@@ -49,11 +49,14 @@ spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING
 | A2d | Interactive canvas navigation and layout persistence | DONE | slice/a2c-undo-save d5d1cb4 (includes 1d3ccd1): bounded 25%-200% zoom, hand-pan, fit-to-screen, minimap, draggable nodes, saved positions through controller/storage; focused 35 passed; full verify 465 passed/2 skipped |
 | A2e | Editor empty-state and terminal UX correction | DONE | slice/a2c-undo-save: fixed Start/Finish are explained as non-editable, Add step is prominent, empty inspector gives next action, terminal labels/contrast improved; focused 24 passed; full verify 467 passed/2 skipped |
 | A2f | Recorder discoverability in create flow | DONE | slice/a2c-undo-save: real RecordingService start/stop controls, active/saved state, local persistence, truthful review-required message; focused 4 passed; full verify 468 passed/2 skipped |
+| A2g | Home first-run UX correction | DONE | removed demo card/redundant CTA/brand footer, added clear manual-vs-recording choices, hid diagnostic demo rows from Home; full verify 468 passed/2 skipped |
+| A2h | Separate manual and recording routes | DONE | Build opens the editor directly; Record opens a dedicated recording screen with back action and review handoff; 469 passed/2 skipped |
+| P5a | Recording to reviewable editor draft | DONE | Stop recording builds a safe observation proposal, Review shows its nodes, existing approval gate saves it, and approved workflow opens in editor; full verify 471 passed/2 skipped |
 | P5 | Recording → editor (slice/p5-recording-editor) | TODO | |
-| P6 | Run + review (slice/p6-run-review) | TODO | includes review.py defects D12/D13 |
+| P6 | Run + review (slice/p6-run-review) | IN PROGRESS | editor run uses WorkflowWorker, requires saved definitions, locks edits while running, refreshes Activity, shows the existing desktop approval gate, renders live step states plus evidence in the inspector, requests cooperative cancellation safely, and opens saved reviews through a real Edit automation route; broader P8 hardening remains |
 | P7 | Branching (slice/p7-branching) | PARKED | PARKED.md PARKED-1; Add-decision hidden |
-| P8 | Hardening (slice/p8-hardening) | TODO | |
-| P9 | Parity, default switch, release (slice/p9-release) | TODO | gate conditions in prompt |
+| P8 | Hardening (slice/p8-hardening) | IN PROGRESS | Added bounded 101-step and overlong-text rejection coverage, repeated cancellation safety coverage, explicit `--classic` entry-point escape hatch, and a regression test for detaching a worker that ignores cancellation |
+| P9 | Parity, default switch, release (slice/p9-release) | IN PROGRESS | Added docs/MVP_CHECKLIST.md and `--classic`; `once.spec` now builds and the isolated packaged smoke test exits 0; default switch remains gated on first-time acceptance |
 
 ## Legacy journey queue (PHASE C) — superseded by the prompt queue above
 

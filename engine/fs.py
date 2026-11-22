@@ -1,7 +1,27 @@
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 from pathlib import Path
+from uuid import uuid4
+
+
+def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8") -> None:
+    """Write one text file without truncating the previous file on failure.
+
+    The payload goes to a unique sibling temporary file, which replaces the
+    destination only after the whole write succeeded. An interrupted write
+    leaves the previous file exactly as it was.
+    """
+    destination = Path(path)
+    temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
+    try:
+        temporary.write_text(text, encoding=encoding)
+        temporary.replace(destination)
+    except OSError:
+        with suppress(OSError):
+            temporary.unlink()
+        raise
 
 
 class RealFs:
