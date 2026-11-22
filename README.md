@@ -127,6 +127,35 @@ All user data (SQLite history, approved application hashes, saved workflows, rec
 
 ---
 
+## Branching and pull requests
+
+`main` is the default and only long-lived branch. Everything lands through a
+pull request into it.
+
+1. Create a feature branch from an up-to-date `main` (for example `lane-a/...`,
+   `slice/...`, `fix/...`, `docs/...`).
+2. Open a pull request whose base is `main`, and wait for both checks:
+   - **CI** — `.github/workflows/tests.yml` runs `scripts/verify.ps1` on
+     `windows-latest` with Python 3.14: `ruff format --check`, `ruff check`, the
+     full `pytest` suite, the offscreen UI smoke test, and the append-only
+     engineering-log gate.
+   - **SonarCloud Code Analysis** — no open bug or vulnerability in new code
+     (reliability and security ratings on new code must both be A).
+3. Merge with a **merge commit**. Squash merges and rebase merges are not used.
+   Never force-push and never rewrite published history.
+
+Never merge while a check is red. Do not delete the review branches
+(`integration/preview`, `lane-a-mvp-replay`, `lane-b-fix`,
+`slice/naming-defect`, `lane-a-mvp-scratch`) without asking the owner.
+
+`docs/ai_engineering_log.md` is append-only: earlier entries are never edited,
+reordered, or removed. The check is
+`scripts/check_log_append_only.py` (see `docs/WORKFLOW.md`, which also records
+the one temporary exception carried by PR #1 and the follow-up that removes
+it).
+
+---
+
 ## Documentation Map
 
 - [`CHANGELOG.md`](CHANGELOG.md) — what changed, and the real defects fixed while verifying it.
@@ -135,6 +164,7 @@ All user data (SQLite history, approved application hashes, saved workflows, rec
 - [`DESIGN.md`](DESIGN.md) — Native Qt design system, color tokens, typography scale, and canvas/inspector anatomy.
 - [`AGENTS.md`](AGENTS.md) — Architecture boundaries, non-negotiable safety invariants (`S1–S12`, `O1–O8`), and engineering rules.
 - [`docs/demo_checklist.md`](docs/demo_checklist.md) — Step-by-step MVP walkthrough checklist.
+- [`docs/WORKFLOW.md`](docs/WORKFLOW.md) — Branch, pull-request, and append-only-log notes, including every recorded exception.
 - [`docs/known_limits.md`](docs/known_limits.md) — Honest scope boundaries and safety constraints.
 - [`docs/decisions.md`](docs/decisions.md) — Architectural and dependency decision records (`PySide6 6.12.0`, `send2trash 2.1.0`, `pytest 9.1.1`, `Ruff 0.17.1`).
 - [`docs/ai_engineering_log.md`](docs/ai_engineering_log.md) — Chronological engineering and verification log.
