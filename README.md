@@ -6,6 +6,12 @@ Once is a local-first Windows desktop application built with Python and **PySide
 
 ---
 
+## Start here
+
+- `docs/PLAN.md` — the three-lane plan, order, evidence levels and risks.
+- `docs/COLLABORATOR.md` — lane rules and how a PR is accepted.
+- `docs/decisions.md`, `docs/WORKFLOW.md`, `AGENTS.md` — standing decisions and workflow.
+
 ## What Works Today (Current Capabilities)
 
 Once brings together a high-contrast native desktop interface — navy rail, lemon accents, banded Anton page titles (`ui/`, documented in [`DESIGN.md`](DESIGN.md)) — and a rock-solid, policy-gated execution engine (`engine/`, `controller/`, `integrations/`):
