@@ -4,10 +4,12 @@ Paste this into a fresh review session for PR **N**. Replace `N` and the task
 file only. Do not accept a PR as done from the author's prose alone.
 
 ```text
-Review PR N in the once repository. Read docs/COLLABORATOR.md, docs/PLAN.md,
-.github/CODEOWNERS and the task brief named in the PR body first. Apply the
-state drift rule: if docs/STATE.md or an old doc disagrees with the code and
-pasted output, the repo state wins; report the drift, do not edit STATE.md.
+Review PR N in the once repository. Re-read repo state before acting: check
+branch, status and gh.exe state yourself. Read docs/COLLABORATOR.md,
+docs/PLAN.md, .github/CODEOWNERS and the task brief named in the PR body first.
+Apply the docs-versus-code rule: if docs/STATE.md or an old doc disagrees with
+the code and pasted output, the repo state wins; report the drift, do not edit
+STATE.md.
 
 Return these sections, in this order:
 
@@ -44,6 +46,7 @@ Return these sections, in this order:
 
 Reviewer checklist (short form):
 
+- [ ] Repo state re-read before review (branch, status, gh.exe state).
 - [ ] Branch, status and task brief agree with the PR.
 - [ ] Only allowed files changed; owner-only paths untouched.
 - [ ] Pytest and both ruff commands pasted with real output.

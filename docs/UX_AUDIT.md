@@ -1,5 +1,10 @@
 # UX audit — the current shell (P1/f)
 
+> **Historical (2026-11-23).** This audit and its D1–D10 defect numbers describe
+> an older revision. The current defect list is `docs/UI_DEFECTS.md`, which uses
+> V1–V10 and records which old D-items are already fixed. Do not open new work
+> from the D-numbers below.
+
 Date: 2026-10-30. Scope: `ui/shell.py`, `ui/pages/*.py` as merged at e638e5e→85a5893
 (the audit reads exactly these revisions). Fixes are scheduled per queue item; the
 audit is re-checked at P8 hardening and before P9.

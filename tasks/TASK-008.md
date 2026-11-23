@@ -1,57 +1,64 @@
-# TASK-008 — Fix UX defects D1–D3 on Home (BLOCKED)
+# TASK-008 — Fix blocking defects V1, V2 and V4
 
-Lane: `ui` · Difficulty: `good-first-task` · Owner review required: `yes` · Label: `lane/ui` · Size: `S`
-
-## Status: BLOCKED
-
-Blocked by TASK-007. The audit must be green before its findings can be used to
-prove these fixes.
+Lane: `ui` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/ui` · Size: `M`
 
 ## Goal
 
-Home shows failed runs as plainly as successful ones, names automations instead
-of ids, and lays the action panel out on the shared top-aligned page template.
-This removes D1, D2 and D3 from `docs/UX_AUDIT.md`.
+Delete confirmation becomes readable, the permission panel shows both actions
+and all its text, and a row stays "Run" (disabled) while waiting for approval.
+These are the three V-defects that stop a user finishing a normal action. See
+`docs/UI_DEFECTS.md` and the app-window captures in `docs/ui-reference/`.
 
 ## Files allowed
 
-- `ui/pages/home.py`
+- `ui/components/delete_confirm.py`
+- `ui/components/approval_panel.py`
+- `ui/components/confirm.py`
+- `ui/pages/my_automations.py`
 - `ui/strings.py`
-- `ui/styles/__init__.py` (only for Home layout/contrast tokens)
+- `ui/styles/__init__.py` (explicitly allowed for V1/V2 tokens)
+- `tests/test_delete_flows.py`
+- `tests/test_b2_approval_panel.py`
 - `tests/test_shell.py`
-- `tests/test_p2_shell.py`
 - `tests/test_contrast.py`
+- `docs/ui-reference/` (before/after app-window captures only)
 
 ## Files forbidden
 
 - `engine/`, `storage/`, `recorder/`, `controller/`, `integrations/`
-- `ui/shell.py`, `ui/pages/my_automations.py`, `ui/pages/activity.py`,
-  `ui/pages/settings.py`, `ui/pages/create_automation.py`
-- `.github/`, `scripts/`, `docs/ai_engineering_log.md`, `docs/STATE.md`
+- `ui/pages/home.py`, `ui/pages/activity.py`, `ui/pages/settings.py`,
+  `ui/pages/review.py`, `ui/components/hero.py`, `ui/components/band.py`,
+  `ui/components/sidebar_item.py`
+- `.github/`, `scripts/verify.ps1`, `scripts/check_log_append_only.py`
+- `docs/ai_engineering_log.md`, `docs/STATE.md`
 - step schema, workflow validators, approval code
 
 ## Acceptance commands (run yourself)
 
 ```
-python -m pytest -q tests/test_shell.py tests/test_p2_shell.py tests/test_contrast.py
+python -m pytest -q tests/test_delete_flows.py tests/test_b2_approval_panel.py tests/test_shell.py tests/test_contrast.py
 ruff check .
 ruff format --check .
 ```
 
-The owner ran these three commands on this base and they pass. Paste your real
-summary lines in the PR.
+The owner ran these three commands on this base and they pass. Once TASK-007
+has landed, also run `python scripts/ui_audit.py` and paste its report.
 
 ## Screenshots
 
-App-window captures of Home at 960x600 and 1280x800, at 100% and 150% scale,
-through the real `app.py` path. One sentence each versus `docs/UI_SPEC.md`.
+Screenshots before and after, app window only, one sentence per image: use
+`docs/ui-reference/delete-confirm-before.png` (from `details.png`),
+`docs/ui-reference/approval-before.png` (from `my-automations.png`) and the
+matching `-after.png` captures; say what was unreadable or cut off and what is
+now readable and visible.
 
 ## Out of scope
 
-Changing run statuses in the engine, adding new strings that are not in
-`ui/strings.py`, or touching other pages.
+Changing the delete policy, the approval gate, or the resolver. No new
+dependency and no full-desktop capture.
 
 ## Notes
 
-Keep the failed-run wording honest: a failed run is still a real history row,
-not a success with a different colour.
+V1 needs a filled danger Delete and outlined navy Cancel using tokens, not
+hard-coded colours. V2 needs a scroll area or modal with both buttons always
+visible. V4 must not change when a run actually starts.

@@ -1,18 +1,13 @@
-# TASK-012 — Pick-one dialog and sample-fed run report view (BLOCKED)
+# TASK-012 — Pick-one dialog and sample-fed run report view
 
 Lane: `ui` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/ui` · Size: `M`
 
-## Status: BLOCKED
-
-Blocked by TASK-007 for the sample-data fixtures, and by TASK-009 for the run
-data shown in the report. Do not build either from invented data.
-
 ## Goal
 
-When a target is ambiguous, the user gets a non-modal picker that explains the
-choices; after a run, a read-only report view shows the same plain-language
-outcome and evidence from the sample data. Nothing in either view executes an
-action.
+When a target is ambiguous, show a non-modal picker that explains the choices;
+after a run, show a read-only report with the same plain-language outcome and
+evidence. Both views are fed by local sample data under `tests/fixtures/`, plus
+`tests/ui_fixtures/` after TASK-007 lands. Neither view executes an action.
 
 ## Files allowed
 
@@ -20,18 +15,22 @@ action.
 - `ui/pages/run_report.py` (new)
 - `ui/shell.py` (only to wire the two views)
 - `ui/strings.py`
-- `ui/styles/__init__.py` (only for picker/report tokens)
+- `ui/styles/__init__.py` (explicitly allowed for picker/report tokens)
+- `tests/fixtures/`
 - `tests/ui_fixtures/`
 - `tests/test_run_report.py` (new)
 - `tests/test_shell.py`
 - `tests/test_b4_status_labels.py`
+- `docs/ui-reference/` (before/after app-window captures only)
 
 ## Files forbidden
 
 - `engine/`, `storage/`, `recorder/`, `controller/`, `integrations/`
 - `ui/pages/home.py`, `ui/pages/my_automations.py`, `ui/pages/activity.py`,
-  `ui/pages/settings.py`, `ui/pages/create_automation.py`
-- `.github/`, `scripts/`, `docs/ai_engineering_log.md`, `docs/STATE.md`
+  `ui/pages/settings.py`, `ui/pages/create_automation.py`,
+  `ui/pages/review.py`
+- `.github/`, `scripts/verify.ps1`, `scripts/check_log_append_only.py`
+- `docs/ai_engineering_log.md`, `docs/STATE.md`
 - step schema, workflow validators, approval code
 
 ## Acceptance commands (run yourself)
@@ -43,21 +42,21 @@ ruff format --check .
 ```
 
 The owner ran these three commands on this base and they pass. Add the new
-`tests/test_run_report.py` to the pytest command before claiming done.
+`tests/test_run_report.py` to the pytest command before claiming done. Once
+TASK-007 has landed, also run `python scripts/ui_audit.py` and paste its report.
 
 ## Screenshots
 
-App-window captures of the picker with two identical targets and of the report
-with one successful and one observation-only step, at 960x600 and 1280x800.
-One sentence each versus `docs/UI_SPEC.md`.
+Screenshots before and after, app window only, one sentence per image: use the
+current shell as before, then show the picker with two identical targets and the
+report with one successful and one observation-only step.
 
 ## Out of scope
 
-Adding a new resolver, changing ambiguity policy, mutating targets from the
-picker, or calling a controller method that runs a workflow from these views.
+Changing the resolver or ambiguity policy, mutating targets from the picker, or
+claiming a real desktop run from sample data.
 
 ## Notes
 
-The picker returns a reviewed selection; it never calls a mutating action
-itself. The report view is read-only and must not show raw internal ids by
-default.
+The picker returns a reviewed selection. The report view must not show raw
+internal ids by default and must never execute a workflow.

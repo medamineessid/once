@@ -13,7 +13,7 @@ python -m venv .venv
 .\.venv\Scripts\python -m pytest -q      # tests (use --basetemp under %TEMP%)
 .\.venv\Scripts\ruff.exe check .
 .\.venv\Scripts\ruff.exe format --check .
-python scripts/ui_audit.py               # when it exists, before UI changes
+python scripts/ui_audit.py               # once TASK-007 lands; helps verify, not a blocker
 ```
 
 ## Folders, one line each
@@ -51,8 +51,10 @@ review map, not permission to edit an owner-only path.
 
 ## Hard rules
 
-1. Your branch is `feat/<lane>-<task>`, created from up-to-date `main`. Never
-   commit or merge into `main` yourself; the owner merges.
+1. **Session rule:** re-read repo state before acting — check `git.exe branch
+   --show-current`, `git.exe status --short`, fetch and `gh.exe` state. Your
+   branch is `feat/<lane>-<task>`, created from up-to-date `main`. Never commit
+   or merge into `main` yourself; the owner merges.
 2. Never force-push, never rewrite published history, never delete a branch.
 3. Change only the files your task brief lists under "Files allowed".
 4. These paths are owner-only, whatever the brief says: `engine/`, `storage/`,
@@ -71,9 +73,10 @@ review map, not permission to edit an owner-only path.
 9. UI pull requests carry app-window screenshots and compare them with
    `docs/UI_SPEC.md`, one sentence per image.
 10. Never claim something is done without pasted `pytest` and `ruff` output.
-11. **State drift rule:** if `docs/STATE.md`, a brief or an old doc disagrees
-    with code and pasted test output, the repo state wins. Report the mismatch
-    to the owner; do not edit `docs/STATE.md` or upgrade an evidence level.
+11. **Docs-versus-code rule:** if `docs/STATE.md`, a brief or an old doc
+    disagrees with code and pasted test output, the repo state wins. Report the
+    mismatch to the owner; do not edit `docs/STATE.md` or upgrade an evidence
+    level.
 12. Ask the owner when unsure. A question costs minutes; a bad merge costs days.
 
 ## What "done" looks like in a PR
@@ -92,6 +95,7 @@ review map, not permission to edit an owner-only path.
 ```text
 Repository: once. You are one of three contributors.
 Rules: docs/COLLABORATOR.md and AGENTS.md govern this session.
+- Re-read repo state before acting (git.exe status --short, branch, gh.exe state).
 - Work only on branch feat/<lane>-<task> from up-to-date main.
 - Touch only files under "Files allowed" in the task brief I name.
 - Never edit engine/, storage/, recorder/, controller/, integrations/, .github/,

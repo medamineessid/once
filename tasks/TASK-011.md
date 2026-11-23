@@ -1,58 +1,59 @@
-# TASK-011 — Fix UX defects D9–D10 on Create and Settings (BLOCKED)
+# TASK-011 — V5 animation follow-ups from the audit
 
-Lane: `ui` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/ui` · Size: `S`
-
-## Status: BLOCKED
-
-Blocked by TASK-007. The audit must be green before its findings can be used to
-prove these fixes.
+Lane: `ui` · Difficulty: `good-first-task` · Owner review required: `yes` · Label: `lane/ui` · Size: `S`
 
 ## Goal
 
-The create flow no longer dead-ends behind a blocking modal, and Settings shows
-information inline instead of through modal dialogs. This removes D9 and D10
-from `docs/UX_AUDIT.md` and gives the later Settings switch screen a base.
+Close the remaining V5 cases once the audit is available: any hover, press or
+focus animation that still paints outside a button's rectangle, starting with
+"Configure checker..." on Settings. The audit helps verify this defect; it is
+not required to start the work. See `docs/UI_DEFECTS.md`.
 
 ## Files allowed
 
-- `ui/pages/create_automation.py`
+- `ui/components/buttons.py`
+- `ui/components/verifier_panel.py`
 - `ui/pages/settings.py`
-- `ui/strings.py`
-- `ui/styles/__init__.py` (only for inline panel/banner tokens)
+- `ui/styles/__init__.py` (explicitly allowed for V5 tokens)
+- `tests/test_styles.py`
+- `tests/test_reduced_motion.py`
 - `tests/test_shell.py`
-- `tests/test_p2_shell.py`
+- `docs/ui-reference/` (before/after app-window captures only)
 
 ## Files forbidden
 
 - `engine/`, `storage/`, `recorder/`, `controller/`, `integrations/`
-- `ui/shell.py`, `ui/pages/home.py`, `ui/pages/my_automations.py`,
-  `ui/pages/activity.py`
-- `.github/`, `scripts/`, `docs/ai_engineering_log.md`, `docs/STATE.md`
+- `ui/pages/home.py`, `ui/pages/my_automations.py`, `ui/pages/activity.py`,
+  `ui/pages/review.py`, `ui/components/hero.py`, `ui/components/band.py`,
+  `ui/components/sidebar_item.py`
+- `.github/`, `scripts/verify.ps1`, `scripts/check_log_append_only.py`
+- `docs/ai_engineering_log.md`, `docs/STATE.md`
 - step schema, workflow validators, approval code
 
 ## Acceptance commands (run yourself)
 
 ```
-python -m pytest -q tests/test_shell.py tests/test_p2_shell.py
+python -m pytest -q tests/test_styles.py tests/test_reduced_motion.py tests/test_shell.py
 ruff check .
 ruff format --check .
 ```
 
-The owner ran these three commands on this base and they pass. Paste your real
-summary lines in the PR.
+The owner ran these three commands on this base and they pass. Once TASK-007
+has landed, also run `python scripts/ui_audit.py` and paste its report.
 
 ## Screenshots
 
-App-window captures of Create and Settings after a save/cancel at 960x600 and
-1280x800 through the real `app.py` path. One sentence each versus
-`docs/UI_SPEC.md`.
+Screenshots before and after, app window only, one sentence per image: use
+`docs/ui-reference/settings.png` as the before image, add the after capture,
+and say which border or animation no longer leaves the rectangle.
 
 ## Out of scope
 
-Building the Settings switch screen (TASK-013), changing configuration storage,
-or restoring the typed-description path.
+Changing button semantics, adding a new animation library, or touching other
+V-defects already assigned in TASK-008..010.
 
 ## Notes
 
-Keep the existing "observation only" wording for recording; this task changes
-presentation, not replay capability.
+TASK-009 fixes the first V5 cases. This brief takes the follow-ups the audit
+reports. If the audit finds nothing new, say so and close the brief with the
+pasted audit report rather than inventing a change.

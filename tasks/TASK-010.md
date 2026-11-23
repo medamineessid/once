@@ -1,57 +1,63 @@
-# TASK-010 — Fix UX defects D7–D8 on Activity (BLOCKED)
+# TASK-010 — Fix polish defects V6, V7, V9 and V10
 
-Lane: `ui` · Difficulty: `good-first-task` · Owner review required: `yes` · Label: `lane/ui` · Size: `S`
-
-## Status: BLOCKED
-
-Blocked by TASK-007. The audit must be green before its findings can be used to
-prove these fixes.
+Lane: `ui` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/ui` · Size: `M`
 
 ## Goal
 
-Activity shows automation names and statuses instead of raw ids, and gives
-timestamps plus a useful empty state with a next action. This removes D7 and D8
-from `docs/UX_AUDIT.md` using data the controller already persists.
+Stack and left-align the Home hero lines with clear spacing, give page bands a
+16px text rhythm, show real file names and reasons in the attention banner with
+a Reveal action, and stop the step-card chip covering its title. See
+`docs/UI_DEFECTS.md` and `docs/ui-reference/`.
 
 ## Files allowed
 
-- `ui/pages/activity.py`
+- `ui/components/hero.py`
+- `ui/components/band.py`
+- `ui/pages/home.py`
+- `ui/pages/my_automations.py`
+- `ui/pages/review.py`
 - `ui/strings.py`
-- `ui/styles/__init__.py` (only for row/empty-state tokens)
-- `tests/test_activity_page.py`
+- `ui/styles/__init__.py` (explicitly allowed for V6/V7/V9/V10 tokens)
+- `tests/test_design_v4.py`
 - `tests/test_shell.py`
+- `tests/test_activity_page.py`
+- `tests/test_contrast.py`
+- `docs/ui-reference/` (before/after app-window captures only)
 
 ## Files forbidden
 
 - `engine/`, `storage/`, `recorder/`, `controller/`, `integrations/`
-- `ui/shell.py`, `ui/pages/home.py`, `ui/pages/my_automations.py`,
-  `ui/pages/settings.py`, `ui/pages/create_automation.py`
-- `.github/`, `scripts/`, `docs/ai_engineering_log.md`, `docs/STATE.md`
+- `ui/pages/settings.py`, `ui/pages/create_automation.py`,
+  `ui/components/buttons.py`, `ui/components/sidebar_item.py`,
+  `ui/components/delete_confirm.py`, `ui/components/approval_panel.py`
+- `.github/`, `scripts/verify.ps1`, `scripts/check_log_append_only.py`
+- `docs/ai_engineering_log.md`, `docs/STATE.md`
 - step schema, workflow validators, approval code
 
 ## Acceptance commands (run yourself)
 
 ```
-python -m pytest -q tests/test_activity_page.py tests/test_shell.py
+python -m pytest -q tests/test_design_v4.py tests/test_shell.py tests/test_activity_page.py tests/test_contrast.py
 ruff check .
 ruff format --check .
 ```
 
-The owner ran these three commands on this base and they pass. Paste your real
-summary lines in the PR.
+The owner ran these three commands on this base and they pass. Once TASK-007
+has landed, also run `python scripts/ui_audit.py` and paste its report.
 
 ## Screenshots
 
-App-window captures of a populated and an empty Activity page at 960x600 and
-1280x800 through the real `app.py` path. One sentence each versus
-`docs/UI_SPEC.md`.
+Screenshots before and after, app window only, one sentence per image: use
+`docs/ui-reference/home.png`, `details.png` and `my-automations.png` as before
+images, add the matching after captures, and say what spacing or overlap was
+fixed in each.
 
 ## Out of scope
 
-Adding new history fields to storage, changing run persistence, or inventing a
-timestamp where none exists.
+Changing run history, file scanning, or the step schema. The Reveal action must
+be read-only and must not open or modify a file.
 
 ## Notes
 
-If a name cannot be resolved from persisted data, say "Unnamed automation" in
-plain language; never print the raw id in the default row text.
+V9 example text: "vscode-session.json: unknown launch fields: application".
+Keep machine paths out of the banner and the screenshots.

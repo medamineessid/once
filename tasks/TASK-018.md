@@ -1,11 +1,13 @@
-# TASK-018 — Privacy checklist for evidence and demos (BLOCKED)
+# TASK-018 — Privacy checklist for evidence and demos
 
 Lane: `tests` · Difficulty: `good-first-task` · Owner review required: `yes` · Label: `lane/tests` · Size: `S`
 
-## Status: BLOCKED
+## Status: NOT BLOCKED
 
-Blocked by TASK-015; the checklist must point at the real evidence template
-fields rather than duplicate them.
+Write the checklist now against the sample evidence and app-window captures
+already tracked in the repo. Where the real evidence template from TASK-015
+does not exist yet, name the fields the checklist expects rather than duplicating
+them; revisit the links in a later PR when that template lands.
 
 ## Goal
 

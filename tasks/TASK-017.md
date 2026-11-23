@@ -1,12 +1,14 @@
-# TASK-017 — Demo kit `docs/DEMO.md` (BLOCKED)
+# TASK-017 — Demo kit `docs/DEMO.md`
 
 Lane: `tests` · Difficulty: `good-first-task` · Owner review required: `yes` · Label: `lane/tests` · Size: `S`
 
-## Status: BLOCKED
+## Status: NOT BLOCKED
 
-Blocked by TASK-014 for the new scenarios and TASK-015 for the evidence
-template. A demo cannot cite a scenario or an evidence level that does not
-exist yet.
+Draft the demo now from the scenarios and sample fixtures already in the repo.
+Where a fixture or the evidence template from TASK-014/TASK-015 is not present
+yet, write the step as `not verified` and leave a placeholder for the path. The
+draft can be updated in a later PR when those tasks land; it is not required to
+start.
 
 ## Goal
 

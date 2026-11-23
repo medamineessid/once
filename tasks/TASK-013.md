@@ -1,33 +1,35 @@
-# TASK-013 — Settings switch screen (BLOCKED)
+# TASK-013 — Settings switch screen
 
 Lane: `ui` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/ui` · Size: `M`
-
-## Status: BLOCKED
-
-Blocked by TASK-011, which first removes the modal Settings dialogs.
 
 ## Goal
 
 Settings uses one consistent switch component for real, already-supported
 options, with plain-language help and no placeholder controls that look live.
-This finishes the Settings part of the app experience without adding settings
-the controller does not implement.
+The screen is fed by local sample data under `tests/fixtures/` (and
+`tests/ui_fixtures/` once TASK-007 lands), so it can be built and reviewed
+without waiting for another task. This finishes the Settings part of the app
+experience without adding settings the controller does not implement.
 
 ## Files allowed
 
 - `ui/components/switch.py` (new)
 - `ui/pages/settings.py`
 - `ui/strings.py`
-- `ui/styles/__init__.py` (only for switch tokens)
+- `ui/styles/__init__.py` (explicitly allowed for switch tokens)
+- `tests/fixtures/`
+- `tests/ui_fixtures/`
 - `tests/test_shell.py`
 - `tests/test_styles.py`
+- `docs/ui-reference/` (before/after app-window captures only)
 
 ## Files forbidden
 
 - `engine/`, `storage/`, `recorder/`, `controller/`, `integrations/`
 - `ui/shell.py`, `ui/pages/home.py`, `ui/pages/my_automations.py`,
   `ui/pages/activity.py`, `ui/pages/create_automation.py`
-- `.github/`, `scripts/`, `docs/ai_engineering_log.md`, `docs/STATE.md`
+- `.github/`, `scripts/verify.ps1`, `scripts/check_log_append_only.py`
+- `docs/ai_engineering_log.md`, `docs/STATE.md`
 - step schema, workflow validators, approval code
 
 ## Acceptance commands (run yourself)
@@ -38,14 +40,16 @@ ruff check .
 ruff format --check .
 ```
 
-The owner ran these three commands on this base and they pass. Paste your real
-summary lines in the PR.
+The owner ran these three commands on this base and they pass. Once TASK-007
+has landed, also run `python scripts/ui_audit.py` and paste its report. The
+audit helps verify the screen; it is not required to start.
 
 ## Screenshots
 
-App-window captures of Settings at 960x600 and 1280x800, at 100% and 150%
-scale, through the real `app.py` path. One sentence each versus
-`docs/UI_SPEC.md`.
+Screenshots before and after, app window only, one sentence per image: use
+`docs/ui-reference/settings.png` as the before image, add the after capture at
+960x600 and 1280x800 at 100% and 150% scale, and say which fake or inconsistent
+control was replaced by an honest switch or unavailable text.
 
 ## Out of scope
 
@@ -55,4 +59,6 @@ configuration storage, or adding new dependencies.
 ## Notes
 
 If an option is not wired to the controller, show it as unavailable text, not
-as a switch. Do not imply that observation-only replay is executable.
+as a switch. Do not imply that observation-only replay is executable. Sample
+data must stay inside `tests/fixtures/` and must not touch the real
+`%LOCALAPPDATA%/Once` folder.
