@@ -1,6 +1,8 @@
 # TASK-016 — Windows packaging PyInstaller spike (dependency-approved-needed)
 
-Lane: `tests` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/tests`, `dependency-approved` · Size: `M`
+Lane: `tests` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/tests` · Size: `M`
+
+Needs: `dependency-approved` from the owner before any dependency change.
 
 ## Goal
 
