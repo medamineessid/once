@@ -54,7 +54,11 @@ OWNER_ONLY = (
     "scripts/check_log_append_only.py",
 )
 
-_SKIP_PATTERN = re.compile(r"pytest\.mark\.(skip|xfail)|pytest\.skip\(|unittest\.skip|@skip")
+#: Only a line that *starts* with one of these is an executed skip. Matching
+#: anywhere would flag the guard's own source and the tests that describe it.
+_SKIP_PATTERN = re.compile(
+    r"^(@pytest\.mark\.(?:skip|xfail)\b|@unittest\.skip\b|pytest\.skip\(|self\.skipTest\(|@skip\b)"
+)
 _TASK_LINE = re.compile(r"^Task:\s*(tasks/[\w./-]+\.md)\s*$", re.MULTILINE)
 
 
@@ -84,12 +88,14 @@ def check_skips(changes: tuple[Change, ...]) -> list[str]:
     """Rule 2: a skip needs an explicit, reasoned marker."""
     failures: list[str] = []
     for change in changes:
-        if not change.path.endswith(".py"):
+        if not is_test_path(change.path):
             continue
         previous = ""
         for line in change.added:
+            stripped = line.strip()
             if (
-                _SKIP_PATTERN.search(line)
+                _SKIP_PATTERN.match(stripped)
+                and not stripped.startswith("#")
                 and SKIP_MARKER not in line
                 and SKIP_MARKER not in previous
             ):
