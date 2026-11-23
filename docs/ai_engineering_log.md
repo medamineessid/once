@@ -1762,3 +1762,31 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   `294 files already formatted`; `docs/PLAN.md` is 76 lines (limit 120).
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-23 — Step 27: current V-defects and unblocked lane briefs (commit: c9e2731)
+- Task: update open PR #14 with a current V1–V10 defect list, historical note on
+  the old audit, rewritten/unblocked TASK-008..013 briefs, Lane A Chrome case
+  and Week 0 / rhythm rules in PLAN, renamed docs-versus-code rule, and the 12
+  GitHub issue edits. No product code changed.
+- AI contribution: `docs/UI_DEFECTS.md`, `docs/ui-reference/` (four repo
+  captures plus provenance), the historical note in `docs/UX_AUDIT.md`,
+  rewrites of `tasks/TASK-008.md`..`TASK-013.md` and the unblocking of
+  `TASK-017.md`/`TASK-018.md`, PLAN/COLLABORATOR/REVIEW_PROMPT updates and
+  new checks in `tests/test_team_plan_docs.py`.
+- Defect found: `C:\Users\DELL\ui-reference` does not exist (confirmed with
+  `cmd.exe /c dir` and a filesystem search); the owner chose repo captures,
+  which are labelled as such. The reviewing model cannot view images, so the
+  captures are recorded as captured, not visually reviewed. My first docs test
+  expected different doc wording and a numeric sort; I fixed the test to match
+  the actual docs after seeing the exact failures.
+- Verification: brief acceptance commands with
+  `C:/Users/DELL/once/.venv/Scripts/python.exe -m pytest -q ...`:
+  `90 passed in 19.23s`, `55 passed in 20.41s`, `93 passed in 20.10s`,
+  `40 passed in 15.93s`, `69 passed in 16.20s`, `34 passed in 16.41s`,
+  `1 passed in 0.03s` for `tests/test_docs_truth.py`; focused docs test
+  `13 passed in 0.07s`; full suite `982 passed, 4 skipped in 161.41s`;
+  `ruff check .` `All checks passed!`; `ruff format --check .`
+  `296 files already formatted`. All 12 issue edits returned their issue URLs
+  and a re-read of `gh.exe issue list` shows no `blocked` label.
+- Outcome: PASSED
+- Human review:
