@@ -168,3 +168,14 @@ it).
 - [`docs/known_limits.md`](docs/known_limits.md) — Honest scope boundaries and safety constraints.
 - [`docs/decisions.md`](docs/decisions.md) — Architectural and dependency decision records (`PySide6 6.12.0`, `send2trash 2.1.0`, `pytest 9.1.1`, `Ruff 0.17.1`).
 - [`docs/ai_engineering_log.md`](docs/ai_engineering_log.md) — Chronological engineering and verification log.
+
+## Contributing
+
+Three people work in this repository in parallel. Read
+[`docs/COLLABORATOR.md`](docs/COLLABORATOR.md) first: it has the run commands,
+the folder map, the hard rules and a block to paste at the start of an AI
+session. Work happens on `feat/<lane>-<task>` branches described by a brief in
+[`tasks/`](tasks/TEMPLATE.md); the owner merges into `main` after CI passes.
+`scripts/check_pr_guards.py` fails a pull request that deletes a test, adds an
+unexplained skip, changes dependencies without the `dependency-approved` label,
+or touches files outside its task brief.

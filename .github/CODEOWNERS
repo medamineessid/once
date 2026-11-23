@@ -1,0 +1,13 @@
+# Owner review is required for anything that can touch safety, storage, the
+# approval gate or the verification gate. Everything else needs one approval.
+/engine/ @medamineessid
+/storage/ @medamineessid
+/recorder/ @medamineessid
+/controller/ @medamineessid
+/integrations/ @medamineessid
+/ui/styles/__init__.py @medamineessid
+/docs/ai_engineering_log.md @medamineessid
+/scripts/verify.ps1 @medamineessid
+/scripts/check_log_append_only.py @medamineessid
+/.github/ @medamineessid
+/AGENTS.md @medamineessid
