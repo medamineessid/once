@@ -1,7 +1,11 @@
 """Centralised UI strings (P2 prompt rule: one module, English, sentence case).
 
 Editor and shell pages must not hard-code their own sentence strings; this is
-the single place that a later French translation touches (QUESTION Q1).
+the single place that a later French translation touches.
+
+Context: smart replay is still observation-only in the app (2026-11-23). Until
+the flag is wired and the adapter ships, "typing" is a concept in the
+spec and the lab only; it is not implemented in the desktop.
 """
 
 from __future__ import annotations

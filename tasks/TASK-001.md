@@ -1,28 +1,34 @@
 # TASK-001 — Scenario-lab fixtures for existing smart replay cases
 
-Lane: `tests` · Difficulty: `normal` · Owner review required: `no`
+Lane: `tests` · Difficulty: `normal` · Owner review required: `no` · Label: `lane/tests`
 
 ## Goal
 
-Add fixtures to `tests/scenarios/` that describe three more recorded-element
-cases (a renamed toolbar button, a moved dialog, two identical rows). The lab
-already scores candidates deterministically; today the cases are written inside
-test functions. Fixtures let the owner replay them without touching tests.
+Add fixture data so the scenario lab can be replayed without touching any test
+expectation. The lab is the deterministic side of smart replay:
+
+- `tests/test_scenarios_lab.py` — the runner that walks `tests/scenarios/` and
+  score/act each recorded step;
+- `tests/scenarios/catalog.py` — the list of registered fixtures;
+- `tests/scenarios/<name>.py` — one fixture per case.
+
+Adding cases here does not change the resolver, the policy thresholds, or any
+existing assertion.
 
 ## Files allowed
 
 - `tests/scenarios/`
-- `tests/test_scenarios.py`
+- `tests/test_scenarios_lab.py`
 
 ## Files forbidden
 
-- everything under `engine/`, `storage/`, `controller/`, `integrations/`
-- `.github/`, `scripts/verify.ps1`, `docs/ai_engineering_log.md`
+- `engine/`, `storage/`, `controller/`, `integrations/`
+- `.github/`, `scripts/`, `docs/`
 
-## Acceptance commands
+## Acceptance commands (run yourself)
 
 ```
-python -m pytest -q tests/test_scenarios.py
+python -m pytest -q tests/test_scenarios_lab.py tests/scenarios/catalog.py
 ruff check .
 ruff format --check .
 ```
@@ -33,10 +39,11 @@ none — no UI change.
 
 ## Out of scope
 
-Do not change the resolver, the policy thresholds or any test expectation. If a
-case fails, report it; do not adjust the assertion.
+Do not change resolver weights, `MIN_CONFIDENCE`, `CLEAR_GAP`, or any existing
+assertion. If a new case fails, report the failure; do not tune the policy to
+make it pass.
 
 ## Notes
 
-`tests/scenarios/lab.py` builds candidates from plain data, so fixtures need no
-Qt and no desktop.
+Real layout on main is `tests/scenarios/` + `tests/test_scenarios_lab.py` +
+`tests/scenarios/catalog.py`, not `tests/test_scenarios.py`.
