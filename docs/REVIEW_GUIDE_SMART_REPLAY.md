@@ -117,11 +117,11 @@ and then, in code, build the pair and hand it to the executor:
 from engine.smart_replay import SmartReplay, options_from_environment
 from integrations.uia_adapter import PywinautoSurface, UiaTargetAdapter
 
-options = options_from_environment()          # enabled=True, unattended=False
-target_json = '{"application": "notepad"}'     # the workflow's desktop target
-surface = PywinautoSurface(target_json)        # pywinauto imported lazily
+options = options_from_environment()  # enabled=True, unattended=False
+target_json = '{"application": "notepad"}'  # the workflow's desktop target
+surface = PywinautoSurface(target_json)  # pywinauto imported lazily
 adapter = UiaTargetAdapter(surface, target_json)
-smart = SmartReplay(adapter, options)          # pass as smart_replay=...
+smart = SmartReplay(adapter, options)  # pass as smart_replay=...
 ```
 
 The working example of that wiring lives in `tests/test_smart_replay.py` and in
