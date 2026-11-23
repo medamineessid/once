@@ -102,3 +102,21 @@ requirements (each moved into its owning item above):
 Each item: id, status (TODO/IN PROGRESS/DONE/BLOCKED), branch, commit hashes, raw
 test summary line. Screenshots captured only through app.py's real path; see
 docs/screenshots/ folders and their README files.
+
+
+## UI audit work package (2026-11-23) — budget stop
+
+- Part 1 DONE: `.github/workflows/tests.yml` no longer filters `pull_request` by
+  base branch. PR #11, CI green, merge commit `05be83d`.
+- Part 2 PARTIAL: `scripts/ui_audit.py`, `scripts/ui_spec.py`,
+  `scripts/build_ui_fixtures.py`, `tests/ui_fixtures/`, `tests/test_ui_audit.py`
+  and `docs/UI_SPEC.md` exist on `ui/audit-harness-wip` (draft PR #12). The
+  harness's own unit tests do not pass yet: `pytest tests/test_ui_audit.py` ->
+  `6 failed, 4 passed`. Known cause: the checks measure `isVisibleTo()` before
+  the offscreen window is mapped, so they skip every synthetic child. Not
+  mergeable until those six tests pass.
+- Part 2 remaining: fails-first run against main, `scripts/verify.ps1` offscreen
+  subset, AGENTS.md standing rule.
+- Part 3 NOT DONE (D1-D10 all still present).
+- Part 4 NOT DONE (no Settings switch, no controller wiring, no descriptors on
+  save, no Activity resolution detail, no docs/REAL_DESKTOP_CHECKLIST.md).
