@@ -102,3 +102,11 @@ requirements (each moved into its owning item above):
 Each item: id, status (TODO/IN PROGRESS/DONE/BLOCKED), branch, commit hashes, raw
 test summary line. Screenshots captured only through app.py's real path; see
 docs/screenshots/ folders and their README files.
+
+## Team governance (2026-11-23)
+
+- Branch `chore/governance`: `docs/COLLABORATOR.md`, `tasks/TEMPLATE.md` and
+  `tasks/TASK-001.md`, `.github/pull_request_template.md`, `.github/CODEOWNERS`,
+  `scripts/check_pr_guards.py` with unit tests, and a `pr-guards` CI job.
+- Still to land: `tasks/TASK-002..004`, label creation, branch protection,
+  the throwaway proof pull request that must make pr-guards fail.

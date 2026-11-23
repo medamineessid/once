@@ -46,3 +46,25 @@ jobs:
             Write-Error "Verification gate failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
+
+  pr-guards:
+    name: pr-guards
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Run pull-request guards
+        run: >-
+          python scripts/check_pr_guards.py
+          --base origin/${{ github.base_ref }}
+          --head ${{ github.event.pull_request.head.sha }}
+          --event-path "$GITHUB_EVENT_PATH"
