@@ -4,32 +4,26 @@ Primary is a lemon fill with navy text, secondary is an outlined navy control,
 destructive is an outlined red control, hero is the outlined white control used
 only on the sky hero band. There is no other button colour in the app.
 
-Hover shifts the trailing arrow by four pixels and grows the button by 3%;
-press shrinks it to 97%. Both are applied instantly (no animation) when Windows
-animations are off. The scale is painted, never applied to the geometry, so a
-hovering button cannot reflow the layout around it.
+Hover shifts the trailing arrow four pixels toward the edge and changes the fill
+and border through the stylesheet; press darkens through ``:pressed`` and moves
+the arrow one pixel back inside. Nothing is ever painted outside the widget
+rectangle: an earlier version scaled the painted button about its centre, which
+was clipped by the widget and cut the border on hover and press. The shift
+animates over 120ms and is applied instantly when Windows animations are off.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QSize, Qt, QVariantAnimation
-from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import (
-    QLabel,
-    QPushButton,
-    QStyle,
-    QStyleOptionButton,
-    QWidget,
-)
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QSize, Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QLabel, QPushButton, QWidget
 
 from ui.components.phosphor_icons import render_icon_pixmap
 from ui.motion import animations_enabled
 from ui.styles import (
     ARROW_SHIFT_PX,
     DURATION_HOVER_MS,
-    HOVER_SCALE,
     NAVY,
-    PRESS_SCALE,
     SPACING_SM,
     STATUS_ERROR,
     WHITE,
@@ -48,10 +42,12 @@ _VARIANT_OBJECT_NAMES = {
 
 _ARROW_INSET = SPACING_SM + 2
 _ARROW_LOGICAL_SIZE = 16
+#: How far the arrow moves inward while the button is pressed.
+_PRESS_INSET_PX = 1
 
 
 class ActionButton(QPushButton):
-    """A themed button with an optional shifted arrow and painted scale."""
+    """A themed button with an optional shifted arrow and no geometric scaling."""
 
     def __init__(
         self,
@@ -65,10 +61,9 @@ class ActionButton(QPushButton):
         self._variant = variant if variant in _VARIANT_OBJECT_NAMES else "primary"
         self.setObjectName(_VARIANT_OBJECT_NAMES[self._variant])
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._scale = 1.0
-        self._scale_animation: QVariantAnimation | None = None
         self._arrow_animation: QPropertyAnimation | None = None
         self._arrow_label: QLabel | None = None
+        self._pressed = False
         if with_arrow:
             self._arrow_label = QLabel(self)
             self._arrow_label.setObjectName("buttonArrow")
@@ -91,59 +86,30 @@ class ActionButton(QPushButton):
             return QColor(WHITE)
         return QColor(NAVY)
 
-    def arrow_position(self, *, shifted: bool) -> QPoint:
-        """Where the trailing arrow sits, resting or hovered."""
+    def arrow_position(self, *, shifted: bool, pressed: bool = False) -> QPoint:
+        """Where the trailing arrow sits, always inside the button rectangle."""
         offset = ARROW_SHIFT_PX if shifted else 0
+        if pressed:
+            offset -= _PRESS_INSET_PX
         x = self.width() - _ARROW_LOGICAL_SIZE - _ARROW_INSET + offset
         y = (self.height() - _ARROW_LOGICAL_SIZE) // 2
-        return QPoint(max(0, x), max(0, y))
+        right_limit = max(0, self.width() - _ARROW_LOGICAL_SIZE)
+        return QPoint(min(max(0, x), right_limit), max(0, y))
 
     def _place_arrow(self, *, shifted: bool) -> None:
         if self._arrow_label is None:
             return
-        self._arrow_label.move(self.arrow_position(shifted=shifted))
+        self._arrow_label.move(self.arrow_position(shifted=shifted, pressed=self._pressed))
 
     def resizeEvent(self, event) -> None:  # noqa: N802 - Qt name
         super().resizeEvent(event)
         self._place_arrow(shifted=self.underMouse())
 
     # ----------------------------------------------------------------- motion
-    @property
-    def scale(self) -> float:
-        """The painted scale (1.0 at rest)."""
-        return self._scale
-
-    def _set_scale(self, value: float) -> None:
-        self._scale = float(value)
-        self.update()
-
-    def animate_scale(self, target: float) -> None:
-        """Move the painted scale to ``target``, instantly when motion is off."""
-        if self._scale_animation is not None:
-            self._scale_animation.stop()
-            self._scale_animation = None
-        if not animations_enabled() or not self.isVisible():
-            self._set_scale(target)
-            return
-        animation = QVariantAnimation(self)
-        animation.setDuration(DURATION_HOVER_MS)
-        animation.setStartValue(self._scale)
-        animation.setEndValue(target)
-        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        animation.valueChanged.connect(self._on_scale_value)
-        self._scale_animation = animation
-        animation.start()
-
-    def _on_scale_value(self, value: object) -> None:
-        try:
-            self._set_scale(float(value))  # type: ignore[arg-type]
-        except (TypeError, ValueError):
-            return
-
     def _shift_arrow(self, shifted: bool) -> None:
         if self._arrow_label is None:
             return
-        target = self.arrow_position(shifted=shifted)
+        target = self.arrow_position(shifted=shifted, pressed=self._pressed)
         if not animations_enabled() or not self.isVisible():
             self._arrow_label.move(target)
             return
@@ -157,41 +123,24 @@ class ActionButton(QPushButton):
 
     def enterEvent(self, event) -> None:  # noqa: N802 - Qt name
         if self.isEnabled():
-            self.animate_scale(HOVER_SCALE)
             self._shift_arrow(True)
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:  # noqa: N802 - Qt name
-        self.animate_scale(1.0)
         self._shift_arrow(False)
         super().leaveEvent(event)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt name
         if event.button() == Qt.MouseButton.LeftButton:
-            self.animate_scale(PRESS_SCALE)
+            self._pressed = True
+            self._shift_arrow(True)
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 - Qt name
         if event.button() == Qt.MouseButton.LeftButton:
-            self.animate_scale(HOVER_SCALE if self.underMouse() else 1.0)
+            self._pressed = False
+            self._shift_arrow(self.underMouse())
         super().mouseReleaseEvent(event)
-
-    # ------------------------------------------------------------------ paint
-    def paintEvent(self, event) -> None:  # noqa: N802 - Qt name
-        if abs(self._scale - 1.0) < 0.001:
-            super().paintEvent(event)
-            return
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-        centre = self.rect().center()
-        painter.translate(centre)
-        painter.scale(self._scale, self._scale)
-        painter.translate(-centre)
-        option = QStyleOptionButton()
-        self.initStyleOption(option)
-        self.style().drawControl(QStyle.ControlElement.CE_PushButton, option, painter, self)
-        painter.end()
 
 
 def action_button(text: str, variant: str = "primary", *, with_arrow: bool = False) -> ActionButton:

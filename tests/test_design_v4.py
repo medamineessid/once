@@ -28,9 +28,7 @@ from ui.styles import (
     DURATION_PAGE_MS,
     DURATION_STAGGER_MS,
     HERO_REVEAL_OFFSET_PX,
-    HOVER_SCALE,
     NAVY,
-    PRESS_SCALE,
     SIDEBAR_ACTIVE_BG,
     SIDEBAR_BG,
     TYPE_HERO_PX,
@@ -257,22 +255,24 @@ def test_motion_tokens_match_the_brief():
     assert DURATION_DIALOG_MS == 220
     assert DURATION_STAGGER_MS == 60
     assert HERO_REVEAL_OFFSET_PX == 16
-    assert HOVER_SCALE == 1.03
-    assert PRESS_SCALE == 0.97
     assert ARROW_SHIFT_PX == 4
     assert DURATION_HOVER_MS == 120
 
 
-def test_button_hover_grows_and_press_shrinks(qtbot, app, monkeypatch):
-    monkeypatch.setattr("ui.components.buttons.animations_enabled", lambda: True)
-    button = ActionButton("Run", variant="primary")
+def test_button_hover_shifts_the_arrow_and_press_stays_inside(qtbot, app, monkeypatch):
+    monkeypatch.setattr("ui.components.buttons.animations_enabled", lambda: False)
+    button = ActionButton("Run", variant="primary", with_arrow=True)
     qtbot.addWidget(button)
+    button.resize(180, 44)
     button.show()
-    qtbot.wait(200)  # let the hover animation reach its end value
+    resting = button.arrow_position(shifted=False)
     button.enterEvent(_enter_event())
-    qtbot.waitUntil(lambda: button.scale == pytest.approx(HOVER_SCALE), timeout=2000)
+    assert button.arrow_position(shifted=True).x() == resting.x() + ARROW_SHIFT_PX
     button.mousePressEvent(_press_event())
-    qtbot.waitUntil(lambda: button.scale == pytest.approx(PRESS_SCALE), timeout=2000)
+    pressed = button.arrow_position(shifted=True, pressed=True)
+    assert pressed.x() == resting.x() + ARROW_SHIFT_PX - 1
+    assert button.rect().contains(button._arrow_label.geometry())
+    assert not hasattr(button, "scale")
 
 
 def test_button_motion_is_instant_when_animations_are_off(qtbot, app, monkeypatch):
@@ -281,8 +281,6 @@ def test_button_motion_is_instant_when_animations_are_off(qtbot, app, monkeypatc
     qtbot.addWidget(button)
     button.resize(160, 40)
     button.show()
-    button.animate_scale(HOVER_SCALE)
-    assert button.scale == pytest.approx(HOVER_SCALE)
     resting = button._arrow_label.pos()
     button._shift_arrow(True)
     assert button._arrow_label.pos().x() == resting.x() + ARROW_SHIFT_PX
