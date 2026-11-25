@@ -16,6 +16,7 @@ import pytest
 from PySide6 import QtCore
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFrame,
     QGraphicsView,
     QGroupBox,
@@ -49,6 +50,7 @@ _SELECTOR_CLASSES = {
     "QLineEdit": QLineEdit,
     "QTextEdit": QTextEdit,
     "QListWidget": QListWidget,
+    "QDialog": QDialog,
 }
 
 _SELECTOR_PAIR = re.compile(r"([A-Za-z]+)#([A-Za-z0-9_]+)")
