@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
-from PySide6.QtWidgets import QToolButton, QWidget
+from PySide6.QtWidgets import QSizePolicy, QToolButton, QWidget
 
 from ui.components.phosphor_icons import render_icon_pixmap
 from ui.styles import (
@@ -86,6 +86,10 @@ class SidebarItem(QToolButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(self.sizePolicy().horizontalPolicy(), self.sizePolicy().verticalPolicy())
         self.setFixedHeight(SIDEBAR_ITEM_HEIGHT)
+        # Every row spans the rail: a narrow row beside a wide one made the
+        # active pill and the focus outline disagree about the row's edges.
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._keyboard_focus = False
         self._text_font = QFont(UI_FONT)
         self._text_font.setPixelSize(TYPE_BODY_PX)
         self._text_font.setWeight(QFont.Weight.DemiBold)
@@ -109,6 +113,26 @@ class SidebarItem(QToolButton):
         return QSize(width, metrics.height)
 
     # --------------------------------------------------------------- events
+    def focusInEvent(self, event) -> None:  # noqa: N802 - Qt name
+        """Only keyboard focus draws the outline.
+
+        A click focuses the row too, but the checked pill already says where you
+        are; drawing an outline as well made one row look like two states.
+        """
+        reason = event.reason()
+        self._keyboard_focus = reason in (
+            Qt.FocusReason.TabFocusReason,
+            Qt.FocusReason.BacktabFocusReason,
+            Qt.FocusReason.ShortcutFocusReason,
+        )
+        self.update()
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event) -> None:  # noqa: N802 - Qt name
+        self._keyboard_focus = False
+        self.update()
+        super().focusOutEvent(event)
+
     def enterEvent(self, event) -> None:  # noqa: N802 - Qt name
         self._hover = True
         self.update()
@@ -130,10 +154,10 @@ class SidebarItem(QToolButton):
         painter.fillRect(self.rect(), QColor(SIDEBAR_BG))
         if checked or self._hover:
             pill = QRect(
-                metrics.inset // 2,
-                (self.height() - metrics.height) // 2 + metrics.inset // 2,
-                self.width() - metrics.inset,
-                metrics.height - metrics.inset,
+                0,
+                (self.height() - metrics.height) // 2,
+                self.width(),
+                metrics.height,
             )
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(QColor(SIDEBAR_ACTIVE_BG if checked else SIDEBAR_HOVER_BG))
@@ -171,7 +195,7 @@ class SidebarItem(QToolButton):
             self.text(),
         )
 
-        if not checked and self.hasFocus():
+        if self._keyboard_focus and not checked:
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.setPen(QPen(QColor(SIDEBAR_TEXT_HOVER), 2))
             painter.drawRoundedRect(
