@@ -47,10 +47,12 @@ has landed, also run `python scripts/ui_audit.py` and paste its report.
 
 ## Screenshots
 
-Screenshots before and after, app window only, one sentence per image: use
-`docs/ui-reference/home.png`, `details.png` and `my-automations.png` as before
-images, add the matching after captures, and say what spacing or overlap was
-fixed in each.
+Screenshots before and after, app window only, one sentence per image: the
+before images are `docs/ui-reference/defects/home-960x600.png`,
+`details-960x600.png` and `my-automations-960x600.png`, plus their 1920x1020
+twins. Add the matching after captures and say what spacing or overlap was
+fixed in each. A person opens every image and writes its one sentence; an
+unreviewed capture is not evidence.
 
 ## Out of scope
 

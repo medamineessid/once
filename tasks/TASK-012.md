@@ -47,9 +47,11 @@ TASK-007 has landed, also run `python scripts/ui_audit.py` and paste its report.
 
 ## Screenshots
 
-Screenshots before and after, app window only, one sentence per image: use the
-current shell as before, then show the picker with two identical targets and the
-report with one successful and one observation-only step.
+Screenshots before and after, app window only, one sentence per image: the
+before image is `docs/ui-reference/defects/my-automations-960x600.png`; then
+show the picker with two identical targets and the report with one successful
+and one observation-only step. A person opens every image and writes its one
+sentence; an unreviewed capture is not evidence.
 
 ## Out of scope
 

@@ -46,11 +46,13 @@ has landed, also run `python scripts/ui_audit.py` and paste its report.
 
 ## Screenshots
 
-Screenshots before and after, app window only, one sentence per image: use
-`docs/ui-reference/delete-confirm-before.png` (from `details.png`),
-`docs/ui-reference/approval-before.png` (from `my-automations.png`) and the
-matching `-after.png` captures; say what was unreadable or cut off and what is
-now readable and visible.
+Screenshots before and after, app window only, one sentence per image: the
+before images are `docs/ui-reference/defects/delete-dialog-960x600.png`,
+`delete-dialog-1920x1020.png`, `my-automations-960x600.png` and
+`my-automations-1920x1020.png`. Add matching `-after` captures at both sizes
+and say what was unreadable or cut off and what is now readable and visible. A
+person opens every image and writes its one sentence; an unreviewed capture is
+not evidence.
 
 ## Out of scope
 

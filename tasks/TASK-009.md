@@ -46,10 +46,13 @@ has landed, also run `python scripts/ui_audit.py` and paste its report.
 
 ## Screenshots
 
-Screenshots before and after, app window only, one sentence per image: use
-`docs/ui-reference/my-automations.png` and `docs/ui-reference/settings.png` as
-the before images, add the matching after captures, and say which overlap,
-half-drawn border or wrong outline was removed.
+Screenshots before and after, app window only, one sentence per image: the
+before images are `docs/ui-reference/defects/my-automations-960x600.png`,
+`settings-960x600.png` and `home-960x600.png` (the V8 sidebar rail is the same
+on every page). Add the matching after captures at 960x600 and 1920x1020 and
+say which overlap, half-drawn border or wrong outline was removed. A person
+opens every image and writes its one sentence; an unreviewed capture is not
+evidence.
 
 ## Out of scope
 

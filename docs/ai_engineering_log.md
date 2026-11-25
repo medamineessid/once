@@ -1790,3 +1790,30 @@ Append-only. Format per AGENTS.md. Human fills in the "Human review" line.
   and a re-read of `gh.exe issue list` shows no `blocked` label.
 - Outcome: PASSED
 - Human review:
+
+## 2026-11-25 — PR #14 follow-up: real defect captures and plan rebalance
+- Task: replace the substitute design-v4 images with real app-window captures of
+  the current UI, point every defect and brief at a file that exists, rebalance
+  A5 to L, and add the two missing lane C briefs (TASK-019, TASK-020).
+- AI contribution: `scripts/capture_ui_defects.py` (offscreen capture from
+  synthetic fixtures), ten PNGs in `docs/ui-reference/defects/`, rewritten
+  `docs/ui-reference/README.md`, reference fixes in `docs/UI_DEFECTS.md` and
+  `tasks/TASK-008.md`..`TASK-013.md`, new `tasks/TASK-019.md` and
+  `tasks/TASK-020.md`, PLAN rebalance plus the screenshot rule, and the expanded
+  `tests/test_team_plan_docs.py`.
+- Defect found: the previous provenance sentence ("the owner chose repo
+  captures") was false and is gone from the reference README and the defect
+  list; it remains inside the earlier log entry above because this file is
+  append-only and that entry may not be edited. Also, four of the ten captures
+  did not exist as named: the old files were `home.png`/`my-automations.png`/
+  `details.png`/`settings.png` from `shots/design-v4`, which never showed the
+  banner, the approval panel or the delete dialog.
+- Verification: `scripts/capture_ui_defects.py` printed ten PNG sizes, largest
+  116333 bytes (limit 300000); `QImage` reported 321-592 sampled colours per
+  shell capture, so the images are not blank. `python -m pytest -q
+  tests/test_team_plan_docs.py` -> `16 passed in 0.28s`. Full suite ->
+  `985 passed, 4 skipped in 172.69s`. `ruff check .` -> `All checks passed!`;
+  `ruff format --check .` -> `299 files already formatted`. `docs/PLAN.md` is
+  95 lines (limit 120).
+- Outcome: PASSED
+- Human review:

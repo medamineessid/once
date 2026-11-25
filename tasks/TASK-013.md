@@ -46,10 +46,12 @@ audit helps verify the screen; it is not required to start.
 
 ## Screenshots
 
-Screenshots before and after, app window only, one sentence per image: use
-`docs/ui-reference/settings.png` as the before image, add the after capture at
-960x600 and 1280x800 at 100% and 150% scale, and say which fake or inconsistent
-control was replaced by an honest switch or unavailable text.
+Screenshots before and after, app window only, one sentence per image: the
+before image is `docs/ui-reference/defects/settings-960x600.png` and its
+1920x1020 twin. Add the after captures at 960x600 and 1920x1020 and say which
+fake or inconsistent control was replaced by an honest switch or unavailable
+text. A person opens every image and writes its one sentence; an unreviewed
+capture is not evidence.
 
 ## Out of scope
 

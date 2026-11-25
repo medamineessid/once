@@ -1,22 +1,31 @@
 # UI reference captures
 
-These four PNGs are **repo captures**, copied from
-`shots/design-v4/` on 2026-11-23. They are not the four images from
-`C:\Users\DELL\ui-reference`: that folder does not exist on this machine, so the
-owner chose repo captures instead.
+`defects/` holds the "before" images for the defects in `docs/UI_DEFECTS.md`.
+They are real app-window captures of the shell `app.py` builds, rendered
+offscreen from synthetic fixtures and saved by
+`scripts/capture_ui_defects.py`. Nothing here is a full-desktop capture.
 
-| file | source | bytes |
+Regenerate them from any checkout with:
+
+```
+python scripts/capture_ui_defects.py
+```
+
+The script builds its own fixture folder under the system temp directory:
+thirteen saved automations (one long name, one short, one accented), two files
+that cannot be read, and three history rows (succeeded, failed, still running).
+It never reads or writes the real `%LOCALAPPDATA%/Once` folder.
+
+| state | files | what it shows |
 | --- | --- | --- |
-| `home.png` | `shots/design-v4/home.png` | 72600 |
-| `my-automations.png` | `shots/design-v4/automations.png` | 51532 |
-| `details.png` | `shots/design-v4/details.png` | 41120 |
-| `settings.png` | `shots/design-v4/settings.png` | 56712 |
+| Home | `home-960x600.png`, `home-1920x1020.png` | hero, three counts, recent runs |
+| My automations | `my-automations-960x600.png`, `my-automations-1920x1020.png` | 13 rows, unreadable-files banner, approval panel open |
+| Automation details | `details-960x600.png`, `details-1920x1020.png` | one saved automation in the details page |
+| Settings | `settings-960x600.png`, `settings-1920x1020.png` | authorized folders and the acceptance checker |
+| Delete dialog | `delete-dialog-960x600.png`, `delete-dialog-1920x1020.png` | the confirmation opened over the shell |
 
-All four are 1600x1025 app-window captures, under 300 KB each. Source:
-`docs/screenshots/latest/INDEX.md` records the capture path through the real
-shell and says "captured, not reviewed". The PNG textual chunks were scanned
-with `strings` and contain no names, paths, emails or secrets; that is a byte
-check, not a visual review. The reviewing model could not view images, so no
-claim is made about what the pixels show beyond the existing capture provenance.
+All ten are PNG, under 300 KB each. The dialog is captured at its own size
+(400x126), which does not change with the window size.
 
-Do not replace these with full-desktop captures or real personal screenshots.
+These images are evidence of a rendering, not a review: a person must open each
+one and write one sentence saying what it shows before it is cited as proof.
