@@ -1,13 +1,33 @@
 # Owner review is required for anything that can touch safety, storage, the
-# approval gate or the verification gate. Everything else needs one approval.
+# approval gate, the verification gate or the team rules. One approval is enough
+# everywhere else. This is a review map, not permission to edit owner-only paths:
+# see docs/COLLABORATOR.md and docs/PLAN.md for the lane split.
+#
+# Owner-only for every lane except A: engine, integrations, recorder, storage,
+# controller, step schema, engineering log, STATE.md and this governance folder.
 /engine/ @medamineessid
-/storage/ @medamineessid
-/recorder/ @medamineessid
-/controller/ @medamineessid
 /integrations/ @medamineessid
-/ui/styles/__init__.py @medamineessid
+/recorder/ @medamineessid
+/storage/ @medamineessid
+/controller/ @medamineessid
 /docs/ai_engineering_log.md @medamineessid
-/scripts/verify.ps1 @medamineessid
-/scripts/check_log_append_only.py @medamineessid
+/docs/STATE.md @medamineessid
+/docs/PLAN.md @medamineessid
+/tasks/ @medamineessid
 /.github/ @medamineessid
 /AGENTS.md @medamineessid
+/scripts/verify.ps1 @medamineessid
+/scripts/check_log_append_only.py @medamineessid
+
+# Lane B may edit ui/ (including ui/styles/__init__.py) only when the brief
+# lists the path; owner still reviews the PR.
+/ui/ @medamineessid
+
+# Lane C may edit tests/, packaging scripts named in the brief, docs/DEMO.md
+# and docs/evidence/ only when the brief lists the path.
+/tests/ @medamineessid
+/once.spec @medamineessid
+/scripts/packaging_spike.py @medamineessid
+/docs/DEMO.md @medamineessid
+/docs/evidence/ @medamineessid
+/docs/REVIEW_PROMPT.md @medamineessid
