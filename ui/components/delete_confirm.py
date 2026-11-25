@@ -3,6 +3,10 @@
 Delete actions are always confirmed with a dialog that names what will be
 removed. The button set is exactly Cancel and Delete, and a run count adds one
 pre-checked "also delete its runs" choice so the default removes both.
+
+The dialog is built on `ui.components.dialog`, not on `QMessageBox`: the stock
+message box painted its buttons with the platform style, so Delete came out
+white on near-white and Cancel was barely visible.
 """
 
 from __future__ import annotations
@@ -10,10 +14,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import override
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QCheckBox, QMessageBox, QWidget
+from PySide6.QtWidgets import QCheckBox, QWidget
 
-from ui.motion import fade_dialog
+from ui.components.dialog import ConfirmDialog
 from ui.strings import DELETE_ACTION, DELETE_CANCEL, DELETE_CONFIRM_TITLE
 
 
@@ -52,8 +55,8 @@ def automation_delete_message(name: str, run_count: int) -> str:
     return f"Delete '{name}' and its {run_count} {_run_noun(run_count)}? This cannot be undone."
 
 
-class DeleteConfirmDialog(QMessageBox):
-    """Modal confirmation with Cancel and Delete, plus optional run deletion."""
+class DeleteConfirmDialog(ConfirmDialog):
+    """Modal confirmation with Cancel and a filled Delete, plus optional runs."""
 
     def __init__(
         self,
@@ -62,25 +65,22 @@ class DeleteConfirmDialog(QMessageBox):
         runs_count: int = 0,
         parent: QWidget | None = None,
     ) -> None:
-        super().__init__(parent)
-        self.setWindowTitle(DELETE_CONFIRM_TITLE)
-        self.setIcon(QMessageBox.Icon.Warning)
-        self.setTextFormat(Qt.TextFormat.PlainText)
-        self.setText(message)
-        self._cancel_button = self.addButton(DELETE_CANCEL, QMessageBox.ButtonRole.RejectRole)
-        self._delete_button = self.addButton(DELETE_ACTION, QMessageBox.ButtonRole.DestructiveRole)
-        self.setDefaultButton(self._cancel_button)
+        super().__init__(
+            DELETE_CONFIRM_TITLE,
+            message,
+            action_label=DELETE_ACTION,
+            cancel_label=DELETE_CANCEL,
+            filled_danger=True,
+            parent=parent,
+        )
         self._runs_check: QCheckBox | None = None
         if runs_count > 0:
-            self._runs_check = QCheckBox(f"Also delete its {runs_count} {_run_noun(runs_count)}")
-            self._runs_check.setChecked(True)
-            self.setCheckBox(self._runs_check)
-
-    @override
-    def showEvent(self, event) -> None:
-        """Fade and scale the dialog in when it appears."""
-        super().showEvent(event)
-        fade_dialog(self)
+            self._runs_check = self.add_checkbox(
+                f"Also delete its {runs_count} {_run_noun(runs_count)}",
+                checked=True,
+            )
+        # Cancel is the default so a stray Enter never deletes anything.
+        self.cancel_button.setFocus()
 
     @property
     def runs_checkbox(self) -> QCheckBox | None:
@@ -89,12 +89,13 @@ class DeleteConfirmDialog(QMessageBox):
 
     def choice(self) -> DeleteChoice:
         """Return the current answer without running the dialog."""
-        confirmed = self.clickedButton() is self._delete_button
+        confirmed = self.result() == int(ConfirmDialog.DialogCode.Accepted)
         return DeleteChoice(
             confirmed,
             confirmed and self._runs_check is not None and self._runs_check.isChecked(),
         )
 
+    @override
     def ask(self) -> DeleteChoice:
         """Show the dialog and return the user's answer."""
         self.exec()

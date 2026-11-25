@@ -559,6 +559,44 @@ _STYLESHEET_TEMPLATE = Template("""
         color: $LEMON;
         border-color: $NAVY;
     }
+    QPushButton#dangerFilledButton {
+        background: $STATUS_ERROR;
+        border: 2px solid $STATUS_ERROR;
+        border-radius: 10px;
+        padding: 8px 18px;
+        color: $WHITE;
+        font-size: ${TYPE_BODY_PX}px;
+        font-weight: 700;
+        font-family: $FONT_STACK;
+        min-height: ${CONTROL_HEIGHT_SMALL}px;
+    }
+    QPushButton#dangerFilledButton:hover {
+        background: $STATUS_ERROR;
+        border-color: $WHITE;
+    }
+    QPushButton#dangerFilledButton:pressed {
+        background: $STATUS_ERROR;
+        border-color: $NAVY;
+    }
+    QPushButton#dangerFilledButton:disabled {
+        background: $TINT_STOP;
+        color: $TEXT_FAINT;
+        border-color: $TINT_STOP;
+    }
+    QDialog#tokenDialog {
+        background: $SURFACE;
+    }
+    QLabel#dialogTitle {
+        color: $NAVY;
+        font-size: ${TYPE_SUBTITLE_PX}px;
+        font-weight: 700;
+        font-family: $FONT_STACK;
+    }
+    QLabel#dialogMessage {
+        color: $TEXT_STRONG;
+        font-size: ${TYPE_BODY_PX}px;
+        font-family: $FONT_STACK;
+    }
     QPushButton#heroSecondaryButton {
         background: transparent;
         color: $WHITE;
@@ -645,6 +683,7 @@ _STYLESHEET_TEMPLATE = Template("""
     QPushButton#primaryActionButton:focus,
     QPushButton#secondaryActionButton:focus,
     QPushButton#dangerButton:focus,
+    QPushButton#dangerFilledButton:focus,
     QPushButton#circleButton:focus,
     QPushButton#outlinedCircleButton:focus,
     QListWidget:focus {
