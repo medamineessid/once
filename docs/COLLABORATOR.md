@@ -49,6 +49,14 @@ Read `docs/PLAN.md` for the three-lane order, task sizes and evidence levels.
 `.github/CODEOWNERS` records the owner review for each of these areas. It is a
 review map, not permission to edit an owner-only path.
 
+## How your work reaches main
+
+1. Cut a branch named `feat/<lane>-<task>` from up-to-date `main`.
+2. Open a pull request that starts with `Task: tasks/TASK-0NN.md`.
+3. Wait for the required `CI` check to pass.
+4. The owner reviews, approves and merges with a merge commit.
+5. GitHub deletes the merged branch automatically.
+
 ## Hard rules
 
 1. **Session rule:** re-read repo state before acting — check `git.exe branch
