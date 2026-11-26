@@ -116,6 +116,14 @@ def test_home_page_keeps_every_visible_child_inside_its_parent(qtbot):
             if parent is None:
                 continue
             allowed = parent.rect().adjusted(-1, -1, 1, 1)
+            area = parent.parentWidget()
+            if area is not None and hasattr(area, "viewport") and area.widget() is child:
+                # A scroll body is meant to be taller than its viewport; only its
+                # width has to fit, so the page never drifts sideways.
+                assert child.width() <= allowed.width() + 2, (
+                    f"home {width}x{height}: the scroll body is wider than the viewport"
+                )
+                continue
             assert allowed.contains(child.geometry()), (
                 f"home {width}x{height}: {child.objectName() or type(child).__name__} "
                 f"sticks out of {parent.objectName() or type(parent).__name__}"

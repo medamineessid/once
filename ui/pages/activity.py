@@ -37,6 +37,7 @@ from ui.components.formatting import (
     human_timestamp,
     status_display,
 )
+from ui.components.scroll_page import ScrollPage
 from ui.strings import (
     ACTIVITY_CLEAR_ALL,
     ACTIVITY_DETAILS_EMPTY,
@@ -140,7 +141,7 @@ class ActivityPage(QWidget):
         body_layout = QVBoxLayout(body)
         body_layout.setContentsMargins(SPACING_XL, SPACING_LG, SPACING_XL, SPACING_LG)
         body_layout.setSpacing(SPACING_MD)
-        layout.addWidget(body, stretch=1)
+        layout.addWidget(ScrollPage(body, self), stretch=1)
 
         controls = QHBoxLayout()
         controls.setSpacing(SPACING_SM)

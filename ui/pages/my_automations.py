@@ -51,6 +51,7 @@ from ui.components.parameters import (
     missing_values,
     parameter_names,
 )
+from ui.components.scroll_page import ScrollPage
 from ui.strings import (
     DELETE_ACTION,
     MY_BANNER_ERROR_TITLE,
@@ -229,7 +230,7 @@ class MyAutomationsPage(QWidget):
         body_layout = QVBoxLayout(body)
         body_layout.setContentsMargins(SPACING_XL, SPACING_LG, SPACING_XL, SPACING_LG)
         body_layout.setSpacing(SPACING_SM)
-        layout.addWidget(body, stretch=1)
+        layout.addWidget(ScrollPage(body, self), stretch=1)
 
         self._banner = Banner(body)
         body_layout.addWidget(self._banner)
