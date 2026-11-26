@@ -8,16 +8,25 @@ Open items, in the order they unblock each other (2026-11-26, `main 603a326`):
       and not mergeable; TASK-007 / issue #15 tracks it.
 - [ ] Close V2 (approval panel cut off) and V4 (row says "Running…" while
       approval is pending) — issue #16.
-- [x] V3: Preview / Clear drafts now own a toolbar row above the list (PR #36).
-- [ ] V2 (approval panel), V4 (row says "Running…" while approval is
-      pending), V6 (hero), V7 (band rhythm), V9 (banner detail), V10 (chip):
-      issues #16, #18. Job 2 items 1 (shared scroll page), 3 (responsive
-      hero), 4 (remaining QMessageBox sites) and 5 (full geometry battery)
-      are not done; no objective test for the toolbar order exists yet.
-- [ ] Job 3 (wire smart replay behind a Settings switch, record side,
-      replay side, run-history evidence): not started. Nothing outside
-      tests constructs SmartReplay or UiaTargetAdapter; `descriptor_from_event`
-      still has no caller on the draft path.
+- [x] V3: Preview / Clear drafts own a toolbar row above the list (PR #36), and
+      `tests/test_my_automations_layout.py` now proves the order with laid-out
+      geometry (PR #37) — the first harness measured zero-height widgets because
+      the page hides its list without a service.
+- [x] Shared `ui/components/scroll_page.py`; My automations and Activity scroll
+      (PR #38). The geometry test allows a scroll body to be taller than its
+      viewport while still requiring its width to fit.
+- [ ] Wrap Home and Create in the scroll page. Home's containment test failed on
+      the body-inside-viewport case; Create builds straight onto its own layout
+      with no body widget.
+- [ ] Replace the nine remaining `QMessageBox` sites: `app.py:183,191,197`,
+      `ui/main_window.py:279,467,577`, `ui/review_view.py:530,533`,
+      `ui/verifier_dialog.py:128`.
+- [ ] V2 (approval panel), V4 ("Running…" while approval is pending), V6 (hero),
+      V7 (band rhythm), V9 (banner detail), V10 (chip) — issues #16, #18.
+- [ ] Job 3 (smart replay behind a Settings switch, record side, replay side,
+      run-history evidence): not started. Nothing outside tests constructs
+      SmartReplay or UiaTargetAdapter; `descriptor_from_event` still has no caller
+      on the draft path.
 - [ ] Take V6, V7, V9 and V10 (hero, band rhythm, banner detail, chip overlap) —
       issue #18, brief TASK-010.
 - [ ] Wire smart replay into the run path (A1): `ONCE_SMART_REPLAY` is read only
