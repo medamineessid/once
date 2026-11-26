@@ -102,6 +102,10 @@ class DesktopApprovalPanel(QWidget):
         self._step_list = QListWidget(frame)
         self._step_list.setObjectName("approvalStepList")
         self._step_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        # A fixed minimum keeps the step list readable when the page stacks the
+        # panel under the automation list: the text and both buttons must stay
+        # visible without scrolling inside a clipped box.
+        self._step_list.setMinimumHeight(96)
         panel_layout.addWidget(self._step_list)
 
         self._binding_note = QLabel(DESKTOP_APPROVAL_BINDING_NOTE, frame)

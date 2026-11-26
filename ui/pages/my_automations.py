@@ -234,25 +234,33 @@ class MyAutomationsPage(QWidget):
         self._banner = Banner(body)
         body_layout.addWidget(self._banner)
 
+        # The two list controls live in their own row above the list. Added
+        # after the list they floated over its last row at narrow heights.
+        self._toolbar = QWidget(body)
+        self._toolbar.setObjectName("myAutomationsToolbar")
+        controls = QHBoxLayout(self._toolbar)
+        controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(SPACING_SM)
+        self._preview_button = ActionButton(MY_PREVIEW, variant="secondary", parent=self._toolbar)
+        self._preview_button.clicked.connect(self._preview_selected)
+        self._clear_drafts_button = ActionButton(
+            MY_CLEAR_DRAFTS, variant="secondary", parent=self._toolbar
+        )
+        self._clear_drafts_button.clicked.connect(self._clear_unnamed_drafts)
+        controls.addWidget(self._preview_button)
+        controls.addWidget(self._clear_drafts_button)
+        controls.addStretch(1)
+        body_layout.addWidget(self._toolbar)
+
         self._workflow_list = QListWidget(body)
         self._workflow_list.setObjectName("workflowList")
         self._workflow_list.setAlternatingRowColors(False)
         self._workflow_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._workflow_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._workflow_list.setMinimumHeight(200)
         self._workflow_list.itemSelectionChanged.connect(self._on_selection_changed)
         self._workflow_list.itemDoubleClicked.connect(lambda _item: self._open_selected())
-        body_layout.addWidget(self._workflow_list)
-
-        controls = QHBoxLayout()
-        controls.setSpacing(SPACING_SM)
-        self._preview_button = ActionButton(MY_PREVIEW, variant="secondary", parent=body)
-        self._preview_button.clicked.connect(self._preview_selected)
-        self._clear_drafts_button = ActionButton(MY_CLEAR_DRAFTS, variant="secondary", parent=body)
-        self._clear_drafts_button.clicked.connect(self._clear_unnamed_drafts)
-        controls.addWidget(self._preview_button)
-        controls.addWidget(self._clear_drafts_button)
-        controls.addStretch(1)
-        body_layout.addLayout(controls)
+        body_layout.addWidget(self._workflow_list, stretch=1)
 
         self._approval_panel = DesktopApprovalPanel(body)
         self._approval_panel.approved.connect(self._on_run_approved)
