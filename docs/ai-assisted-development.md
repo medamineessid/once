@@ -1,5 +1,10 @@
 # Once: AI-Assisted Development Documentation
 
+Status: current (kept as a reference)
+Last verified: as written by its author; not re-checked against the code
+Owner: collaborator (indexed by the owner)
+
+
 Draft for review before committing to `medamineessid/once` as `docs/ai_assisted_development.md`. Items marked **\[FILL\]** need your real information; I did not invent them.
 
 ## 1. Purpose and scope

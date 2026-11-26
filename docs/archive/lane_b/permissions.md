@@ -1,5 +1,11 @@
 # Lane B permissions — every command prefix actually run
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 Format: one line per distinct command prefix (actions with credentials or outside the repo listed explicitly). All work stays inside C:\Users\DELL\once-lane-b.
 
 - (read) git branch --show-current / git status -sb / git fetch / git --no-pager log / git config / git diff / git checkout -b / git remote -v / git push --dry-run

@@ -1,5 +1,11 @@
 # BLOCKED — B3: removing unwired Settings controls vs. "no test may be removed"
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 - Date: 2026-10-27
 - Branch: slice/layout-foundation (PHASE A already merged and pushed to main at 1685475)
 - Ledger item: B3 — status BLOCKED

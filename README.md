@@ -84,6 +84,7 @@ pytest's `tmp_path`. Two opt-in groups need a real desktop:
 
 ## Documentation map
 
+- [`docs/README.md`](docs/README.md) — the index of every living document.
 - [`docs/STATE.md`](docs/STATE.md) — capabilities and their evidence level.
 - [`docs/PLAN.md`](docs/PLAN.md) — the three lanes, the tasks and their status.
 - [`docs/REAL_DESKTOP_CHECKLIST.md`](docs/REAL_DESKTOP_CHECKLIST.md) — the

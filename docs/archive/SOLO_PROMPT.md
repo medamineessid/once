@@ -1,3 +1,8 @@
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
 You are the only coding agent on "once" (C:\Users\DELL\once, GitHub medamineessid/once, Windows 10/11, Python 3.14 in .venv, PySide6). Always use .\.venv\Scripts\python.exe. The user runs Windows PowerShell 5.1 (French locale); anything handed to the user must run there. UTF-8 without BOM (Get-Content -Encoding utf8; never create source files with >). Say which shell your tool uses. You have no memory of earlier sessions: the repo is your memory. Copy and paste raw output, never retype hashes or numbers; write "I cannot confirm this" when unsure.
 FIRST ACTIONS
 1. Paste raw: git branch --show-current, git status -sb, git fetch, git --no-pager log --oneline --decorate -6. Run scripts/verify.ps1 once and paste the full output. Never discard uncommitted work (no checkout ., reset, clean, stash); WIP-commit it on its branch first. If docs/specs/ exists untracked, commit it docs-only (do not require the reference image).

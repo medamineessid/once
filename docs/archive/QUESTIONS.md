@@ -1,5 +1,11 @@
 # Open questions (non-blocking)
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 The default is applied immediately; change it by answering here and re-touching the
 answer in docs/AUTONOMOUS_DECISIONS.md. Nothing in this queue blocks work.
 

@@ -1,5 +1,11 @@
 # Once progress
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 **Active session piece:** 2026-10-31 production request — visual workflow editor,
 full shell refresh, MVP moves to P9 (prompt queue P0–P9 in session prompt). The
 spec files (`docs/specs/visual_workflow_editor.md`, reference PNG) are MISSING

@@ -1,5 +1,11 @@
 # Lane B decisions (ids B-001...; newest decision numbers continue upward)
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 ## B-001 — WSL-side CRLF checkout artifact (2026-11-01)
 Question: `git status` showed all 161 tracked files modified on a fresh clone; commit/verify work would be poisoned by line-ending churn.
 Choice: `git config core.autocrlf true` locally in this clone (only .git/config; no repo file touched, no commit, no dependency change). Evidence: `git diff --numstat | awk` showed 31570 additions / 31570 deletions (perfect symmetry = line endings only); `git diff --ignore-cr-at-eol --numstat` empty; `git -c core.autocrlf=true status -sb` clean before the config change; after it, `git status -sb` clean and `scripts/verify.ps1` ALL CHECKS PASSED.

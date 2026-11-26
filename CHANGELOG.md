@@ -7,6 +7,33 @@ Owner: owner
 
 All notable changes to Once. Dates are the day the work landed on this branch.
 
+## 2026-11-26
+
+### Documentation — one living set, one archive
+
+- Moved the agent prompts, the blocked/parked/questions notes, the autonomous
+  decisions, the UX and button audits, the superseded progress files, the lane B
+  notes and `ui_migration_plan.md` into `docs/archive/`, each with a historical
+  note at the top; the collaborator's document became
+  `docs/ai-assisted-development.md`.
+- Added `docs/README.md`: an index of every living document with a status, a
+  last-verified date and hash, and an owner, plus the naming rule for new docs.
+- Rewrote the README, the vision, the acceptance and demo checklists, the MVP
+  table and the limits page for the current product, each with an explicit
+  tests-only / real-desktop / not-verified split.
+- Corrected `docs/desktop_automation.md`, which said no mouse fallback existed;
+  it does, at `integrations/windows_desktop.py:826`, after the element is
+  re-resolved and re-verified.
+- `docs/STATE.md` and `docs/PLAN.md` now record the real status of every task
+  (`docs/PLAN.md` has a status table with PRs and issues).
+
+### Verification added
+
+- `tests/test_docs_index.py` — indexed docs exist and keep their header, README
+  links resolve, archive files are marked historical, the naming rule is present.
+- `tests/test_governance_docs.py` — the governance pages exist, stay within their
+  line limits, and the README links them.
+
 ## 2026-11-22
 
 ### Repository — `main` is now the real line

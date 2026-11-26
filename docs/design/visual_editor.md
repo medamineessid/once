@@ -15,7 +15,7 @@ not proof that it shipped.
 The session prompt is the governing spec: `docs/specs/visual_workflow_editor.md` and
 `docs/specs/reference/workflow_editor.png` do NOT exist (docs/specs/reference/ is an
 empty folder; verified with `find docs/specs -type f` → no output). Recorded as
-AD-008 in docs/AUTONOMOUS_DECISIONS.md. Everything below is derived from this
+AD-008 in docs/archive/AUTONOMOUS_DECISIONS.md. Everything below is derived from this
 prompt's DESIGN LANGUAGE section, the prompt's acceptance criteria, and the code.
 
 ## 1. Evidence (prompt items a–f, with file:line)
@@ -185,7 +185,7 @@ it — the port is filled by the user from a LAUNCH_BROWSER step or left for rev
 
 ### (f) UX audit of the current shell
 
-Written in full in docs/UX_AUDIT.md (created in this slice), including per-page
+Written in full in docs/archive/UX_AUDIT.md (created in this slice), including per-page
 defects and the fixes each queue item applies.
 
 ## 2. Design decisions (prompt's list)
@@ -198,7 +198,7 @@ defects and the fixes each queue item applies.
   persisted, never executable (pre-decided in the prompt).
 - A connection between two adjacent cards **is** the execution order edge of the
   tuple. There are no crossings, joins, or parallel wires, because the engine cannot
-  express them (evidence (a)). Branching is parked (docs/PARKED.md P7) and "Add
+  express them (evidence (a)). Branching is parked (docs/archive/PARKED.md P7) and "Add
   decision" stays hidden until the gates are met.
 - Insert-on-connection = insert a step at the tuple index represented by that edge:
   edge(Start, step[0]) → index 0; edge(step[i], step[i+1]) → index i+1;

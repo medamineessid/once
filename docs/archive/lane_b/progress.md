@@ -1,5 +1,11 @@
 # Lane B progress / handoff note
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 > Handoff note (updated after every commit) — most recent at the top.
 
 ## Handoff (2026-11-01) — B1 LANDED on main (f7217c7); B2 implemented on branch b/b2-approval-panel (538b4cd)

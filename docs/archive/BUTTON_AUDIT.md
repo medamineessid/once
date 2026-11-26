@@ -1,5 +1,11 @@
 # Button audit (P1.2) — every clickable control in the shell
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 Date: 2026-10-29. Branch: slice/p1-foundations. Scope: `ui/shell.py` and
 `ui/pages/*.py` only (the old window `ui/main_window.py` is being retired and is
 not part of the MVP surface; its behaviour is the parity reference for journeys

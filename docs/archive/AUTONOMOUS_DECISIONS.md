@@ -1,5 +1,11 @@
 # Autonomous decisions (session-prompt protocol)
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 Format per item: id, date, question, options, choice, reason.
 
 ## AD-031 — 2026-11-01 — Running from the editor
