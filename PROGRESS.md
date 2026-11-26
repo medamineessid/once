@@ -8,7 +8,16 @@ Open items, in the order they unblock each other (2026-11-26, `main 603a326`):
       and not mergeable; TASK-007 / issue #15 tracks it.
 - [ ] Close V2 (approval panel cut off) and V4 (row says "Running…" while
       approval is pending) — issue #16.
-- [ ] Close V3 (Preview / Clear drafts floats over a row) — issue #17.
+- [x] V3: Preview / Clear drafts now own a toolbar row above the list (PR #36).
+- [ ] V2 (approval panel), V4 (row says "Running…" while approval is
+      pending), V6 (hero), V7 (band rhythm), V9 (banner detail), V10 (chip):
+      issues #16, #18. Job 2 items 1 (shared scroll page), 3 (responsive
+      hero), 4 (remaining QMessageBox sites) and 5 (full geometry battery)
+      are not done; no objective test for the toolbar order exists yet.
+- [ ] Job 3 (wire smart replay behind a Settings switch, record side,
+      replay side, run-history evidence): not started. Nothing outside
+      tests constructs SmartReplay or UiaTargetAdapter; `descriptor_from_event`
+      still has no caller on the draft path.
 - [ ] Take V6, V7, V9 and V10 (hero, band rhythm, banner detail, chip overlap) —
       issue #18, brief TASK-010.
 - [ ] Wire smart replay into the run path (A1): `ONCE_SMART_REPLAY` is read only

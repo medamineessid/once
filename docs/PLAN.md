@@ -25,7 +25,7 @@ Checked 2026-11-26 against `main 603a326` and the open issues; `not verified` me
 | A5 Chrome tab case | — | NOT STARTED | — | not verified |
 | B1 finish the UI audit tool | TASK-007 | IN PROGRESS | draft PR #12, issue #15 | not verified: the draft is open and not mergeable |
 | B2 blocking defects V1, V2, V4 | TASK-008 | IN PROGRESS | #29 (V1), issue #16 | tests only |
-| B3 layout defects V3, V5, V8 | TASK-009 | IN PROGRESS | #27 (V5, V8), issue #17 | tests only |
+| B3 layout defects V3, V5, V8 | TASK-009 | DONE (V3, V5, V8) | #27, #36, issue #17 | tests only |
 | B4 polish defects V6, V7, V9, V10 | TASK-010 | NOT STARTED | issue #18 | not verified |
 | B5 V5 animation follow-ups | TASK-011 | IN PROGRESS | #27 (base), #19 | tests only; follow-ups wait for B1 |
 | B6 pick-one dialog and sample-fed run report | TASK-012 | NOT STARTED | issue #20 | not verified |
