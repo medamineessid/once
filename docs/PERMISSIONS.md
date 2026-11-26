@@ -1,5 +1,10 @@
 # Permissions ledger
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 ## 2026-11-01, A2a session
 
 My tool shell is Windows PowerShell 5.1 via the Copilot PowerShell tool.

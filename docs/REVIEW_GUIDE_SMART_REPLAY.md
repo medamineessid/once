@@ -1,5 +1,10 @@
 # Review guide: one step through smart replay
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane A (replay core)
+
+
 A one-page walkthrough for explaining this code in a demo. Every claim below is
 about code that is in the repository now. Where something is not finished, the
 guide says so instead of pretending.

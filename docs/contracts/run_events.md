@@ -1,8 +1,11 @@
 # Run events contract
 
-Status: implemented (controller/run_events.py, ui/workers.py). Version: 1.
-Owner: lane B (docs/contracts). Consumers: shell pages, editor live node
-states (task B7), Activity evidence (task B5), approval panel (task B2).
+Status: current — implemented in `controller/run_events.py` and `ui/workers.py`.
+Version: 1.
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane B (app experience)
+Consumers: shell pages, editor live node states, Activity evidence, approval
+panel.
 
 ## What the engine really produces
 

@@ -1,5 +1,10 @@
 # Changelog
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 All notable changes to Once. Dates are the day the work landed on this branch.
 
 ## 2026-11-22

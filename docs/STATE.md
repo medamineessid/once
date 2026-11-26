@@ -1,5 +1,10 @@
 # State — once (as of the last owner PR)
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 Owner-only. Updated by the owner in the PR that changes what works, so a fresh
 session can continue from the repo alone.
 

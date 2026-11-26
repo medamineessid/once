@@ -1,5 +1,10 @@
 # Once Desktop Design System (`DESIGN.md`)
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane B (app experience)
+
+
 Once is a local-first Windows desktop application built with Python and **PySide6 (Qt Widgets)**. Because Once runs natively on Windows without a web browser or Electron runtime, web-only libraries (such as GSAP, Tailwind, or CSS `box-shadow`/`transition`) are not used. Instead, Once implements a Linear/Raycast-inspired light-first desktop aesthetic using Qt Widgets, `QGraphicsScene`, and validated Qt Style Sheets (`ui/styles/__init__.py`).
 
 ---

@@ -1,5 +1,10 @@
 # Reusable PR review prompt
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 Paste this into a fresh review session for PR **N**. Replace `N` and the task
 file only. Do not accept a PR as done from the author's prose alone.
 

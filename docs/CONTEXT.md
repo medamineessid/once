@@ -1,5 +1,10 @@
 # Context
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 Once is a local-first desktop app on Windows for describing, running and
 reviewing bounded workflows. It is offline by default; every real run starts on
 the machine, and nothing reaches a network service unless the user configures

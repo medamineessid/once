@@ -1,5 +1,10 @@
 # Collaborator guide
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 For the two collaborators and their coding agents. The rules that already live in
 `AGENTS.md` and `docs/WORKING_AGREEMENT.md` still apply; this page is the
 short version plus the lane split.

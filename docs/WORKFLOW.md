@@ -1,5 +1,10 @@
 # Workflow notes
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 Operational notes about how changes move through this repository. The rules
 themselves live in `AGENTS.md` and `docs/WORKING_AGREEMENT.md`; this file records
 exceptions and their reasons.

@@ -1,5 +1,10 @@
 # First run: a walkthrough, with the places that confuse people
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane B (app experience)
+
+
 This is the shortest honest path through Once for someone who has never seen it,
 written by walking it. Each "where people get stuck" note is a real observation
 from driving the running app, not a guess.

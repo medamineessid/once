@@ -1,7 +1,16 @@
 # Visual workflow editor — design document (P1)
 
 Date: 2026-10-31 (session date 2026-10-29/30). Branch: slice/p1-editor-discovery.
-Status: evidence-based design, no code yet. Queue owner: this file governs P3–P6.
+Status: current (a design record; implemented in part — see the note below).
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane B (app experience)
+
+Status note: the linear chain editor is implemented — `ui/pages/editor.py`,
+`controller/editor.py` and `storage/layouts.py` (canvas, inspector, undo/redo,
+layout persistence), pinned by `tests/test_editor_page.py` and
+`tests/test_workflow_layouts.py`. Not implemented: branch and decision nodes
+(parked) and anything this document lists for P5–P7. Reading a section below is
+not proof that it shipped.
 
 The session prompt is the governing spec: `docs/specs/visual_workflow_editor.md` and
 `docs/specs/reference/workflow_editor.png` do NOT exist (docs/specs/reference/ is an

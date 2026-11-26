@@ -1,5 +1,10 @@
 # Once — Post-Recording Visual Workflow Editor
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane B (app experience)
+
+
 
 
 ## 1. Objective
@@ -1779,4 +1784,3 @@ The redesign should be considered successful when:
 
 
 The final result should make Once feel like an approachable, visual automation editor: the AI creates the initial workflow, and the user can refine it by interacting directly with the diagram.
-
