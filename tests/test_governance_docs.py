@@ -10,8 +10,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[1]
 START_HERE_LINKS = (
     ("CONTEXT.md", "docs/CONTEXT.md"),
@@ -54,10 +52,8 @@ def test_state_has_a_last_updated_line() -> None:
 def test_context_and_state_are_under_their_line_limits() -> None:
     context = ROOT / "docs" / "CONTEXT.md"
     state = ROOT / "docs" / "STATE.md"
-    if not context.exists():
-        pytest.skip("docs/CONTEXT.md not present yet")
-    if not state.exists():
-        pytest.skip("docs/STATE.md not present yet")
+    assert context.exists(), "docs/CONTEXT.md is missing"
+    assert state.exists(), "docs/STATE.md is missing"
     context_lines = _read(context).splitlines()
     state_lines = _read(state).splitlines()
     assert len(context_lines) <= CONTEXT_MAX, (
