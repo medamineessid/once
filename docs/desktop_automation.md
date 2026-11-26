@@ -1,5 +1,10 @@
 # Desktop Automation Engine
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane A (replay core)
+
+
 Implemented (2026-10-25) on branch `desktop-automation-engine`. This document
 describes exactly what exists in code today; anything not listed here is not
 implemented.
@@ -162,8 +167,10 @@ Elements (inside the resolved window):
   cannot be inspected. Notepad's editor has an empty `automation_id` and a
   stable `class_name` (`RichEditD2DPT`), which is why class_name is accepted.
 
-Coordinate-based clicking is NOT implemented (no fallback exists to silently
-click elsewhere).
+Clicking is element-based. When the control exposes no UI Automation pattern,
+the provider re-resolves the element, re-checks its presence and bounds, and
+then clicks its bounding-box centre (`integrations/windows_desktop.py:826`). A
+coordinate-only click, with nothing to verify first, is not implemented.
 
 ## Permissions and approval flow
 
@@ -198,7 +205,9 @@ Cancellation between steps produces `CANCELLED` runs.
 - Password fields and OOB security dialogs (UAC/secure desktop) are not
   automatable; Value pattern + per-window targeting cannot reach them.
 - Only the four mutating kinds above exist; there is no generic "do anything"
-  action, no coordinate clicks, no window-move/close, no clipboard scraping.
+  action, no coordinate-only clicks (the mouse fallback runs only after the
+  element has been re-resolved and re-verified), no window-move/close, no
+  clipboard scraping.
 - Concurrent timeouts: `timeout_seconds` bounds waits and launches indirectly
   (both stop within the workflow's step budget).
 

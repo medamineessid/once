@@ -1,5 +1,10 @@
 # Once — three-lane team plan (3 weeks)
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 ## Finish line
 
 The demo is the finish line: record once; change the screen (more tabs, wanted
@@ -11,8 +16,7 @@ at `real desktop` level without an approved real-PC run.
 
 ## Status
 
-Checked 2026-11-26 against `main 603a326` and the open issues. `not verified`
-means nobody ran it on a real desktop; the evidence levels are defined below.
+Checked 2026-11-26 against `main 603a326` and the open issues; `not verified` means no real-desktop run.
 
 | task | brief | status | PR / issue | evidence |
 | --- | --- | --- | --- | --- |
@@ -73,17 +77,13 @@ the owner has run on this base.
 
 ## Daily and weekly rhythm
 
-- **Session rule:** re-read repo state before acting — `git.exe branch
-  --show-current`, `git.exe status --short`, fetch and `gh.exe` state; work only
-  on `feat/<lane>-<task>` from up-to-date `main`, with absolute paths.
-- **Daily 3-line update:** done, next, stuck. Post it every day in the team
-  channel.
-- **Friday integration:** merge, run the demo script on a clean copy, list what
-  failed.
-- **Explain-back:** the author explains each big PR in 5 lines. In week 3,
-  practise the explanation out loud.
-- **Peer review:** lane B and C read each other's PRs for clarity; the owner
-  merges.
+- **Session rule:** re-read repo state before acting (`git.exe branch
+  --show-current`, `git.exe status --short`, fetch, `gh.exe`); work only on
+  `feat/<lane>-<task>` from up-to-date `main`, with absolute paths.
+- **Daily 3-line update:** done, next, stuck, every day in the team channel.
+- **Friday integration:** merge, run the demo script on a clean copy, list what failed.
+- **Explain-back:** the author explains each big PR in 5 lines, out loud in week 3.
+- **Peer review:** lane B and C read each other's PRs for clarity; the owner merges.
 - **Screenshot rule:** a person looks at every screenshot and writes one
   sentence per image. A capture nobody has opened is not evidence, whatever its
   file name or size says.

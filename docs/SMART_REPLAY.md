@@ -1,5 +1,10 @@
 # Smart replay — design (2026-11-22)
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane A (replay core)
+
+
 Status: **slices 1–3 implemented on `feat/smart-replay-core`.** The resolver
 (`engine/resolve/`), the flag-gated integration (`engine/smart_replay.py`), the
 schema-4 step fields (`engine/workflow.py`, `storage/workflows.py`) and the UI

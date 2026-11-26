@@ -1,5 +1,10 @@
 # TASK-0NN — <short title>
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 Lane: `<tests|ui|engine>` · Difficulty: `<good-first-task|normal>` ·
 Owner review required: `<yes|no>` · Label: `<lane/tests|lane/ui|lane/engine>`
 

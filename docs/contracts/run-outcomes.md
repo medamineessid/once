@@ -1,10 +1,11 @@
 # Run outcome contract
 
-Status: implemented (engine/workflow.py, controller/run_events.py,
-ui/components/formatting.py). Version: 1.
-Owner: lane B (docs/contracts). Consumers: Activity page, Home "recent
-activity" list, run event stream (docs/contracts/run_events.md), saved
-workflow history, approval panel.
+Status: current — implemented in `engine/workflow.py`,
+`controller/run_events.py` and `ui/components/formatting.py`. Version: 1.
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane B (app experience)
+Consumers: Activity page, Home "recent activity" list, run event stream
+(`docs/contracts/run_events.md`), saved workflow history, approval panel.
 
 ## The problem this contract fixes
 

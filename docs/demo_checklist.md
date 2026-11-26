@@ -1,56 +1,76 @@
-# Once MVP Demo Checklist
+# Demo checklist
 
-Core framing: **"Once replays what it can verify and tells you honestly about the rest."**
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane C (proof and delivery)
 
-## Pre-Demo Launch Command
+The finish line from `docs/PLAN.md`: **record once; change the screen (more tabs,
+the wanted result lower in the list); replay finds the right thing or asks, and
+never clicks wrong.** Rehearse the fallback too, because the smart-replay half is
+not wired into the app path yet (`ONCE_SMART_REPLAY` is read only in
+`engine/smart_replay.py`, grep 2026-11-26).
 
-From `C:\Users\DELL\once` in PowerShell:
+## Before you start
 
 ```powershell
-.\.venv\Scripts\python.exe app.py --shell
+.\.venv\Scripts\python.exe app.py
 ```
 
-## 8-Step Live Demo Sequence
+Close every Notepad window. Have a second browser window ready for the "change
+the screen" beat. Do not touch the mouse or keyboard while a run is going; if it
+goes wrong, press `Ctrl+Alt+Q`.
 
-1. **Start a Recording**
-   - On the **Home** page, click **Start with a recording** (or open **Create automation** and click **Record task**).
-   - Once begins recording local window and input observations.
-   - Open a classic Win32 desktop utility (recommended: `C:\Windows\System32\charmap.exe` — Character Map), wait 2 seconds so its top-level window is visible, then close it.
-   - Click **Stop recording**.
+## The five-beat demo (about 6 minutes)
 
-2. **Review the Proposed Draft & Step Labels**
-   - Once automatically transitions to **Review automation draft**.
-   - Point out the application summary: `This task opens: charmap — C:\Windows\System32\charmap.exe`.
-   - Point out the step list:
-     - `LAUNCH_APPLICATION` and `CLOSE_APPLICATION` are labeled **`[Replayable: Once can replay this step.]`**.
-     - Any mouse clicks, window switches, or key presses are labeled **`[Observation only: Recorded observation only — nothing is performed on replay.]`** with an info banner explaining that observation-only steps are shown but not performed.
+1. **Record once.** Home → **Record** → open Notepad, type `Hello Once`, open a
+   menu, close *without saving* → **Stop recording**.
+   *Say:* "Once captured the window, the control it typed into and the close, not
+   screen coordinates."
 
-3. **Approve the Application Once**
-   - Try clicking or note that **Approve draft and edit** stays hidden until the application is approved.
-   - Click **Approve to open it with Once (one-time)**.
-   - Once records the executable path and its SHA-256 content hash in SQLite (`%LOCALAPPDATA%\Once\once.db`).
+2. **Review.** Point at the step list: replayable steps, observation-only steps,
+   and the one-time application approval (path + SHA-256).
+   *Say:* "Nothing runs until I approve this application and these actions."
 
-4. **Approve Draft & Save in the Visual Editor**
-   - Click **Approve draft and edit**.
-   - Once saves the approved workflow and opens it in the visual **Editor** canvas (`Start -> Launch -> Close -> Finish`).
-   - Optionally click a step node on the canvas to inspect or edit its name/message in the right-hand inspector, or click **Save** to persist changes.
+3. **Change the screen.** Open two more Notepad windows, or move the window and
+   resize it, so the target is no longer where it was recorded.
 
-5. **Run the Automation Live**
-   - Click **Run** in the Editor (and confirm desktop execution when prompted).
-   - Watch `charmap.exe` actually launch on screen and then close automatically by its launched PID.
+4. **Replay.** **Run** → approve the gate.
+   *Say:* "It re-resolves the target instead of replaying a position." Watch for
+   the honest outcome in Activity: `Succeeded`, `Partly performed`, or a failure
+   whose first line is a plain reason.
 
-6. **Inspect Honest Run Outcomes**
-   - If the workflow had only `LAUNCH_APPLICATION` and `CLOSE_APPLICATION`, the run finishes as **`Succeeded`**.
-   - If the recording also included mouse clicks or focus switches (`REPORT` steps) alongside the launch/close steps, the run finishes as **`Partly performed`** (`Partly performed: 2 step(s) performed, N step(s) observation only`).
-   - Open the **Activity** page from the left sidebar to show the persisted run record, timestamp, status chip, and per-step evidence (`process_id=...`, `sha256=...`, `windows_closed=1`, `exited=true`).
+5. **Never a wrong click.** If the target moved somewhere ambiguous, show that
+   Once stops or asks rather than clicking the nearest thing — read the reason
+   aloud from Activity.
 
-7. **Verify Unapproved / Modified App Refusal**
-   - Run the CLI probe or attempt to run a workflow whose executable has not been approved:
-     ```powershell
-     .\.venv\Scripts\python.exe scripts\live_registry_probe.py --exe C:\Windows\System32\charmap.exe --db $env:TEMP\once-probe.db
-     ```
-   - Point out step `[1/4]` (`approval_needed=true`, `approval_reason=not_recorded`) and step `[4/4]` (`approval_reason=hash_mismatch`).
+Then show **Stop** and `Ctrl+Alt+Q` on a second run, and the persisted row in
+Activity after a restart.
 
-8. **Verify Persistence Across Restart**
-   - Close the Once window and relaunch `.\.venv\Scripts\python.exe app.py --shell`.
-   - Open **My Automations** and **Activity** to show that saved automations, one-time application approvals, and run history persist in SQLite across restarts.
+## Fallback script — smart replay not ready
+
+If step 4 does not re-resolve (today's app path), do not fake it. Say what is
+true and show the parts that do work:
+
+1. Record and approve as in beats 1–2.
+2. Run it with the window in place: **Succeeded**, evidence shows the control it
+   typed into.
+3. Then prove the honesty half: rename or close the target window first, run
+   again, and show the step failing with "Could not find the … button in
+   Notepad." — Once reports a miss instead of clicking something else.
+4. Close with: "The resolver that turns this miss into a question is implemented
+   and tested, and is not wired into the app yet; `docs/STATE.md` records it as
+   tests only."
+
+Never claim the smart-replay beat as demonstrated. If asked when, the answer is
+A1 in `docs/PLAN.md`.
+
+## What to have open
+
+- Home, then My automations, then Activity.
+- `docs/STATE.md` for the evidence levels, and `docs/UI_DEFECTS.md` if a UI
+  defect is visible: name it as a known defect instead of apologising for it.
+
+## After the demo
+
+Write the run ids and any failure text into `docs/evidence/TEMPLATE.md`, and tell
+the owner which claims are now **real desktop** instead of **tests only**.

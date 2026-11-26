@@ -1,5 +1,10 @@
 # WORKING AGREEMENT
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner
+
+
 ## Hard rules
 
 1. Never change the semantics of the approval gate, replay policy, workflow validators or safety invariants. Calling them and adding tests for them is allowed.

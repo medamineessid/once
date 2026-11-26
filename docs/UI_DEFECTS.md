@@ -1,5 +1,10 @@
 # Current UI defects — V1 to V10
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane B (app experience)
+
+
 Checked against `603a326` on 2026-11-26. `docs/UX_AUDIT.md` is historical; do
 not use its D1–D10 numbers for new work. V1, V5 and V8 are fixed (PR #29 and
 PR #27); V2, V3, V4, V6, V7, V9 and V10 are unchanged. Reference captures are in

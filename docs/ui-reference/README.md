@@ -1,5 +1,10 @@
 # UI reference captures
 
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane B (app experience)
+
+
 `defects/` holds the "before" images for the defects in `docs/UI_DEFECTS.md`.
 They are real app-window captures of the shell `app.py` builds, rendered
 offscreen from synthetic fixtures and saved by

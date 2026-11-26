@@ -1,10 +1,14 @@
-# Once — Local-First Supervised Desktop Automation & Orchestration
+# Once: record a task once, replay it on Windows
 
-**Show Once a task once—or build it visually—review every step in plain English, approve what touches your desktop, and let a deterministic engine handle the rest.**
+Record a task once, read every step in plain English, approve what may touch your
+desktop, and let a deterministic engine replay it. Once is a local-first Windows
+app written in Python and PySide6 (Qt Widgets), and it never lets a model decide
+what to click: when a recorded step cannot be resolved safely it asks you or
+stops, instead of guessing.
 
-Once is a local-first Windows desktop application built with Python and **PySide6 (Qt Widgets)** for recording, building, verifying, and replaying bounded desktop, browser, and file-verification workflows. Instead of fragile coordinate clicking or opaque AI scripts, Once pairs **semantic Windows UI Automation (UIA)** with a strict, human-approved execution engine. Every action is inspectable, every application launch is bound to its cryptographic SHA-256 identity, and nothing mutates your machine without your explicit permission.
-
----
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner (all lanes)
 
 ## Start here
 
@@ -16,176 +20,99 @@ Once is a local-first Windows desktop application built with Python and **PySide
 - `docs/COLLABORATOR.md` — how your work reaches `main`.
 - `docs/PLAN.md` — the three-lane plan and the task status table.
 
-## What Works Today (Current Capabilities)
+## Status and evidence
 
-Once brings together a high-contrast native desktop interface — navy rail, lemon accents, banded Anton page titles (`ui/`, documented in [`DESIGN.md`](DESIGN.md)) — and a rock-solid, policy-gated execution engine (`engine/`, `controller/`, `integrations/`):
+Evidence has three levels and a doc never invents a fourth: **real desktop**
+(a person ran it on a real PC), **tests only** (green pytest, no real run), and
+**not verified**.
 
-### 1. Semantic Task Recording & AI-Assisted Drafts (`Start with a recording`)
-- **Beyond `(x, y)` Coordinates:** Captures window launches, window closes, UIA control clicks (`Button`, `MenuItem`, `CheckBox`, `RadioButton`, `ListItem`, `TabItem`, `Hyperlink`), text entry (`Edit`, `Document`, `ComboBox`), and keyboard shortcuts locally while automatically redacting password fields.
-- **Deterministic Offline + Optional Gemini Cloud Analysis:** Turns your recorded task into a structured workflow draft (`LAUNCH_APPLICATION`, `CLICK_UI_ELEMENT`, `TYPE_TEXT`, `PRESS_SHORTCUT`, `CLOSE_APPLICATION`). Works 100% offline out of the box, and seamlessly upgrades to cloud Gemini analysis when a `GEMINI_API_KEY` or Windows Credential Manager entry is configured—automatically keeping whichever draft produces more replayable steps.
-- **Transparent Review Screen:** Labels every proposed step as **`Replayable`** or **`Observation only`** with a clear explanation, and requires a one-time application identity approval (executable path + SHA-256 hash) before saving.
+**Proven on a real desktop.** The Notepad flow — record, approve the application
+once, run it twice — ended `SUCCEEDED` both times with no window left behind
+(`scripts/prove_notepad_flow.py`, `shots/after/notepad-flow.json`). The kill
+switch `Ctrl+Alt+Q` stopped a live run (`shots/after/kill-switch.json`).
 
-### 2. Visual Workflow Editor (`Build it yourself`)
-- **Interactive Node Canvas & Minimap:** Visualizes your workflow chain (`Start -> Steps -> Finish`) with semantic status badges (`RUNNING`, `SUCCEEDED`, `VERIFIED`, `OBSERVED`, `FAILED`), zoom/pan controls, and persistent node layouts in SQLite.
-- **Synchronized Step List & Guided Inspector:** Click any step on the canvas or in the step list to edit its `Kind`, `Name`, `Message`, `Target`, `Attempts`, `Timeout`, or `Postcondition`. Changing a step's `Kind` automatically populates a valid target template so you never have to guess JSON syntax.
-- **Full Undo / Redo & Live Execution:** Edit with confidence (`Ctrl+Z` / `Ctrl+Y` / `Ctrl+S`), delete steps, and run saved automations directly from the editor with real-time per-node progress and evidence inspection.
+**Tests only.** Workflow validation and persistence, the approval gate, the
+shell and its pages, run outcomes, the file-verification primitives, and the
+button, sidebar and dialog fixes in PR #27 and #29.
 
-### 3. Resilient Windows 11 Desktop & Browser Replay
-- **Cryptographic Application Registry (`once.db`):** Launches only executables you have explicitly approved and verifies their SHA-256 digest before every run. `CLOSE_APPLICATION` closes only a window that did not exist before the launch and belongs to the launched executable — including Windows 11 Notepad's single-instance handoff — and never a window you already had open. If the application answers with its own save prompt, Once declines it rather than writing a file; a window it cannot prove it owns is left open and reported.
-- **Real-World Windows 11 UIA Tolerance:** Automatically waits up to 5 seconds for newly launched windows to appear, tolerates dirty-indicator title prefixes (such as `*Untitled - Notepad`), and falls back to focused keyboard entry when modern WinUI/DirectUI controls do not expose `ValuePattern`.
-- **Isolated Chrome DevTools Automation:** Supports bounded browser steps (`LAUNCH_BROWSER`, `NAVIGATE_BROWSER`, `INSPECT_PAGE`, `FIND_PAGE_ELEMENT`, `INTERACT_PAGE_ELEMENT`, `WAIT_PAGE`) inside disposable temporary profiles that clean up automatically when the run finishes.
+**Not wired yet.** Smart replay resolves a recorded step by its clues and is
+covered by tests, but the flag `ONCE_SMART_REPLAY` is read only in
+`engine/smart_replay.py` — nothing in `app.py`, `controller/` or `ui/` reads it,
+so the app path does not use it yet. The Chrome tab case is not built. The UI
+audit harness is an open draft (PR #12).
 
-### 4. Supervised Test-and-Fix Orchestrator & Verifier
-- **Allowlisted Headless Verifier:** Runs synthetic invoice acceptance cases against allowlisted local commands, compares per-field JSON outputs, and packages redacted evidence bundles (`engine/verifier.py`).
-- **Isolated Git Worktree Verification:** Reviews coding-agent proposals on separate branches, verifies exact commit tips inside disposable Git worktrees (`verify_proposal_pre_merge`), and requires explicit human approval before fast-forwarding.
+## What it does
 
----
+- **Record** — window launches and closes, UI Automation control clicks, text
+  entry and allowlisted shortcuts are captured locally, with password fields
+  redacted.
+- **Review** — the draft shows each step as replayable or observation-only, and
+  the application is approved once by path and SHA-256.
+- **Replay** — only steps that carry a target are performed; a step that cannot
+  find its window or control fails with a plain reason, and the run says what
+  actually happened (`Succeeded`, `Partly performed`, `Observation only —
+  nothing was performed`, `Failed`, `Cancelled`).
 
-## Honest Run Outcomes
+## Quick start
 
-Every run reports an accurate, plain-language outcome (`docs/contracts/run-outcomes.md`) persisted to SQLite (`Activity` & `Home`):
-
-- **`Succeeded` (`SUCCEEDED`):** Every step performed or verified real work.
-- **`Partly performed` (`PARTIALLY_PERFORMED`):** At least one step performed real work and at least one step was `Observation only` (`REPORT`).
-- **`Observation only — nothing was performed` (`OBSERVATION_ONLY`):** The workflow contained only observation notes.
-- **`Failed` (`FAILED`):** A step failed, timed out, or was refused by a safety gate (such as an unapproved executable or SHA-256 mismatch).
-- **`Cancelled` (`CANCELLED`):** Cooperatively stopped by the user before completion — from the **Stop** button in the footer, or **Ctrl+Alt+Q** anywhere, which is a global hotkey armed only while a run is live.
-
-Each run in **Activity** shows its name, status, duration, and the first plain-language failure reason, with per-run **Run again** and **Delete**.
-
----
-
-## Quick Start
-
-### Requirements
-- Windows 10 or 11 (x64)
-- Python 3.12 or newer; the app and its tests run on 3.14.3 on this machine, and
-  the linter targets 3.12 so nothing emitted here needs a newer interpreter
-
-### Setup
-
-From the repository root (`c:\Users\DELL\once`) in PowerShell:
+Requirements: Windows 10 or 11 (x64) and Python 3.12 or newer.
 
 ```powershell
 py -3.14 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-```
-
-### Launch Once
-
- Both commands below launch the modern **Once desktop shell** (`ui/shell.py`):
-
-```powershell
 .\.venv\Scripts\python.exe app.py
-# or explicitly:
-.\.venv\Scripts\python.exe app.py --shell
 ```
 
-*(Need the legacy diagnostic window? Run `.\.venv\Scripts\python.exe app.py --classic`.)*
+The app opens on **Home** with two entry points: **Record** (perform the task
+once) and **Build** (place the steps yourself). `app.py --classic` opens the
+older diagnostic window; `docs/first_run.md` walks the same path with the places
+people actually get stuck.
 
----
-
-## Try It Out: Recommended Scenarios
-
-1. **Record & Replay a Live Desktop Task:**
-   - Open Once, click **Start with a recording** on the Home screen, and click **Start recording**.
-   - Launch a desktop app, click buttons or type into an input field, close the app, and click **Stop recording**.
-   - On the **Review recorded draft** screen, click **Approve to open it with Once (one-time)**, then **Approve draft and edit**.
-   - Inspect your generated steps on the visual canvas, click **Run automation**, approve the desktop action gate, and watch Once replay the task end-to-end.
-2. **Build a Custom Automation Visually:**
-   - Click **Build an automation** on Home.
-   - Click **Add step**, select the step on the canvas or list, choose a `Kind` in the right-hand Inspector (e.g., `LAUNCH_APPLICATION`, `TYPE_TEXT`, `VERIFY_PATH_EXISTS`), customize the target, click **Apply changes**, **Save automation**, and **Run automation**.
-3. **Run the Supervised Test-and-Fix Demo (`scripts/run_demo.py`):**
-   ```powershell
-   echo approve | .\.venv\Scripts\python.exe scripts\run_demo.py
-   ```
-4. **Probe the Live SQLite Application Registry:**
-   ```powershell
-   .\.venv\Scripts\python.exe scripts\live_registry_probe.py --exe C:\Windows\System32\notepad.exe --db $env:TEMP\once-probe.db
-   ```
-
----
-
-## Verification, Testing & Packaging
-
-### Run the Test Suite & Linter
+## Run the tests
 
 ```powershell
-.\.venv\Scripts\ruff.exe format .
+.\.venv\Scripts\ruff.exe format --check .
 .\.venv\Scripts\ruff.exe check .
-$env:QT_QPA_PLATFORM = "offscreen"
 .\.venv\Scripts\python.exe -m pytest -q
+.\scripts\verify.ps1        # what CI runs
 ```
 
-### Headless UI Smoke Test
+The suite is offscreen (`QT_QPA_PLATFORM=offscreen`) and every test works inside
+pytest's `tmp_path`. Two opt-in groups need a real desktop:
+`ONCE_REAL_DESKTOP=1` runs the Notepad end-to-end test, and
+`docs/REAL_DESKTOP_CHECKLIST.md` is a checklist a person runs by hand.
 
-```powershell
-$env:QT_QPA_PLATFORM = "offscreen"
-.\.venv\Scripts\python.exe app.py --smoke-test
-$LASTEXITCODE   # expect 0
-```
+## Documentation map
 
-### Package a Standalone Windows Build (`dist\Once\Once.exe`)
-
-```powershell
-.\.venv\Scripts\python.exe -m PyInstaller once.spec --noconfirm --clean
-.\dist\Once\Once.exe --smoke-test   # expect exit code 0
-```
-
-All user data (SQLite history, approved application hashes, saved workflows, recordings, and rotating logs) lives cleanly under `%LOCALAPPDATA%\Once` and is never written next to the executable.
-
----
-
-## Branching and pull requests
-
-`main` is the default and only long-lived branch. Everything lands through a
-pull request into it.
-
-1. Create a feature branch from an up-to-date `main` (for example `lane-a/...`,
-   `slice/...`, `fix/...`, `docs/...`).
-2. Open a pull request whose base is `main`, and wait for both checks:
-   - **CI** — `.github/workflows/tests.yml` runs `scripts/verify.ps1` on
-     `windows-latest` with Python 3.14: `ruff format --check`, `ruff check`, the
-     full `pytest` suite, the offscreen UI smoke test, and the append-only
-     engineering-log gate.
-   - **SonarCloud Code Analysis** — no open bug or vulnerability in new code
-     (reliability and security ratings on new code must both be A).
-3. Merge with a **merge commit**. Squash merges and rebase merges are not used.
-   Never force-push and never rewrite published history.
-
-Never merge while a check is red. Do not delete the review branches
-(`integration/preview`, `lane-a-mvp-replay`, `lane-b-fix`,
-`slice/naming-defect`, `lane-a-mvp-scratch`) without asking the owner.
-
-`docs/ai_engineering_log.md` is append-only: earlier entries are never edited,
-reordered, or removed. The check is
-`scripts/check_log_append_only.py` (see `docs/WORKFLOW.md`, which also records
-the one temporary exception carried by PR #1 and the follow-up that removes
-it).
-
----
-
-## Documentation Map
-
-- [`CHANGELOG.md`](CHANGELOG.md) — what changed, and the real defects fixed while verifying it.
-- [`docs/first_run.md`](docs/first_run.md) — the first-run walkthrough, with the places people actually get stuck.
-
-- [`DESIGN.md`](DESIGN.md) — Native Qt design system, color tokens, typography scale, and canvas/inspector anatomy.
-- [`AGENTS.md`](AGENTS.md) — Architecture boundaries, non-negotiable safety invariants (`S1–S12`, `O1–O8`), and engineering rules.
-- [`docs/demo_checklist.md`](docs/demo_checklist.md) — Step-by-step MVP walkthrough checklist.
-- [`docs/WORKFLOW.md`](docs/WORKFLOW.md) — Branch, pull-request, and append-only-log notes, including every recorded exception.
-- [`docs/known_limits.md`](docs/known_limits.md) — Honest scope boundaries and safety constraints.
-- [`docs/decisions.md`](docs/decisions.md) — Architectural and dependency decision records (`PySide6 6.12.0`, `send2trash 2.1.0`, `pytest 9.1.1`, `Ruff 0.17.1`).
-- [`docs/ai_engineering_log.md`](docs/ai_engineering_log.md) — Chronological engineering and verification log.
+- [`docs/STATE.md`](docs/STATE.md) — capabilities and their evidence level.
+- [`docs/PLAN.md`](docs/PLAN.md) — the three lanes, the tasks and their status.
+- [`docs/REAL_DESKTOP_CHECKLIST.md`](docs/REAL_DESKTOP_CHECKLIST.md) — the
+  person-run checklist.
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed, including defects found while
+  verifying it.
+- [`docs/decisions.md`](docs/decisions.md) — architectural decision records.
+- [`docs/ai_engineering_log.md`](docs/ai_engineering_log.md) — append-only
+  engineering log.
 
 ## Contributing
 
-Three people work in this repository in parallel. Read
-[`docs/COLLABORATOR.md`](docs/COLLABORATOR.md) first: it has the run commands,
-the folder map, the hard rules and a block to paste at the start of an AI
-session. Work happens on `feat/<lane>-<task>` branches described by a brief in
-[`tasks/`](tasks/TEMPLATE.md); the owner merges into `main` after CI passes.
-`scripts/check_pr_guards.py` fails a pull request that deletes a test, adds an
-unexplained skip, changes dependencies without the `dependency-approved` label,
-or touches files outside its task brief.
+Work happens on `feat/<lane>-<task>` branches described by a brief in
+[`tasks/`](tasks/TEMPLATE.md). Read [`docs/COLLABORATOR.md`](docs/COLLABORATOR.md)
+first: it has the run commands, the folder map, the hard rules and how a change
+reaches `main`. `scripts/check_pr_guards.py` rejects a pull request that deletes
+a test, adds an unexplained skip, changes dependencies without the
+`dependency-approved` label, or touches files outside its brief.
+
+## License
+
+No license file yet. Until one is added, treat the repository as
+all-rights-reserved and ask the owner before reusing it.
+
+## Legacy: verifier and orchestrator
+
+Before this line, Once was described as a supervised test-and-fix orchestrator:
+bounded invoice verification, redacted evidence bundles and coding-agent
+proposals on separate branches. That code still exists (`engine/verifier.py`,
+`engine/acceptance.py`, `engine/agent_change.py`, `integrations/coding_agent.py`)
+and the safety reasoning behind it still applies, but it is not the product
+described above and nothing in the current record-review-replay path reaches it.

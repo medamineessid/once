@@ -1,38 +1,73 @@
-# Known Limits (MVP)
+# Known limits
 
-Once is designed around a strict honesty contract: **every step in a workflow is either deterministically replayable with postcondition verification, or explicitly labeled `Observation only` so a run never claims a success it did not perform.**
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: lane A (replay core)
 
-## What Recording + Replay Supports End-to-End Today
+Once only claims what a step can prove. This page lists what it cannot do today;
+`docs/STATE.md` records what it can, with an evidence level.
 
-- **Opening an application (`WINDOW_OPEN` -> `LAUNCH_APPLICATION`):**
-  - Captures the exact executable path (`executable_path`) and SHA-256 hash (`executable_sha256`) from the live Windows process.
-  - Requires a one-time user approval stored in SQLite (`app_approvals` / `approved_applications`).
-  - Launches directly with `subprocess.Popen(argv, shell=False)` after verifying the file exists and its SHA-256 matches the approved hash.
-- **Closing an application launched in the same run (`WINDOW_CLOSE` -> `CLOSE_APPLICATION`):**
-  - Emitted when the recording also captured opening that application.
-  - Polls for visible, unowned top-level windows belonging to the exact PID launched by the current run and closes only those windows.
-  - Reports `SUCCEEDED` only when the launched PID exits or has zero visible top-level windows remaining. Never touches pre-existing user windows.
-- **Read-only path & file verification (`INSPECT_PATH`, `VERIFY_PATH_EXISTS`, `VERIFY_FILE_TEXT`):**
-  - Verifies files inside an user-authorized folder and records `VERIFIED` with size/match evidence.
+## Platform
 
-## What Stays Observation-Only in Recording Drafts
+- **Windows 10/11 x64 only.** The desktop adapter is Windows UI Automation
+  (`integrations/uia_adapter.py`, `integrations/windows_desktop.py`); nothing
+  else exists.
+- **The kill switch only works while a run is live.** `Ctrl+Alt+Q` is armed
+  during a run (`integrations/kill_switch.py:28`) and does nothing otherwise.
 
-The following recorded events are captured in the recording timeline and converted into `REPORT` steps labeled **`Observation only`**:
+## Typing and clicking
 
-- **Coordinate mouse clicks (`MOUSE_CLICK`):** Screen coordinates break when windows move or resize, so coordinate clicks are never replayed blindly.
-- **Free-form typing (`TEXT_INPUT`) and raw key presses (`KEY_PRESS`):** Captured in the event log (with password fields redacted), converted to `REPORT` observations in recorded drafts.
-- **Window focus switches (`WINDOW_FOCUS`) without a new process launch:** Recorded as `REPORT` observations.
-- **Closing an application that the workflow did not launch:** Kept as a `REPORT` observation (`"Observed closing ..., which this workflow does not launch"`).
-- **Observation-only save guard:** A workflow containing zero replayable steps cannot be saved as an executable automation (`WorkflowValidationError: This task has no steps Once can perform`).
+- **Typing becomes `TYPE_TEXT` only when the step names a window and a
+  non-password text control.** Anything else — a password field, a control with
+  no usable text pattern, free-form keystrokes — stays an observation in a
+  recorded draft and is reported, never performed.
+- **Clicks need one unique, enabled element.** Ambiguous matches are refused.
+  When the control exposes no UI Automation pattern, the adapter re-resolves the
+  element, re-checks it is still there, and clicks its bounding-box centre
+  (`integrations/windows_desktop.py:826`); if it moved or vanished, the step
+  fails instead of clicking the old coordinates. A coordinate-only click, with
+  no element to verify, is not implemented.
+- **Password fields are not automatable**, and neither is anything on the secure
+  desktop (UAC prompts).
 
-## Run Status Honesty (`docs/contracts/run-outcomes.md`)
+## Fragile surfaces
 
-- **`SUCCEEDED` ("Succeeded"):** At least one step performed/verified real work, zero steps failed, and zero steps were `OBSERVED`.
-- **`PARTIALLY_PERFORMED` ("Partly performed"):** At least one step performed/verified real work, at least one step was `OBSERVED` (`REPORT`), and zero steps failed.
-- **`OBSERVATION_ONLY` ("Observation only — nothing was performed"):** Zero steps failed and no step performed or verified real work.
-- **`FAILED` ("Failed"):** One or more steps failed or were refused (for example, missing approval or SHA-256 mismatch).
+- **The Start menu and the taskbar are fragile.** Their windows belong to shell
+  processes, their identity changes between sessions, and a recorded click can
+  resolve to the wrong surface. Recording them is possible; replaying them is not
+  reliable, and a failed step is the expected outcome.
+- **Applications with poor accessibility information** (custom-drawn controls,
+  DirectUI panels, some Electron apps) expose no stable element identity. Once
+  refuses those steps rather than falling back to raw coordinates.
+- **Windows 11 Store / single-instance apps** may hand a window to a broker
+  process and exit the launcher, so `CLOSE_APPLICATION` can only close a window
+  it can prove it owns; otherwise it leaves it open and says so.
 
-## Windows 11 Store / Single-Instance Apps
+## Smart replay
 
-- Classic Win32 executables that own their top-level window (such as `C:\Windows\System32\charmap.exe`) work reliably with PID-tracked launch and close.
-- Modern Windows 11 packaged/Store apps (such as `calc.exe` or multi-tab Windows 11 `notepad.exe`) may hand off window ownership to an existing broker process and exit the launcher PID immediately, or spawn replacement windows (such as Chrome). Where PID-owned window close cannot be verified, `CLOSE_APPLICATION` fails closed rather than claiming a false success.
+- The resolver, its policy layer and the UI Automation adapter are implemented
+  and tested, but **the app path does not use them yet**: `ONCE_SMART_REPLAY` is
+  read only in `engine/smart_replay.py` (grep, 2026-11-26). Recordings replay as
+  recorded.
+- No real-desktop run of the adapter's ask-or-stop behaviour has been recorded
+  yet; `docs/REAL_DESKTOP_CHECKLIST.md` is the checklist that would produce one.
+
+## Browser
+
+- Isolated Chrome via DevTools only: Once launches its own profile, drives one
+  page, and refuses when more than one page is open. Your ordinary browser
+  session is never attached to.
+- No downloads, uploads, alerts or dialogs, no free-form JavaScript, and the
+  tab-selection case (A5) is not built.
+
+## Files and history
+
+- No permanent deletion and no silent overwrite anywhere in the app.
+- Run history and approvals live in `%LOCALAPPDATA%\Once`; deleting that folder
+  loses them, and nothing is synced.
+
+## Evidence
+
+- The only real-desktop proof in the repository is the Notepad launch/close flow
+  and the kill switch (`shots/after/*.json`). Everything else is **tests only**
+  or **not verified**.

@@ -1,40 +1,60 @@
 # Once product vision
 
-Once is a local-first supervised test-and-fix orchestrator. A user describes a
-task such as “test these invoices and fix extraction bugs,” and Once runs a
-bounded, allowlisted process rather than executing arbitrary instructions.
+Status: current
+Last verified: 2026-11-26 · `main f2e6ca3`
+Owner: owner (all lanes)
 
-## Six-step flow
+Once records what you do on a Windows desktop once, shows it back as plain
+steps, and replays it — but only after you approve, and only when every step can
+name its target. When a step cannot be resolved safely, Once asks or stops. It
+does not guess, and it does not let a model decide what to click.
 
-1. **Describe:** capture the task and explicit acceptance criteria.
-2. **Run:** execute configured tools against controlled inputs.
-3. **Verify:** compare observable outputs, logs, and monitoring evidence with
-   expected results.
-4. **Send evidence:** after explicit authorization, provide a redacted,
-   delimited evidence bundle to an approved coding-agent integration.
-5. **Propose and review:** receive a proposed diff on a separate branch and
-   show the user the changes, risks, and test plan.
-6. **Rerun:** apply only after human approval, rerun verification, and stop at
-   the configured iteration, wall-time, or no-progress limit.
+## The loop
 
-## First target
+1. **Record** the task, or build it step by step.
+2. **Review** every step in plain English and see which ones Once can replay.
+3. **Approve** the application (path + SHA-256) and the actions that will run.
+4. **Replay** deterministically, with an honest outcome: `Succeeded`,
+   `Partly performed`, `Observation only — nothing was performed`, `Failed` or
+   `Cancelled`.
+5. **Read what happened** in Activity, with the first failure reason in plain
+   words and per-step evidence.
 
-The first domain target is the Hotix invoice extractor
-([medamineessid/hotix-invoice](https://github.com/medamineessid/hotix-invoice)):
-a WPF C# client and Python FastAPI backend using Gemini, PaddleOCR, and Groq.
-Precision matters more than recall. No real invoices are available, so the
-initial ground truth is synthetic invoices with known values.
+## Smart replay
 
-The first implementation slice is headless: a strictly validated acceptance
-case, an allowlisted extractor command, JSON-output verification, and a
-redacted evidence bundle. It does not call a coding agent or change Hotix.
+A recorded step keeps clues about what it targeted — window title, control name,
+automation id, nearby text. Smart replay re-resolves the element from those clues
+at run time, so a window that moved or a list that reordered still resolves to
+the right control. When the clues match nothing, or match more than one thing,
+Once asks a question or stops: a wrong click is worse than a stopped run.
 
-## Deferred
+The resolver and its policy layer are implemented and tested
+(`engine/smart_replay.py`, `integrations/uia_adapter.py`). The app path does not
+use them yet: `ONCE_SMART_REPLAY` is read only in `engine/smart_replay.py` (grep,
+2026-11-26). Until that is wired, replay uses the recorded steps exactly as they
+are.
 
-- Mutating desktop UI actions such as clicks and typing.
-- Browser automation.
-- Unrestricted shell, Python, or AI-generated code execution.
-- Automatic coding-agent merges or pushes.
-- Live cloud transmission without explicit configuration and consent.
-- Accuracy claims based on real invoices before representative ground truth is
-  available.
+## Local-first
+
+Runs happen on your machine. Recordings, workflows, approvals and history live
+under `%LOCALAPPDATA%\Once`. Nothing reaches the network unless you have
+configured that integration and consented, and cloud analysis of a recording is
+disabled by default.
+
+## Non-goals
+
+- **No AI at replay time.** A model may help draft a recording; it never decides
+  what to click and never emits executable code.
+- **Windows only.** Windows 10/11 x64, including its UI Automation API.
+- **Not an agent that decides by itself.** No autonomous merges, pushes, shell
+  commands or unapproved desktop actions.
+- **No permanent deletion and no silent overwrite** of user files.
+- **No universal coverage.** An application with no usable accessibility
+  information is reported as such rather than poked at by coordinates.
+
+## Legacy line
+
+Before this line Once was a supervised test-and-fix orchestrator (invoice
+verification, evidence bundles, coding-agent diffs); that code remains in the
+repository, is not reached by the record-review-replay path, and is documented
+as legacy in the README.
