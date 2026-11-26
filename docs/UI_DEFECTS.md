@@ -1,20 +1,23 @@
 # Current UI defects — V1 to V10
 
-Checked against `8c91ea7` on 2026-11-23. `docs/UX_AUDIT.md` is historical; do
-not use its D1–D10 numbers for new work. Reference captures are in
+Checked against `603a326` on 2026-11-26. `docs/UX_AUDIT.md` is historical; do
+not use its D1–D10 numbers for new work. V1, V5 and V8 are fixed (PR #29 and
+PR #27); V2, V3, V4, V6, V7, V9 and V10 are unchanged. Reference captures are in
 `docs/ui-reference/defects/` (app window only, never a full desktop; generated
 by `scripts/capture_ui_defects.py` from synthetic fixtures at 960x600 and
 1920x1020, and not yet reviewed by a person — see that folder's README).
 
 ## Blocking the app
 
-### V1 — Delete confirmation buttons are unreadable
-`ui/components/delete_confirm.py:55-72` builds a plain `QMessageBox` with
-default-painted buttons; the Delete button renders white on near-white and
-Cancel is faint. Fix: use design tokens — Delete is a filled danger button with
-readable text, Cancel is an outlined navy button. See
-`docs/ui-reference/defects/delete-dialog-960x600.png` and
-`delete-dialog-1920x1020.png`.
+### V1 — Delete confirmation buttons are unreadable — **FIXED** (PR #29)
+Was: a plain `QMessageBox` whose buttons the platform style painted, so Delete
+rendered white on near-white and Cancel was faint. Now `DeleteConfirmDialog`
+(`ui/components/delete_confirm.py:58`) subclasses `ConfirmDialog`
+(`ui/components/dialog.py:112`): Delete is a filled danger button with white
+text, Cancel is an outlined navy button, both have a focus state, and Cancel is
+the default. Pinned by `tests/test_confirm_dialog.py`; evidence level **tests
+only** — no person has reviewed the after capture yet. Before capture:
+`docs/ui-reference/defects/delete-dialog-960x600.png`.
 
 ### V2 — Permission panel overlaps and cuts off actions
 `ui/components/approval_panel.py:82-129` stacks paragraph, action list, footnote
@@ -39,20 +42,23 @@ after it, with styling that lets the controls overlap a row. Fix: put them in an
 explicit toolbar row above `workflowList`. See
 `docs/ui-reference/defects/my-automations-960x600.png`.
 
-### V5 — Hover/press animation escapes the button rectangle
-`ui/components/buttons.py:120-134,181-189` drives a painted scale and
-`ui/styles/__init__.py:447-494` supplies hover/press borders; on Settings,
-"Configure checker..." shows a half-drawn border. Fix: animate colours or paint
-only inside the rectangle; never scale widgets. See
-`docs/ui-reference/defects/settings-960x600.png` and
-`settings-1920x1020.png`.
+### V5 — Hover/press animation escapes the button rectangle — **FIXED** (PR #27)
+Was: the button painted itself scaled about its centre, so the border left the
+widget rectangle, and `HOVER_SCALE`/`PRESS_SCALE` lived in the styles module.
+Now `ui/components/buttons.py` has no `paintEvent` override and no scale
+(grep, 2026-11-26): hover changes colour and border, the arrow shifts 4px, press
+moves 1px inward, and everything stays inside the rectangle. Pinned by
+`tests/test_layout_geometry.py` (edge midpoints stay opaque at rest, hover and
+press) and `tests/test_design_v4.py`; evidence level **tests only**. Before
+capture: `docs/ui-reference/defects/settings-960x600.png`.
 
-### V8 — Sidebar widths and focus outline disagree
-`ui/components/sidebar_item.py:129-140` paints the active/hover pill and
-`:174-176` paints focus as an outline; items have inconsistent widths. Fix: one
-item width and an outline only for keyboard focus, never a second pill. See
-`docs/ui-reference/defects/home-960x600.png` (the rail is identical on every
-page).
+### V8 — Sidebar widths and focus outline disagree — **FIXED** (PR #27)
+Was: rows had inconsistent widths and focus painted a second pill. Now rows
+expand to the rail (`QSizePolicy.Expanding`, `ui/components/sidebar_item.py:91`),
+the pill spans the full row, and `_keyboard_focus` is set only for Tab, Backtab
+and Shortcut focus reasons (`:123`), so keyboard focus is an outline and a click
+is not. Verified by `tests/test_layout_geometry.py`; evidence level **tests
+only**. Before capture: `docs/ui-reference/defects/home-960x600.png`.
 
 ## Polish
 

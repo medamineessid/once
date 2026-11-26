@@ -1,5 +1,23 @@
 # Autonomous Execution Progress & Decisions
 
+## Resume here
+
+Open items, in the order they unblock each other (2026-11-26, `main 603a326`):
+
+- [ ] Land the UI audit harness — draft PR #12 (`ui/audit-harness-wip`) is open
+      and not mergeable; TASK-007 / issue #15 tracks it.
+- [ ] Close V2 (approval panel cut off) and V4 (row says "Running…" while
+      approval is pending) — issue #16.
+- [ ] Close V3 (Preview / Clear drafts floats over a row) — issue #17.
+- [ ] Take V6, V7, V9 and V10 (hero, band rhythm, banner detail, chip overlap) —
+      issue #18, brief TASK-010.
+- [ ] Wire smart replay into the run path (A1): `ONCE_SMART_REPLAY` is read only
+      in `engine/smart_replay.py`, nowhere in `app.py`, `controller/` or `ui/`.
+- [ ] Prove the desktop adapter and the approval → rerun loop on a real desktop
+      (A3), then run `docs/REAL_DESKTOP_CHECKLIST.md` and record it under
+      `docs/evidence/`.
+- [ ] Chrome tab case (A5).
+
 ## Plan Progress
 - [x] **1. Housekeeping**: Replaced bare `except Exception:` in `WorkflowService.__init__` (`controller/service.py`) with `except (ImportError, OSError, RuntimeError):`. Tested `HotkeyKillSwitch` (`Ctrl+Alt+Q`); `SetWindowsHookEx(WH_KEYBOARD_LL)` installs a valid hook handle, though synthetic keystrokes from a headless subshell cannot trigger the low-level hook without an interactive foreground desktop window / physical keyboard input.
 - [x] **2. Recorder fix**: Updated `WindowEventMonitor` (`integrations/recorder.py`) and `_win32_windows()` to include `hwnd` and track windows by stable `(process_name, hwnd)` identity. Added `WINDOW_TITLE_CHANGED` in `recorder/models.py` and `recorder/drafts.py`. Added regression test using `tests/fixtures/recording-1794212626041060300.json`.

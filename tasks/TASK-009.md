@@ -2,6 +2,19 @@
 
 Lane: `ui` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/ui` · Size: `M`
 
+## Status
+
+- **V5 — fixed** by PR #27 (merged): no painted scale remains in
+  `ui/components/buttons.py`; hover and press change colour, border and a 4px
+  arrow shift only. Pinned by `tests/test_layout_geometry.py` and
+  `tests/test_design_v4.py`. Evidence level **tests only**.
+- **V8 — fixed** by PR #27 (merged): sidebar rows expand to the rail width and
+  the outline appears only for keyboard focus
+  (`ui/components/sidebar_item.py:91,123`).
+- **V3 — open:** the Preview / Clear drafts controls are still added after the
+  list, not as a toolbar row above `workflowList`.
+- Tracking issue: #17, still open for V3.
+
 ## Goal
 
 The Preview / Clear drafts controls become a real toolbar row above the list,
