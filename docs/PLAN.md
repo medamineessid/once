@@ -35,8 +35,8 @@ Checked 2026-11-26 against `main 603a326` and the open issues; `not verified` me
 | C3 PyInstaller spike | TASK-016 | NOT STARTED | issue #24 | not verified |
 | C4 demo kit | TASK-017 | NOT STARTED | issue #25 | not verified |
 | C5 privacy checklist | TASK-018 | NOT STARTED | issue #26 | not verified |
-| C6 a person runs the real-PC checklist | TASK-019 | NOT STARTED | — | not verified |
-| C7 record and rehearse the demo | TASK-020 | NOT STARTED | — | not verified |
+| C6 a person runs the real-PC checklist | TASK-019 | NOT STARTED | issue #33 | not verified |
+| C7 record and rehearse the demo | TASK-020 | NOT STARTED | issue #34 | not verified |
 
 ## Lanes, tasks and sizes
 
