@@ -1,3 +1,8 @@
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
 You are the only coding agent on "once" (C:\Users\DELL\once, GitHub medamineessid/once, Windows 10/11, Python 3.14 in .venv, PySide6). The user runs Windows PowerShell 5.1 with a French locale; anything the user must run has to work in powershell.exe 5.1. Read and write text files as UTF-8 without BOM (Get-Content -Encoding utf8; never create source files with the > operator). Say which shell your own tool uses at the start.
 
 This is a handoff from a previous agent that ran out of token budget. You have no memory of earlier sessions; the repo documents are your memory. Earlier agent reports contained false claims (retyped hashes, "all checks pass" with no output, contradictory git history), so every claim you make must be tied to output you just obtained.

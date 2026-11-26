@@ -1,5 +1,11 @@
 # Lane B questions (each with the default I applied)
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 ## 2026-11-01 — B2: the desktop gate rejects a REPORT step mixed into a desktop automation
 
 - Found (2026-11-01, B2): `approve_desktop_workflow` (engine/desktop.py) validates with `DESKTOP_INTERACTION_POLICY` (engine/replay.py), which does not include `StepKind.REPORT`. A saved automation the create flow can produce (e.g. a REPORT note plus a TYPE_TEXT step) lists correctly in the approval panel, but Approve is refused: `Replay does not allow these step kinds: REPORT.`

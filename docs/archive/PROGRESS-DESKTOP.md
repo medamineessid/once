@@ -1,5 +1,11 @@
 # PROGRESS-DESKTOP.md — desktop automation engine (Chrome automation)
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 Branch: desktop-automation-engine @ e196f5c (carried from the repo; this is the
 first-pass session resuming it). Worktree: /c/Users/DELL/once-desktop (recreated
 cleanly this session because the old orphan dir was not a usable git worktree and

@@ -1,5 +1,11 @@
 # Once UX Brief
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 Date: 2026-10-27. Written from evidence only: README.md, AGENTS.md, ui/main_window.py (the old window's capabilities), ui/pages/*, ui/shell.py, controller/service.py. The USER INPUT block of the session prompt was empty, so **every product guess is tagged ASSUMPTION** and can be corrected by the user.
 
 ## 1. Audience and promise

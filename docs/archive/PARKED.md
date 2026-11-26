@@ -1,5 +1,11 @@
 # Parked work (PARK AND CONTINUE protocol)
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 The default is applied immediately; the item stays parked until someone answers it,
 per the session prompt ("PARK AND CONTINUE").
 

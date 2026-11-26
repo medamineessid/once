@@ -138,7 +138,7 @@ def test_current_defect_doc_uses_v_numbers_and_marks_historical_d_items() -> Non
     for number in range(1, 11):
         assert f"D{number}" in defects, f"UI_DEFECTS.md omits old D{number} status"
     assert defects.count(".py:") >= 10, "old D-status table needs file:line evidence"
-    audit = _read(ROOT / "docs" / "UX_AUDIT.md")
+    audit = _read(ROOT / "docs" / "archive" / "UX_AUDIT.md")
     assert "Historical" in audit.splitlines()[2], "UX_AUDIT.md has no historical note"
     assert "docs/UI_DEFECTS.md" in audit[:600], "UX_AUDIT.md does not point to V-defects"
 

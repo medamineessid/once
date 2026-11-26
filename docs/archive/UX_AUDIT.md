@@ -1,5 +1,11 @@
 # UX audit — the current shell (P1/f)
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 > **Historical (2026-11-23).** This audit and its D1–D10 defect numbers describe
 > an older revision. The current defect list is `docs/UI_DEFECTS.md`, which uses
 > V1–V10 and records which old D-items are already fixed. Do not open new work

@@ -1,5 +1,11 @@
 # UI Migration Plan (evidence-based)
 
+Status: Historical — kept for the record
+Last verified: as written (the body keeps its original date)
+Owner: none (archive)
+
+> Historical, kept for the record. Not current guidance.
+
 Branch: `docs/ui-migration-plan` (created from `main` @ `cd2e77e`).  
 Starting facts verified by commands:
 - `git log --oneline -1`: `cd2e77e Merge redesign-ui: resolve conflicts in docs keeping both sides`  

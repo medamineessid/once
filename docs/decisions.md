@@ -414,3 +414,19 @@ was added to the development requirements and installed successfully.
 - Note: this decision is about branch strategy, not a code change. The next
   non-document action is a rebase with conflict resolution, not another shell edit.
 
+
+## 2026-11-26 — Documentation cleanup
+
+- **Question:** Which documents should stay current, and what should happen to the rest?
+- **Choice:** Move the prompts, the blocked/parked notes, the audits, the lane_b
+  notes and the superseded progress files into `docs/archive/` with a historical
+  note at the top; rename the collaborator's document to
+  `docs/ai-assisted-development.md`; and index every living document in
+  `docs/README.md` with a Status, a last-verified date and hash, and an owner.
+  New documents use lowercase-with-hyphens names.
+- **Reason:** The repository had three generations of docs side by side, and a
+  reader could not tell a current claim from a historical one. A date, a hash and
+  two status words are the cheapest honest fix, and they make a stale page fail a
+  test instead of quietly misleading someone.
+- **Scope:** documentation only. No product code, no edit to earlier entries of
+  this file, and none to the append-only engineering log.
