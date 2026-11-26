@@ -8,9 +8,13 @@ Once is a local-first Windows desktop application built with Python and **PySide
 
 ## Start here
 
-- `docs/PLAN.md` — the three-lane plan, order, evidence levels and risks.
-- `docs/COLLABORATOR.md` — lane rules and how a PR is accepted.
-- `docs/decisions.md`, `docs/WORKFLOW.md`, `AGENTS.md` — standing decisions and workflow.
+- `docs/STATE.md` — what works now, with an evidence level per capability.
+- `docs/CONTEXT.md` — one page on what Once is and how the code is laid out.
+- `docs/decisions.md` — decisions that are not re-litigated.
+- `AGENTS.md` — boundaries and the non-negotiable rules.
+- `docs/WORKFLOW.md` — branch, pull-request and append-only log rules.
+- `docs/COLLABORATOR.md` — how your work reaches `main`.
+- `docs/PLAN.md` — the three-lane plan and the task status table.
 
 ## What Works Today (Current Capabilities)
 

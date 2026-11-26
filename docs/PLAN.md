@@ -9,6 +9,31 @@ C owns proof and delivery. A task is DONE only when its brief's acceptance
 commands have been run and their real output is pasted. No capability is claimed
 at `real desktop` level without an approved real-PC run.
 
+## Status
+
+Checked 2026-11-26 against `main 603a326` and the open issues. `not verified`
+means nobody ran it on a real desktop; the evidence levels are defined below.
+
+| task | brief | status | PR / issue | evidence |
+| --- | --- | --- | --- | --- |
+| A1 wire the smart-replay flag into the app path | — | NOT STARTED | — | not verified: `ONCE_SMART_REPLAY` is read only in `engine/smart_replay.py` |
+| A3 prove the desktop adapter and the approval → rerun loop | — | NOT STARTED | — | not verified |
+| A5 Chrome tab case | — | NOT STARTED | — | not verified |
+| B1 finish the UI audit tool | TASK-007 | IN PROGRESS | draft PR #12, issue #15 | not verified: the draft is open and not mergeable |
+| B2 blocking defects V1, V2, V4 | TASK-008 | IN PROGRESS | #29 (V1), issue #16 | tests only |
+| B3 layout defects V3, V5, V8 | TASK-009 | IN PROGRESS | #27 (V5, V8), issue #17 | tests only |
+| B4 polish defects V6, V7, V9, V10 | TASK-010 | NOT STARTED | issue #18 | not verified |
+| B5 V5 animation follow-ups | TASK-011 | IN PROGRESS | #27 (base), #19 | tests only; follow-ups wait for B1 |
+| B6 pick-one dialog and sample-fed run report | TASK-012 | NOT STARTED | issue #20 | not verified |
+| B7 Settings switch screen | TASK-013 | NOT STARTED | issue #21 | not verified |
+| C1 Chrome-style tab and lower-result cases | TASK-014 | NOT STARTED | issue #22 | not verified |
+| C2 real-PC evidence template and checklist | TASK-015 | NOT STARTED | issue #23 | not verified |
+| C3 PyInstaller spike | TASK-016 | NOT STARTED | issue #24 | not verified |
+| C4 demo kit | TASK-017 | NOT STARTED | issue #25 | not verified |
+| C5 privacy checklist | TASK-018 | NOT STARTED | issue #26 | not verified |
+| C6 a person runs the real-PC checklist | TASK-019 | NOT STARTED | — | not verified |
+| C7 record and rehearse the demo | TASK-020 | NOT STARTED | — | not verified |
+
 ## Lanes, tasks and sizes
 
 | lane | scope | tasks | sizes |

@@ -2,6 +2,11 @@
 
 Lane: `ui` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/ui` · Size: `M`
 
+## Status
+
+Not started (2026-11-26). V6, V7, V9 and V10 are unchanged in the code; the
+tracking issue is #18.
+
 ## Goal
 
 Stack and left-align the Home hero lines with clear spacing, give page bands a

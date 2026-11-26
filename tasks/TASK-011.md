@@ -2,6 +2,14 @@
 
 Lane: `ui` · Difficulty: `good-first-task` · Owner review required: `yes` · Label: `lane/ui` · Size: `S`
 
+## Status
+
+Part started (2026-11-26). V5's base case is fixed by PR #27: there is no
+painted scale left in `ui/components/buttons.py`, so no hover, press or focus
+animation can leave the rectangle by scaling. The follow-ups this brief asks
+for cannot be enumerated until the audit from TASK-007 lands (draft PR #12 is
+open and not mergeable). Tracking issue: #19.
+
 ## Goal
 
 Close the remaining V5 cases once the audit is available: any hover, press or

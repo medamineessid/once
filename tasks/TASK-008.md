@@ -2,6 +2,16 @@
 
 Lane: `ui` · Difficulty: `normal` · Owner review required: `yes` · Label: `lane/ui` · Size: `M`
 
+## Status
+
+- **V1 — fixed** by PR #29 (merged): the delete confirmation is built on
+  `ui/components/dialog.py`, Delete is a filled danger button, Cancel is
+  outlined navy, both take focus, and `tests/test_confirm_dialog.py` pins it.
+  Evidence level **tests only**.
+- **V2 and V4 — open.** `ui/components/approval_panel.py` and the
+  "Running…" text in `ui/pages/my_automations.py` are unchanged.
+- Tracking issue: #16, still open for V2 and V4.
+
 ## Goal
 
 Delete confirmation becomes readable, the permission panel shows both actions
